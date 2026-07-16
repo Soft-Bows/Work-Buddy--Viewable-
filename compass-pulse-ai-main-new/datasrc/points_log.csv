@@ -1,0 +1,34 @@
+id,user_id,description,points,date
+pl1782808877785,u0,Endorsed skill: HR Business Partnering,5,2026-06-30T08:41:17.785Z
+pl1782806613618,u0,Endorsed skill: Employee Engagement,5,2026-06-30T08:03:33.618Z
+pl1782730355854,u0,Endorsed skill: HR Analytics,5,2026-06-29T10:52:35.854Z
+pl1781938847697,u0,Responded to team remark,10,2026-06-20T07:00:47.697Z
+pl1781875682360,u0,Endorsed skill: Change Management,5,2026-06-19T13:28:02.360Z
+pl1781872356180,u0,Endorsed skill: OD Design,5,2026-06-19T12:32:36.180Z
+pl1781787230531,u0,Endorsed skill: Change Management,5,2026-06-19T04:00:00Z
+pl1781756703863,u0,Responded to team remark,10,2026-06-19T02:00:00Z
+pl1781606125696,u0,Redeemed: Premium Coffee Subscription,-350,2026-06-17T06:00:00Z
+pl1781091044511,u0,Responded to team remark,10,2026-06-12T06:00:00Z
+pl1,u0,Responded to team remark,10,2026-06-19T00:00:00Z
+pl2,u0,Sent compliment to Priya,25,2026-06-18T06:00:00Z
+pl3,u0,Completed action plan item,50,2026-06-16T06:00:00Z
+pl4,u0,Approved skill addition,5,2026-06-14T06:00:00Z
+pl5,u0,Goal RAG update (Q2),10,2026-06-12T06:00:00Z
+pl_u2_1,u2,Completed DEI workshop facilitation,50,2026-06-18T08:00:00Z
+pl_u2_2,u2,Goal RAG update: Attrition (Q2),10,2026-06-17T09:00:00Z
+pl_u2_3,u2,Sent compliment to James,25,2026-06-16T14:00:00Z
+pl_u2_4,u2,Endorsed skill: Coaching,5,2026-06-14T10:00:00Z
+pl_u2_5,u2,Engagement survey rollout completed,50,2026-06-10T08:00:00Z
+pl_u1_1,u1,Delivered Q2 manager training cohort,50,2026-06-18T10:00:00Z
+pl_u1_2,u1,Sent compliment to Belle,25,2026-06-17T11:00:00Z
+pl_u1_3,u1,Goal RAG update: Training cohort,10,2026-06-15T09:00:00Z
+pl_u21_1,u21,Q1 AUM growth review completed,50,2026-06-18T09:00:00Z
+pl_u21_2,u21,Goal RAG update: Digital onboarding platform,10,2026-06-16T10:00:00Z
+pl_u21_3,u21,Sent compliment to Brandon,25,2026-06-15T08:00:00Z
+pl_u21_4,u21,Endorsed skill: Trade Execution,5,2026-06-14T11:00:00Z
+pl_u21_5,u21,Completed action plan item,50,2026-06-12T07:00:00Z
+pl_u22_1,u22,Onboarded new affluent client,50,2026-06-19T08:00:00Z
+pl_u22_2,u22,Goal RAG update: Trade execution accuracy,10,2026-06-17T09:00:00Z
+pl_u22_3,u22,Completed action plan item,50,2026-06-15T10:00:00Z
+pl_u23_1,u23,Completed CMFAS M6 module,25,2026-06-18T09:00:00Z
+pl_u23_2,u23,Goal RAG update: Client referral pipeline,10,2026-06-16T10:00:00Z

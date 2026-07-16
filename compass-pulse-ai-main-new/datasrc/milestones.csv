@@ -1,0 +1,10 @@
+id,user_id,name,date_target,complete,type
+om1,u0,"Building the Clock" Orientation,+3mo,true,onboarding
+om2,u0,30-day check-in meeting,+1mo,true,onboarding
+om3,u0,First skills profile submission,+2mo,true,onboarding
+om4,u0,Probation review,+6mo,false,onboarding
+dm1,u0,Coaching certification,Q3 2026,false,dev
+dm2,u0,All-hands presentation,Q4 2026,false,dev
+dm3,u0,Lift team engagement +8pts,Q4 2026,false,perf
+dm4,u0,P&C analytics dashboard GA,Q3 2026,false,perf
+dm5,u0,Mid-year performance review,Jun 2026,true,perf

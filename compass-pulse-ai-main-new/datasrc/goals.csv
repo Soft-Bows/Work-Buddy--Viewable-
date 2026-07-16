@@ -1,0 +1,20 @@
+id,user_id,title,description,metric,linked_dept,goal_type,weightage,approved
+g1,u1,Deliver Q2 manager training,"Run 4 cohorts across all business units to lift manager effectiveness scores.",4/4 cohorts completed,d1,team,70,false
+g2,u1,Build new hire portal,"Design and internally launch a self-service onboarding portal for all new hires.",Portal live by Aug,d4,team,50,true
+g3,u1,Coaching certification,"Complete ICF Level 1 accredited coaching programme to strengthen people leadership.",ICF cert obtained,d1,team,10,false
+g4,u2,Attrition reduction in Tech,"Drive retention initiatives across the Technology division targeting voluntary attrition below 10%.",Voluntary attrition < 10%,d2,team,70,true
+g5,u2,Engagement survey rollout,"Execute the annual engagement survey across all units and deliver insights report.",100% unit coverage,d2,team,10,false
+g6,u2,DEI workshops,"Lead 3 structured D&I workshops with cross-functional cohorts.",3/3 workshops delivered,d5,team,60,true
+g7,u3,Senior engineering hires,"Backfill 8 critical senior engineering roles to unblock product delivery.",8 hires closed,d2,team,10,true
+g8,u3,Time-to-hire < 30 days,"Reduce average time-to-hire across all open requisitions through process improvements.",Avg <= 30 days,d2,team,10,false
+g9,u3,Diversity slate compliance,"Ensure all shortlists include a minimum diverse candidate representation per policy.",95% shortlist compliance,d5,team,40,false
+g10,u3,Recruiter coaching cadence,"Establish weekly 1:1 coaching rhythm for all team recruiters to build capability.",Weekly cadence maintained,d1,team,20,false
+g11,u4,Wellness platform launch,"Lead Phase 1 delivery of the employee wellness platform including vendor onboarding.",Platform live by Sep,d3,team,80,false
+g12,u4,Mental health first-aider cohort,"Train 20 employees as certified Mental Health First Aiders across Singapore office.",20 MHFAs certified,d3,team,15,true
+g13,u4,Quarterly wellness pulse,"Design and run quarterly employee wellness pulse survey and publish results dashboard.",4 pulse cycles per year,d3,team,5,true
+g14,u4,Skills marketplace co-design,"Collaborate with L&D to co-design the skills tagging framework for the marketplace.",Framework signed off by Q3,d4,team,50,false
+p1,u0,Lift team engagement score +8pts,Sustained quarter-on-quarter improvement.,+8 pts,d1,performance,,
+p2,u0,Department attrition < 8%,Annual.,<8%,d2,performance,,
+p3,u0,Launch P&C analytics dashboard,Self-serve insights.,Q3 GA,d4,performance,,
+dv1,u0,Executive coaching certification,ICF ACC,,,development,,
+dv2,u0,Data storytelling masterclass,Tableau / narrative,,,development,,

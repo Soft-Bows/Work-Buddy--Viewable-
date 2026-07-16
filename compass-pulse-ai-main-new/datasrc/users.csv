@@ -1,0 +1,9 @@
+id,name,email,department,designation,grade,join_date,tenure_years,hod,points_ytd,avatar,supervisor,role_type
+u0,Sarah Chen,sarah.chen@phillipsg.com,Human Capital & Workplace Management,"Director, Human Capital",6,2014-01-15,12,true,175,SC,,manager
+u1,Anabelle Tan,anabelle.tan@phillipsg.com,Human Capital & Workplace Management,"Senior Manager, Learning & Development",4,2020-06-01,6,false,95,AT,Sarah Chen,manager
+u2,Priya Kapoor,priya.kapoor@phillipsg.com,Human Capital & Workplace Management,HR Business Partner,3,2022-03-01,4,false,220,PK,Sarah Chen,staff
+u4,Belle Lim,belle.lim@phillipsg.com,Human Capital & Workplace Management,"Executive, Human Capital",1,2024-09-01,2,false,155,BL,Anabelle Tan,staff
+u21,Eliza Lim,eliza.lim@phillipsg.com,Affluent Markets,"Director, Private Clients Solutions",6,1993-07-15,33,true,150,EL,,manager
+u22,Brandon Lim,brandon.lim@phillipsg.com,Affluent Markets,"Senior Manager, Dealing",4,2011-07-04,15,false,75,BR,Eliza Lim,manager
+u23,Goi Teck Poh Frankie,frankie.goi@phillipsg.com,Affluent Markets,Dealer,1,2024-07-22,2,false,25,GF,Brandon Lim,staff
+u42,James Okafor,james.okafor@phillipsg.com,Human Capital & Workplace Management,L&D Specialist,4,2024-03-01,2,false,110,JO,Sarah Chen,staff

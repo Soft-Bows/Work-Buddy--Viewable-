@@ -1,0 +1,28 @@
+id,goal_id,author,text,date,pending
+r001,g1,James,Hit a blocker on stakeholder alignment — could use guidance.,2 days ago,false
+r002,g1,Priya,Progress steady this quarter ahead on training milestones.,2 days ago,true
+r003,g1,Marcus,Concerned about resourcing for Q3 would value a check-in.,2 days ago,false
+r004,g2,James,Hit a blocker on stakeholder alignment — could use guidance.,2 days ago,false
+r005,g2,Priya,Progress steady this quarter ahead on training milestones.,2 days ago,false
+r006,g3,James,Completed certification exploring next steps.,2 days ago,false
+r025,g14,Kay,OAuth migration done on the auth service — pending QA sign-off before we push to prod.,1 day ago,false
+r026,g15,Kay,Hit our latency target in staging. Need help getting infra team to prioritise the prod deploy slot.,1 day ago,true
+r027,g16,Kay,API v1 is feature-complete. Could we align on the go-live comms plan before I cut the release?,3 days ago,false
+r007,g4,James,Hit a blocker on stakeholder alignment — could use guidance.,2 days ago,true
+r008,g4,Priya,Progress steady this quarter ahead on training milestones.,2 days ago,false
+r009,g5,James,Hit a blocker on stakeholder alignment — could use guidance.,2 days ago,true
+r010,g5,Priya,Progress steady this quarter ahead on training milestones.,2 days ago,false
+r011,g6,James,Completed certification exploring next steps.,2 days ago,false
+r012,g7,James,Hit a blocker on stakeholder alignment — could use guidance.,2 days ago,true
+r013,g7,Priya,Progress steady this quarter ahead on training milestones.,2 days ago,true
+r014,g7,Marcus,Concerned about resourcing for Q3 would value a check-in.,2 days ago,false
+r015,g8,James,Hit a blocker on stakeholder alignment — could use guidance.,2 days ago,true
+r016,g8,Priya,Progress steady this quarter ahead on training milestones.,2 days ago,false
+r017,g9,James,Completed certification exploring next steps.,2 days ago,false
+r018,g10,James,Hit a blocker on stakeholder alignment — could use guidance.,2 days ago,true
+r019,g11,James,Hit a blocker on stakeholder alignment — could use guidance.,2 days ago,true
+r020,g11,Priya,Progress steady this quarter ahead on training milestones.,2 days ago,true
+r021,g11,Marcus,Concerned about resourcing for Q3 would value a check-in.,2 days ago,false
+r022,g12,James,Completed certification exploring next steps.,2 days ago,false
+r023,g13,James,Hit a blocker on stakeholder alignment — could use guidance.,2 days ago,true
+r024,g13,Priya,Progress steady this quarter ahead on training milestones.,2 days ago,false

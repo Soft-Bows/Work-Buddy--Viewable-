@@ -1,0 +1,30 @@
+user_id,skill,status
+u0,Coaching & Mentoring,verified
+u0,Stakeholder Engagement,verified
+u0,Strategic Planning,verified
+u0,Organisational Development,verified
+u0,Training Needs Analysis,verified
+u0,Change Management,verified
+u0,HR Analytics,pending
+u0,Industrial Relations,pending
+u1,Training Needs Analysis,verified
+u1,Coaching & Mentoring,verified
+u1,Organisational Development,verified
+u1,Change Management,verified
+u2,Stakeholder Engagement,verified
+u2,Strategic Planning,verified
+u2,HR Analytics,verified
+u2,Leadership Development,pending
+u2,Organisational Development,pending
+u2,Change Management,pending
+u4,Organisational Development,verified
+u4,Training Needs Analysis,verified
+u4,HR Analytics,verified
+u4,Employee Engagement,verified
+u1,HR Business Partnering,verified
+u0,Securities Order Execution,pending
+u0,CMFAS M6A (Collective Investment Schemes I),pending
+u4,Labour Policies & Legislation,pending
+u4,Employee Relations & Engagement,pending
+u0,Strategic Workforce Planning,pending
+u0,Organisational Change Management,pending
