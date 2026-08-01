@@ -457,12 +457,16 @@ function TeamAtAGlanceSection({
           {!pending.length && rowPastel && (
             <WatercolorWash blobs={[{ color: rowPastel.hex, style: { top: "-40%", left: "-4%", width: "45%", height: "180%" } }]} />
           )}
+          {/* Clicking the name/avatar always opens THIS person's own goals drawer — including when
+              they're themselves a leave supervisor. Expanding to see their reports is a separate,
+              explicit chevron button below, so an HOD can actually see a supervisor's own goals
+              instead of that click only ever toggling the nested list (the previous behaviour). */}
           <button
             onClick={() => {
-              if (isHodViewer && isSupervisor) { setExpandedSupervisor(isExpanded ? null : m.name); return; }
               setTeamMemberDrawerReturnHome(true);
               setFocusedTeamMemberId(m.id); setSection("team");
             }}
+            title={`View ${m.name}'s goals`}
             className="flex items-center gap-3 flex-1 min-w-0 text-left"
           >
             <div className={cn(
@@ -470,13 +474,21 @@ function TeamAtAGlanceSection({
               opts.narrow ? "size-7 text-xs" : "size-9 text-sm"
             )}>{m.avatar}</div>
             <div className="flex-1 min-w-0">
-              <div className={cn("font-medium group-hover:text-primary transition-colors truncate flex items-center gap-1", opts.narrow ? "text-xs" : "text-sm", rowPastel?.text)}>
+              <div className={cn("font-medium group-hover:text-primary transition-colors truncate", opts.narrow ? "text-xs" : "text-sm", rowPastel?.text)}>
                 {m.name}
-                {isHodViewer && isSupervisor && (isExpanded ? <ChevronDown className="size-3 shrink-0" /> : <ChevronRight className="size-3 shrink-0" />)}
               </div>
               {!opts.narrow && <div className="text-xs text-muted-foreground truncate">{m.role}</div>}
             </div>
           </button>
+          {isHodViewer && isSupervisor && (
+            <button
+              onClick={() => setExpandedSupervisor(isExpanded ? null : m.name)}
+              title={isExpanded ? `Hide ${m.name}'s reports` : `Show ${m.name}'s reports`}
+              className="size-7 rounded-full grid place-items-center shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+            </button>
+          )}
           {celebrationGoal && (
             <button
               onClick={() => setCelebrationFor(m)}

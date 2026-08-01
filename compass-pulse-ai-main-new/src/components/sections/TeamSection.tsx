@@ -27,7 +27,7 @@ function TeamSVG() {
 
 import { toast } from "sonner";
 import { pointsToast } from "@/lib/pointsToast";
-import { cn, workingDaysSince, formatGoalStatusDueDate, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, flattenOkrOptions, objectiveScore, objectiveConfidence, objectiveConfidenceValue, scoreToRag, keyResultsOwnedBy, formatMonthlyConfidenceDueDate, isAmongOwners, ownerNames, isPendingAckFor, hasPendingAck, isKrOverdue, formatEffectiveKrScoreDueDate } from "@/lib/utils";
+import { cn, workingDaysSince, formatGoalStatusDueDate, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, flattenOkrOptions, objectiveScore, objectiveConfidence, objectiveConfidenceValue, ragConfidenceValue, scoreToRag, keyResultsOwnedBy, formatMonthlyConfidenceDueDate, isAmongOwners, ownerNames, isPendingAckFor, hasPendingAck, isKrOverdue, formatEffectiveKrScoreDueDate } from "@/lib/utils";
 import { computeChallengeThemes, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
 import { COMPLIANCE_DEPT_NAME, complianceTeamMembers, complianceDepartmentGoals } from "@/lib/complianceData";
 import { MARKETING_DEPT_NAME, marketingTeamMembers, marketingDepartmentGoals } from "@/lib/marketingData";
@@ -477,7 +477,7 @@ function KeyResultRow({
                 >
                   {confidenceRecentlyUpdated && !isOwnerViewer && <Sparkles className="size-3 text-violet-500 shrink-0" />}
                   {confidenceStale && <Clock className="size-3 text-amber-600 dark:text-amber-400 shrink-0" />}
-                  <RagPill rag={kr.ragConfidence} />
+                  <RagPill rag={kr.ragConfidence} value={ragConfidenceValue(kr.ragConfidence)} />
                 </div>
               </div>
               {kr.score !== undefined && (
@@ -673,15 +673,24 @@ function KeyResultRow({
         const showBody = !challengeResolved || challengeThreadOpen;
         return (
         <div className="rounded-md border border-amber-300/50 bg-amber-50/40 dark:bg-amber-900/10 dark:border-amber-700/30 p-2.5 space-y-2">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <RagDot rag={kr.challengeRemark.rag} />
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-amber-800 dark:text-amber-300">Challenge Shared · {kr.challengeRemark.date}</span>
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-amber-800 dark:text-amber-300">
+              Challenge shared by {ownerNames(kr.owner).join(", ")} · {kr.challengeRemark.date}
+            </span>
             {challengeResolved && (
               <button onClick={() => setChallengeThreadOpen(o => !o)} className="ml-auto text-[10px] font-semibold text-amber-700 dark:text-amber-400 hover:underline">
                 {challengeThreadOpen ? "Hide details" : "Resolved · Show details"}
               </button>
             )}
           </div>
+          {showBody && !challengeResolved && (kr.pendingChallengeResponseFor?.length || kr.pendingChallengeAckByOwner) && (
+            <div className="text-[10px] text-amber-700 dark:text-amber-400">
+              {kr.pendingChallengeResponseFor?.length
+                ? <>Awaiting response from <strong>{kr.pendingChallengeResponseFor.join(", ")}</strong></>
+                : <>Awaiting acknowledgement from <strong>{ownerNames(kr.owner).join(", ")}</strong></>}
+            </div>
+          )}
           {showBody && <p className="text-xs text-foreground/85 leading-relaxed">&ldquo;{kr.challengeRemark.text}&rdquo;</p>}
 
           {showBody && kr.challengeResponse && (
@@ -869,7 +878,7 @@ function KeyResultRow({
                 {/* Standalone RAG word + dot, same RagPill treatment as everyone else's read-only
                     view of this same field — previously the word only existed inside the <select>'s
                     own closed-state text, easy to miss at a glance. */}
-                <RagPill rag={kr.ragConfidence} />
+                <RagPill rag={kr.ragConfidence} value={ragConfidenceValue(kr.ragConfidence)} />
                 <select
                   value={kr.ragConfidence}
                   onChange={e => handleConfidenceChange(e.target.value as RAG)}
@@ -2396,10 +2405,14 @@ export function TeamSection() {
   const resolvedDept = directorMeta ? directorMeta.department : opsMeta ? opsMeta.user.department : currentUser.department;
 
   // Owner names are just strings on Objectives/KRs — resolving to an actual TeamMember (to open
-  // their drawer) only works for names present in this department's roster. Permission: the HOD
-  // can always open anyone; for team-level items, the clicked member's own direct supervisor can
-  // too (mirrors the existing directManager convention used everywhere else on this page).
-  const resolveMemberByName = (name: string) => visibleMembers.find(m => m.name === name);
+  // their drawer) used to only search this department's own roster (`visibleMembers`), which
+  // silently failed (click did nothing, no error) for any cross-department KR owner — e.g. a
+  // Compliance or Marketing Communications person named as a co-owner on an HCWM Key Result.
+  // Searching every known roster fixes that; permission is still gated separately by canOpenOwner
+  // below. The HOD can always open anyone; for team-level items, the clicked member's own direct
+  // supervisor can too (mirrors the existing directManager convention used everywhere else here).
+  const ALL_KNOWN_MEMBERS = [...teamMembers, ...opsTeamMembersAll, ...complianceTeamMembers, ...marketingTeamMembers];
+  const resolveMemberByName = (name: string) => ALL_KNOWN_MEMBERS.find(m => m.name === name);
   const canOpenOwner = (ownerName: string, level: "department" | "team"): boolean => {
     if (isHod) return true;
     if (level !== "team") return false;
@@ -2409,6 +2422,7 @@ export function TeamSection() {
   const openOwner = (ownerName: string) => {
     const member = resolveMemberByName(ownerName);
     if (member) setActive(member);
+    else toast.error(`Couldn't find ${ownerName}'s profile — they may no longer be an active account.`);
   };
 
   // Department-level first, then team-level grouped by teamName — "arrange by department-level
@@ -2483,12 +2497,19 @@ export function TeamSection() {
   const keyStaffChallenges = (isHod || directorMeta)
     ? computeChallengeThemes(
         relevantDepts.flatMap(d => MEMBERS_BY_DEPT[d] ?? []),
-        relevantDepts.map(d => GOALS_BY_DEPT[d] ?? []),
+        Object.fromEntries(relevantDepts.map(d => [d, GOALS_BY_DEPT[d] ?? []])),
       )
     : isLeaveSupervisorViewer
-    ? computeChallengeThemes(visibleMembers.filter(m => m.directManager === viewedUserName), [departmentGoals])
+    ? computeChallengeThemes(visibleMembers.filter(m => m.directManager === viewedUserName), { [HCWM_DEPT_NAME]: departmentGoals })
     : [];
-  const [expandedChallengeTheme, setExpandedChallengeTheme] = useState<string | null>(null);
+  // A Set, not a single value — expanding one theme used to collapse whatever else was open, which
+  // makes comparing 2+ challenge threads side by side impossible. Each theme now toggles independently.
+  const [expandedChallengeThemes, setExpandedChallengeThemes] = useState<Set<string>>(new Set());
+  const toggleChallengeTheme = (theme: string) => setExpandedChallengeThemes(prev => {
+    const next = new Set(prev);
+    if (next.has(theme)) next.delete(theme); else next.add(theme);
+    return next;
+  });
 
   // ── Cross-Department Appointment Consent — searches BOTH department goal sets regardless of
   // which one this page is currently showing, since the appointee's HOD/leave supervisor might
@@ -2763,14 +2784,16 @@ export function TeamSection() {
               <p className="text-xs text-muted-foreground mb-2">
                 Distilled in real time from {isDirector ? "your departments'" : isHod ? "your team's" : "your direct reports'"} monthly confidence challenges and goal-progress remarks. Click a theme to see the full conversation.
               </p>
-              {keyStaffChallenges.map(t => (
+              {keyStaffChallenges.map(t => {
+                const isExpanded = expandedChallengeThemes.has(t.theme);
+                return (
                 <div key={t.theme} className="border-b border-border/60 last:border-0">
                   <button
-                    onClick={() => setExpandedChallengeTheme(v => v === t.theme ? null : t.theme)}
+                    onClick={() => toggleChallengeTheme(t.theme)}
                     className="w-full flex items-center justify-between py-2.5 text-left gap-2"
                   >
                     <div className="text-sm flex items-center gap-1.5 min-w-0">
-                      {expandedChallengeTheme === t.theme ? <ChevronUp className="size-3 text-muted-foreground shrink-0" /> : <ChevronDown className="size-3 text-muted-foreground shrink-0" />}
+                      {isExpanded ? <ChevronUp className="size-3 text-muted-foreground shrink-0" /> : <ChevronDown className="size-3 text-muted-foreground shrink-0" />}
                       <span className="truncate">{t.theme}</span>
                       {t.entries.some(e => e.response && !e.resolved) && (
                         <ActionNeededIcon size={13} title="Has an unresolved response awaiting acknowledgement" />
@@ -2778,7 +2801,7 @@ export function TeamSection() {
                     </div>
                     <div className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">{t.count} mention{t.count !== 1 ? "s" : ""}</div>
                   </button>
-                  {expandedChallengeTheme === t.theme && (
+                  {isExpanded && (
                     <div className="pb-3 pl-4 space-y-2">
                       {t.entries.map((e, i) => (
                         <div key={i} className="rounded-lg border border-border/60 bg-muted/20 p-2.5">
@@ -2799,18 +2822,28 @@ export function TeamSection() {
                               </div>
                               <p className="text-xs text-foreground/80 mt-1 leading-relaxed">{e.response.text}</p>
                             </div>
+                          ) : e.pendingResponseFor?.length ? (
+                            <div className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                              <ActionNeededIcon size={12} title="Awaiting a response" /> Awaiting response from <strong>{e.pendingResponseFor.join(", ")}</strong>
+                            </div>
                           ) : e.date && (
                             <div className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
                               <ActionNeededIcon size={12} title="Awaiting a response" /> Awaiting a response
                             </div>
                           )}
-                          <div className="text-[10px] text-muted-foreground mt-1.5">Linked to: {e.linkedDeptTitle}</div>
+                          <div className="text-[10px] text-muted-foreground mt-1.5">
+                            Linked to: {e.linkedDeptTitle}
+                            {e.deptName && (
+                              <> · <span className="font-medium">{e.deptName}</span> · {e.objectiveLevel === "team" ? `${e.teamName ?? "Team"}-level OKR` : "Department-level OKR"}</>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
               {keyStaffChallenges.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4">No staff challenges reported yet.</p>
               )}
@@ -3315,8 +3348,21 @@ export function TeamDrawer({ member, onClose }: { member: TeamMember; onClose: (
 
   // Performance goals are now Key Results owned by this member (by name), pulled straight from the
   // live Objectives — not the old individually-created Goal list. Each entry carries its parent
-  // Objective so the supervisor sees the linkage at a glance.
-  const memberKeyResults = keyResultsOwnedBy(member.name, departmentGoals, opsDepartmentGoals);
+  // Objective so the supervisor sees the linkage at a glance. Includes Compliance/Marketing
+  // Communications goals too — omitting them meant a Compliance or Marketing team member's own
+  // owned Key Results silently never appeared in their own drawer.
+  const memberKeyResults = keyResultsOwnedBy(member.name, departmentGoals, opsDepartmentGoals, complianceDepartmentGoals, marketingDepartmentGoals);
+  // Which real department an Objective's Key Results live under — resolved by array membership
+  // rather than trusting anything on the Objective itself, so cross-department ownership (a person
+  // co-owning a KR on another department's Objective) is always labelled with the *real* department,
+  // not assumed from whichever roster the viewer happens to be looking at.
+  const deptNameForObjective = (objective: DeptGoal): string => {
+    if (departmentGoals.includes(objective)) return HCWM_DEPT_NAME;
+    if (opsDepartmentGoals.includes(objective)) return CREDIT_RISK_DEPT_NAME;
+    if (complianceDepartmentGoals.includes(objective)) return COMPLIANCE_DEPT_NAME;
+    if (marketingDepartmentGoals.includes(objective)) return MARKETING_DEPT_NAME;
+    return "Unknown Department";
+  };
 
   return (
     <div className="fixed inset-0 z-40 flex" onClick={onClose}>
@@ -3418,39 +3464,63 @@ export function TeamDrawer({ member, onClose }: { member: TeamMember; onClose: (
                     </div>
                   </div>
                 )}
-                {memberKeyResults.map(({ kr, objective }) => (
-                  <div
-                    key={kr.id}
-                    className={cn(
-                      "rounded-xl border p-4 space-y-2",
-                      isPendingAckFor(kr, member.name) ? "border-amber-300/60 bg-amber-50/40 dark:bg-amber-900/10" : "border-border/60 bg-muted/20"
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5">
-                          🔗 {objective.level === "team" ? `${objective.teamName ?? "Team"} OKRs` : "Department OKRs"} · {objective.title}
-                        </div>
-                        <div className="font-medium text-sm mt-1">{kr.title}</div>
-                        {kr.dueDate && <div className="text-[10px] text-muted-foreground mt-1">Due {formatDueDate(kr.dueDate)}</div>}
-                      </div>
-                      <div className="shrink-0 flex flex-col items-end gap-1">
-                        <RagPill rag={kr.ragConfidence} />
-                        <span className="text-xs font-semibold text-primary">{kr.score !== undefined ? kr.score.toFixed(1) : "Not yet scored"}</span>
-                      </div>
+                {/* Grouped by Objective — a member who owns 2+ Key Results under the same Objective
+                    (e.g. Diana Chang) used to get that Objective's banner repeated once per Key
+                    Result, as separate full-width cards. One card per Objective, its Key Results
+                    listed inside, reads as "these belong together" instead of implying 2 different
+                    goals. */}
+                {Object.values(
+                  memberKeyResults.reduce((acc, { kr, objective }) => {
+                    (acc[objective.id] ??= { objective, krs: [] }).krs.push(kr);
+                    return acc;
+                  }, {} as Record<string, { objective: DeptGoal; krs: KeyResult[] }>)
+                ).map(({ objective, krs }) => (
+                  <div key={objective.id} className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3">
+                    <div className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5">
+                      🔗 {deptNameForObjective(objective)} · {objective.level === "team" ? `${objective.teamName ?? "Team"}-level OKR` : "Department-level OKR"} · {objective.title}
                     </div>
-                    {isPendingAckFor(kr, member.name) && (
-                      <div className="text-[11px] text-amber-700 dark:text-amber-400">⏳ Awaiting {member.name.split(" ")[0]}'s acknowledgement</div>
-                    )}
-                    {kr.counterProposal && (
-                      <div className="rounded-md border border-violet-300/50 bg-violet-50/50 dark:bg-violet-900/10 px-2.5 py-1.5 text-[11px] text-violet-800 dark:text-violet-300">
-                        {member.name.split(" ")[0]} proposed
-                        {kr.counterProposal.title && <> title <strong>"{kr.counterProposal.title}"</strong></>}
-                        {kr.counterProposal.title && kr.counterProposal.dueDate && <> and</>}
-                        {kr.counterProposal.dueDate && <> due date <strong>{formatDueDate(kr.counterProposal.dueDate)}</strong></>}
-                        {" "}— resolve from the Team OKRs page
-                      </div>
-                    )}
+                    <div className="space-y-3 divide-y divide-border/50">
+                      {krs.map(kr => (
+                        <div key={kr.id} className={cn("pt-3 first:pt-0", isPendingAckFor(kr, member.name) && "-mx-4 px-4 rounded-lg border border-amber-300/60 bg-amber-50/40 dark:bg-amber-900/10")}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-sm">{kr.title}</div>
+                              {kr.dueDate && <div className="text-[10px] text-muted-foreground mt-1">Due {formatDueDate(kr.dueDate)}</div>}
+                            </div>
+                            {/* Both score types labelled distinctly — a bare RAG pill next to a bare
+                                number used to leave it ambiguous which was which. Micro-labels (same
+                                size the OKR editing cards already use for "Confidence"/"Score") keep
+                                this from reading as two full extra lines. */}
+                            <div className="shrink-0 flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-1">
+                                <span className="text-[8px] uppercase tracking-wider text-muted-foreground">Monthly Confidence</span>
+                                <RagPill rag={kr.ragConfidence} value={ragConfidenceValue(kr.ragConfidence)} />
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[8px] uppercase tracking-wider text-muted-foreground">Quarterly Score</span>
+                                {kr.score !== undefined ? (
+                                  <RagPill rag={scoreToRag(kr.score)} value={kr.score} />
+                                ) : (
+                                  <span className="text-[10px] text-muted-foreground">Not yet scored</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          {isPendingAckFor(kr, member.name) && (
+                            <div className="text-[11px] text-amber-700 dark:text-amber-400 mt-1.5">⏳ Awaiting {member.name.split(" ")[0]}'s acknowledgement</div>
+                          )}
+                          {kr.counterProposal && (
+                            <div className="rounded-md border border-violet-300/50 bg-violet-50/50 dark:bg-violet-900/10 px-2.5 py-1.5 text-[11px] text-violet-800 dark:text-violet-300 mt-1.5">
+                              {member.name.split(" ")[0]} proposed
+                              {kr.counterProposal.title && <> title <strong>"{kr.counterProposal.title}"</strong></>}
+                              {kr.counterProposal.title && kr.counterProposal.dueDate && <> and</>}
+                              {kr.counterProposal.dueDate && <> due date <strong>{formatDueDate(kr.counterProposal.dueDate)}</strong></>}
+                              {" "}— resolve from the Team OKRs page
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>

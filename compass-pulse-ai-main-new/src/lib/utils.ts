@@ -243,6 +243,15 @@ export function objectiveScore(o: DeptGoal): number | undefined {
 // numeric score). Each RAG band is mapped to its band midpoint for averaging purposes, then bucketed
 // back using the same red < 0.4 / amber 0.4–0.6 / green 0.7–1.0 thresholds shown in the RAG Guide.
 const RAG_MIDPOINT: Record<RAG, number> = { red: 0.2, amber: 0.5, green: 0.85 };
+
+// The same red/amber/green band midpoint, exposed for a single Key Result's own confidence —
+// there's no continuously-tracked confidence number in the data model (ragConfidence is always a
+// qualitative RAG band), so the band's midpoint is the quantitative value shown alongside it,
+// exactly like the Objective-level rollup above already does.
+export function ragConfidenceValue(rag: RAG): number {
+  return RAG_MIDPOINT[rag];
+}
+
 export function objectiveConfidence(o: DeptGoal): RAG {
   const confidences = (o.keyResults ?? []).map(k => k.ragConfidence);
   if (confidences.length === 0) return "green";

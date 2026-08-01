@@ -1384,15 +1384,21 @@ export function AdminSection() {
     if (directorScope) {
       return computeChallengeThemes(
         directorScope.depts.flatMap(d => CHALLENGE_MEMBERS_BY_DEPT[d] ?? []),
-        directorScope.depts.map(d => CHALLENGE_GOALS_BY_DEPT[d] ?? []),
+        Object.fromEntries(directorScope.depts.map(d => [d, CHALLENGE_GOALS_BY_DEPT[d] ?? []])),
       );
     }
     return computeChallengeThemes(
       [...teamMembers, ...opsTeamMembersAll, ...complianceTeamMembers, ...marketingTeamMembers],
-      [departmentGoals, opsDepartmentGoals, complianceDepartmentGoals, marketingDepartmentGoals],
+      CHALLENGE_GOALS_BY_DEPT,
     );
   }, [teamMembers, opsTeamMembersAll, departmentGoals, opsDepartmentGoals, directorScope]);
-  const [expandedTheme, setExpandedTheme] = useState<string | null>(null);
+  // A Set, not a single value — expanding one theme used to collapse whatever else was open.
+  const [expandedThemes, setExpandedThemes] = useState<Set<string>>(new Set());
+  const toggleTheme = (theme: string) => setExpandedThemes(prev => {
+    const next = new Set(prev);
+    if (next.has(theme)) next.delete(theme); else next.add(theme);
+    return next;
+  });
 
   return (
     <div className="space-y-6">
@@ -1807,19 +1813,21 @@ export function AdminSection() {
               </span>
             )}
           </div>
-          {challengeThemes.map((t) => (
+          {challengeThemes.map((t) => {
+            const isExpanded = expandedThemes.has(t.theme);
+            return (
             <div key={t.theme} className="border-b border-border/60 last:border-0">
               <button
-                onClick={() => setExpandedTheme(v => v === t.theme ? null : t.theme)}
+                onClick={() => toggleTheme(t.theme)}
                 className="w-full flex items-center justify-between py-2.5 text-left gap-2"
               >
                 <div className="text-sm flex items-center gap-1.5 min-w-0">
-                  {expandedTheme === t.theme ? <ChevronUp className="size-3 text-muted-foreground shrink-0" /> : <ChevronDown className="size-3 text-muted-foreground shrink-0" />}
+                  {isExpanded ? <ChevronUp className="size-3 text-muted-foreground shrink-0" /> : <ChevronDown className="size-3 text-muted-foreground shrink-0" />}
                   <span className="truncate">{t.theme}</span>
                 </div>
                 <div className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">{t.count} mention{t.count !== 1 ? "s" : ""}</div>
               </button>
-              {expandedTheme === t.theme && (
+              {isExpanded && (
                 <div className="pb-3 pl-4 space-y-2">
                   {t.entries.map((e, i) => (
                     <div key={i} className="rounded-lg border border-border/60 bg-muted/20 p-2.5">
@@ -1828,13 +1836,24 @@ export function AdminSection() {
                         <span className="text-[10px] text-muted-foreground truncate">{e.goalTitle}</span>
                       </div>
                       <p className="text-xs text-foreground/80 mt-1 leading-relaxed">&ldquo;{e.remarkText}&rdquo;</p>
-                      <div className="text-[10px] text-muted-foreground mt-1">Linked to: {e.linkedDeptTitle}</div>
+                      {e.pendingResponseFor?.length && !e.response && (
+                        <div className="mt-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                          Awaiting response from <strong>{e.pendingResponseFor.join(", ")}</strong>
+                        </div>
+                      )}
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        Linked to: {e.linkedDeptTitle}
+                        {e.deptName && (
+                          <> · <span className="font-medium">{e.deptName}</span> · {e.objectiveLevel === "team" ? `${e.teamName ?? "Team"}-level OKR` : "Department-level OKR"}</>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
           {challengeThemes.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">No staff challenges reported yet.</p>
           )}

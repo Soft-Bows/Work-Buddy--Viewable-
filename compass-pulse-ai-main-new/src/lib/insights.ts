@@ -57,6 +57,16 @@ export interface ChallengeEntry {
   // remark system) — carries the full thread so the UI can show response/acknowledgement status.
   response?: { text: string; date: string; respondedBy: string; isAI?: boolean };
   resolved?: boolean; // true once the KR owner has acknowledged the response
+  // Real department this Objective belongs to, and whether the Objective itself is department- or
+  // team-level (+ which team) — a staff member can be involved in cross-department OKRs, so this
+  // is what lets the UI label the actual source instead of assuming "your own department."
+  deptName?: string;
+  objectiveLevel?: "department" | "team";
+  teamName?: string;
+  // Who owes the next action — the HOD (+ any secondary owner) if nobody's responded yet, or the
+  // other owner(s) if a response is awaiting the owner's acknowledgement. Mirrors the individual
+  // Key Result card's own "Awaiting response from…" label on Team OKRs so both surfaces agree.
+  pendingResponseFor?: string[];
 }
 export interface ChallengeThemeGroup {
   theme: string;
@@ -65,16 +75,18 @@ export interface ChallengeThemeGroup {
 }
 
 // Computes challenge themes for a given set of members — pass every department's members (admin,
-// org-wide) or just the department(s) a HOD/Director should see (scoped). deptGoalLists resolves
-// each remark's linked Objective title across however many department goal sets are relevant, and is
-// also the live source of Key Result challenge remarks themselves (see challengeRemark on KeyResult).
+// org-wide) or just the department(s) a HOD/Director should see (scoped). deptGoalLists is keyed by
+// real department name (not a bare array) so each entry can be labelled with its actual source
+// department — a staff member's Key Result can live under a department they don't otherwise appear
+// in this view for (cross-department OKRs), which the UI needs to be able to say plainly.
 export function computeChallengeThemes(
   members: TeamMember[],
-  deptGoalLists: DeptGoal[][],
+  deptGoalLists: Record<string, DeptGoal[]>,
 ): ChallengeThemeGroup[] {
+  const allLists = Object.values(deptGoalLists);
   const resolveDeptGoalTitle = (linkedDept?: string): string => {
     if (!linkedDept) return "—";
-    for (const list of deptGoalLists) {
+    for (const list of allLists) {
       const found = list.find(g => g.id === linkedDept);
       if (found) return found.title;
     }
@@ -98,7 +110,7 @@ export function computeChallengeThemes(
   // above, so a non-HOD leave supervisor passing just their own direct reports sees only their own
   // team's challenges, while a HOD/Director passing the full department roster sees everything.
   const memberNames = new Set(members.map(m => m.name));
-  for (const list of deptGoalLists) {
+  for (const [deptName, list] of Object.entries(deptGoalLists)) {
     for (const objective of list) {
       for (const kr of objective.keyResults ?? []) {
         if (!kr.challengeRemark) continue;
@@ -112,6 +124,14 @@ export function computeChallengeThemes(
           date: kr.challengeRemark.date,
           response: kr.challengeResponse,
           resolved: !!kr.challengeResponse && !kr.pendingChallengeAckByOwner,
+          deptName,
+          objectiveLevel: objective.level === "team" ? "team" : "department",
+          teamName: objective.teamName,
+          pendingResponseFor: kr.pendingChallengeResponseFor?.length
+            ? kr.pendingChallengeResponseFor
+            : kr.pendingChallengeAckByOwner
+            ? ownerNames(kr.owner)
+            : undefined,
         });
       }
     }
