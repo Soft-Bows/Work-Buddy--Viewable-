@@ -38,21 +38,21 @@ function PaletteMascotSVG({ className }: { className?: string }) {
   );
 }
 
-// Directors are usual accounts with an extra supervisory layer, not a separate isolated page —
-// they get the same nav as everyone else, minus My Goals/Skills Profile/Survey Insights (which
-// assume the viewer owns personal KRs/a skills profile/a single department, none of which a
-// director has in this data model). Their multi-department oversight is embedded directly into
-// Team OKRs' Key Staff Challenges and Admin Console's Departmental Competency Gaps (both already
-// existing pages) via getRelevantDeptsForViewer, exactly like any other real leave supervisor who
-// happens to have more than one HOD reporting to them — see src/lib/insights.ts.
+// Directors are usual accounts with an extra supervisory layer, not a separate isolated page — they
+// get the full nav any HOD would (Home, Team OKRs, My Goals, Skills Profile, Appreciation Corner,
+// Survey Insights, Rewards), just never Admin Console (that stays admin-tier-only). Their multi-
+// department oversight is embedded directly into Team OKRs' Key Staff Challenges (scoped to the
+// departments they actually oversee) and Skills Profile's Organisational Competency Gaps/Key Staff
+// Challenges (org-wide — every department, not just the ones reporting to them, matching an actual
+// admin's view) via getRelevantDeptsForViewer — see src/lib/insights.ts.
 const NAV = [
   { id: "home", label: "Home", icon: Home, tiers: ["staff", "manager", "admin", "director1", "director2"] },
   { id: "team", label: "Team OKRs", icon: Target, tiers: ["staff", "manager", "admin", "director1", "director2"] },
-  { id: "mygoals", label: "My Goals", icon: TrendingUp, tiers: ["staff", "manager", "admin"] },
-  { id: "skills", label: "Skills Profile", icon: Brain, tiers: ["staff", "manager", "admin"] },
+  { id: "mygoals", label: "My Goals", icon: TrendingUp, tiers: ["staff", "manager", "admin", "director1", "director2"] },
+  { id: "skills", label: "Skills Profile", icon: Brain, tiers: ["staff", "manager", "admin", "director1", "director2"] },
   { id: "compliments", label: "Appreciation Corner", icon: Heart, tiers: ["staff", "manager", "admin", "director1", "director2"] },
-  { id: "survey", label: "Survey Insights", icon: BarChart3, tiers: ["manager"] },
-  { id: "admin", label: "Admin Console", icon: Settings, tiers: ["admin", "director1", "director2"] },
+  { id: "survey", label: "Survey Insights", icon: BarChart3, tiers: ["manager", "director1", "director2"] },
+  { id: "admin", label: "Admin Console", icon: Settings, tiers: ["admin"] },
   { id: "rewards", label: "Rewards", icon: Trophy, tiers: ["staff", "manager", "admin", "director1", "director2"] },
 ] as const;
 
@@ -101,8 +101,8 @@ export function Sidebar({
   const viewMember = viewMemberId ? teamMembers.find((m) => m.id === viewMemberId) : null;
   const viewStaffEntry = viewMemberId && !viewMember ? staffList.find(s => s.id === viewMemberId) : null;
   const items = NAV.filter((n) => {
-    if (n.id === "admin") return tier === "admin" || isDirectorTier;
-    if (n.id === "survey") return tier === "manager" || tier === "ops_hod" || tier === "staff" || tier === "ops_mgr1";
+    if (n.id === "admin") return tier === "admin";
+    if (n.id === "survey") return tier === "manager" || tier === "ops_hod" || tier === "staff" || tier === "ops_mgr1" || isDirectorTier;
     if (isOpsTier) return true;
     return n.tiers.includes(tier as never);
   });

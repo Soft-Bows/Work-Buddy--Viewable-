@@ -276,14 +276,18 @@ interface AppCtx {
     },
     isOps: boolean,
   ) => void;
-  updateObjective: (objectiveId: string, changes: Partial<DeptGoal>, isOps: boolean, requestedBy?: string) => void;
+  // actingOnBehalfOfHod: set only when a Director (not the department's real HOD) is making this
+  // edit — their real HOD is added to the pending-acknowledgement list regardless of whether the
+  // normal owner-reacknowledgement rules would have included them, since a director's changes are
+  // never self-executing (see appContext.tsx's own comment on updateObjective for the full reasoning).
+  updateObjective: (objectiveId: string, changes: Partial<DeptGoal>, isOps: boolean, requestedBy?: string, actingOnBehalfOfHod?: string) => void;
   renameTeam: (oldName: string, newName: string, isOps: boolean) => void;
   deleteObjective: (objectiveId: string, isOps: boolean) => void;
   // requestedBy is who's making the appointment — used to detect a cross-department owner (their
   // real staffList department differs from this KR's own) and, if so, kick off the 3-party consent
   // workflow (see crossDeptApproval on KeyResult) instead of just the appointee's own acknowledgement.
-  addKeyResult: (objectiveId: string, kr: Omit<KeyResult, "id" | "assignedDate" | "pendingAcknowledgementFor">, isOps: boolean, requestedBy: string) => void;
-  updateKeyResult: (objectiveId: string, krId: string, changes: Partial<KeyResult>, isOps: boolean, requestedBy: string) => void;
+  addKeyResult: (objectiveId: string, kr: Omit<KeyResult, "id" | "assignedDate" | "pendingAcknowledgementFor">, isOps: boolean, requestedBy: string, actingOnBehalfOfHod?: string) => void;
+  updateKeyResult: (objectiveId: string, krId: string, changes: Partial<KeyResult>, isOps: boolean, requestedBy: string, actingOnBehalfOfHod?: string) => void;
   deleteKeyResult: (objectiveId: string, krId: string, isOps: boolean) => void;
   // The appointee's HOD or direct leave supervisor accepts/rejects a cross-department appointment —
   // see respondToCrossDeptAppointment's own comment for the reject-removes-the-owner behaviour.
@@ -1574,10 +1578,17 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
   // computeOwnerEditPendingAck above). assignedDate/ackPenaltyApplied are re-stamped whenever
   // anyone newly goes pending — otherwise the 7-working-day ack SLA sweep (sweepOkrAck) would
   // measure against the *original* (possibly months-old) assignedDate and could fire immediately.
-  const updateObjective = (objectiveId: string, changes: Partial<DeptGoal>, isOps: boolean, requestedBy?: string) =>
+  // `actingOnBehalfOfHod` — set only when the requester is a Director editing a department they
+  // supervise but don't actually head (see DirectorViewMeta/getRelevantDeptsForViewer). A director
+  // has the same editing controls as an HOD, but isn't the department's real owner/executor, so
+  // their real HOD must always end up in the pending-acknowledgement list — added on top of
+  // whatever computeOwnerEditPendingAck already resolved, not instead of it, since the normal
+  // owner-reacknowledgement rules (e.g. a co-owner needing to re-ack a title change) still apply.
+  const updateObjective = (objectiveId: string, changes: Partial<DeptGoal>, isOps: boolean, requestedBy?: string, actingOnBehalfOfHod?: string) =>
     deptGoalSetter(isOps)(prev => prev.map(g => {
       if (g.id !== objectiveId) return g;
-      const pendingFor = applyTeamCoResponsibility(g, changes, g.level, g.teamName, isOps, requestedBy, computeOwnerEditPendingAck(g, changes, requestedBy));
+      let pendingFor = applyTeamCoResponsibility(g, changes, g.level, g.teamName, isOps, requestedBy, computeOwnerEditPendingAck(g, changes, requestedBy));
+      if (actingOnBehalfOfHod && !pendingFor.includes(actingOnBehalfOfHod)) pendingFor = [...pendingFor, actingOnBehalfOfHod];
       return {
         ...g, ...changes,
         pendingAcknowledgementFor: pendingFor.length > 0 ? pendingFor : g.pendingAcknowledgementFor,
@@ -1611,6 +1622,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
     kr: Omit<KeyResult, "id" | "assignedDate" | "pendingAcknowledgementFor">,
     isOps: boolean,
     requestedBy: string,
+    actingOnBehalfOfHod?: string,
   ) => {
     deptGoalSetter(isOps)(prev => prev.map(g => (g.id !== objectiveId ? g : {
       ...g,
@@ -1618,7 +1630,13 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
         ...(g.keyResults ?? []),
         {
           ...kr, id: `kr${Date.now()}${Math.random().toString(36).slice(2, 5)}`,
-          assignedDate: new Date().toISOString().slice(0, 10), pendingAcknowledgementFor: ownerNames(kr.owner),
+          assignedDate: new Date().toISOString().slice(0, 10),
+          // A director adding this KR isn't its department's real owner/executor — their real HOD
+          // goes on the pending list alongside the new appointee(s), same reasoning as
+          // updateObjective's actingOnBehalfOfHod above.
+          pendingAcknowledgementFor: actingOnBehalfOfHod && !ownerNames(kr.owner).includes(actingOnBehalfOfHod)
+            ? [...ownerNames(kr.owner), actingOnBehalfOfHod]
+            : ownerNames(kr.owner),
           crossDeptApproval: detectCrossDeptAppointment(ownerNames(kr.owner), isOps, requestedBy),
         },
       ],
@@ -1627,11 +1645,12 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
 
   // HOD-only, same re-acknowledgement rationale (and assignedDate/ackPenaltyApplied re-stamp) as
   // updateObjective above — only newly-added owners go pending unless title/dueDate also changed.
-  const updateKeyResult = (objectiveId: string, krId: string, changes: Partial<KeyResult>, isOps: boolean, requestedBy: string) =>
+  const updateKeyResult = (objectiveId: string, krId: string, changes: Partial<KeyResult>, isOps: boolean, requestedBy: string, actingOnBehalfOfHod?: string) =>
     deptGoalSetter(isOps)(prev => prev.map(g => (g.id !== objectiveId ? g : {
       ...g, keyResults: (g.keyResults ?? []).map(k => {
         if (k.id !== krId) return k;
-        const pendingFor = applyTeamCoResponsibility(k, changes, g.level, g.teamName, isOps, requestedBy, computeOwnerEditPendingAck(k, changes, requestedBy));
+        let pendingFor = applyTeamCoResponsibility(k, changes, g.level, g.teamName, isOps, requestedBy, computeOwnerEditPendingAck(k, changes, requestedBy));
+        if (actingOnBehalfOfHod && !pendingFor.includes(actingOnBehalfOfHod)) pendingFor = [...pendingFor, actingOnBehalfOfHod];
         // Cross-department detection only cares about names genuinely new to this KR — not
         // "everyone re-acking because the title changed too," which pendingFor also covers.
         const newlyAddedOwners = changes.owner !== undefined

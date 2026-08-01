@@ -27,7 +27,7 @@ function TeamSVG() {
 
 import { toast } from "sonner";
 import { pointsToast } from "@/lib/pointsToast";
-import { cn, workingDaysSince, formatGoalStatusDueDate, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, flattenOkrOptions, objectiveScore, objectiveConfidence, objectiveConfidenceValue, ragConfidenceValue, scoreToRag, keyResultsOwnedBy, formatMonthlyConfidenceDueDate, isAmongOwners, ownerNames, isPendingAckFor, hasPendingAck, isKrOverdue, formatEffectiveKrScoreDueDate, isConfidenceStale } from "@/lib/utils";
+import { cn, workingDaysSince, formatGoalStatusDueDate, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, flattenOkrOptions, objectiveScore, objectiveConfidence, objectiveConfidenceValue, ragConfidenceValue, scoreToRag, keyResultsOwnedBy, formatMonthlyConfidenceDueDate, isAmongOwners, ownerNames, isPendingAckFor, hasPendingAck, isKrOverdue, formatEffectiveKrScoreDueDate, isConfidenceStale, krOwnerCounts, MAX_KRS_PER_OWNER } from "@/lib/utils";
 import { computeChallengeThemes, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
 import { COMPLIANCE_DEPT_NAME, complianceTeamMembers, complianceDepartmentGoals } from "@/lib/complianceData";
 import { MARKETING_DEPT_NAME, marketingTeamMembers, marketingDepartmentGoals } from "@/lib/marketingData";
@@ -1545,6 +1545,25 @@ function ObjectiveCard({
               <button
                 onClick={() => {
                   if (!krDraft.title.trim() || !krDraft.owner || !krDraft.dueDate) { toast.error("Title, owner, and due date are required"); return; }
+                  // Max 5 Key Results per owner, department-wide — separate from the existing max-5-
+                  // per-Objective cap above. Checked against every Objective in this department, not
+                  // just this one, since that's where the person is actually being stretched thin.
+                  const counts = krOwnerCounts(allDeptGoals);
+                  const draftOwnerNames = krDraft.owner.split(",").map(s => s.trim()).filter(Boolean);
+                  const overLimit = draftOwnerNames.filter(n => (counts[n] ?? 0) >= MAX_KRS_PER_OWNER);
+                  if (overLimit.length > 0) {
+                    const roomToSpare = staffList
+                      .filter(s => s.dept === dept && !overLimit.includes(s.name) && (counts[s.name] ?? 0) < MAX_KRS_PER_OWNER)
+                      .sort((a, b) => (counts[a.name] ?? 0) - (counts[b.name] ?? 0))
+                      .slice(0, 5)
+                      .map(s => `${s.name} (${counts[s.name] ?? 0}/${MAX_KRS_PER_OWNER})`);
+                    toast.error(
+                      `${overLimit.join(", ")} already ${overLimit.length > 1 ? "have" : "has"} ${MAX_KRS_PER_OWNER} key results assigned — that's the max per person.` +
+                      (roomToSpare.length > 0 ? ` Consider instead: ${roomToSpare.join(", ")}.` : " No one else in this department has room right now."),
+                      { duration: 8000 },
+                    );
+                    return;
+                  }
                   addKeyResult(deptGoal.id, { title: krDraft.title, owner: krDraft.owner, dueDate: krDraft.dueDate, ragConfidence: "green" }, isOps, viewedUserName);
                   setKrDraft({ title: "", owner: "", dueDate: "" });
                   setAddingKr(false);
@@ -2425,6 +2444,27 @@ export function TeamSection() {
     else toast.error(`Couldn't find ${ownerName}'s profile — they may no longer be an active account.`);
   };
 
+  // A director sees every department they oversee, collapsed by default, one at a time — "grouped
+  // by department... collapsible rows... only fully display if they click on the department." HCWM
+  // and Credit Risk are real, live, CSV-backed state (addKeyResult/updateObjective/updateKeyResult
+  // support them directly), so directors get full HOD-equivalent editing there — the same
+  // ObjectiveCard every HOD uses, just with isHod force-set true and actingOnBehalfOfHod passed
+  // through so the department's real HOD ends up needing to acknowledge the change (see appContext.
+  // tsx's own comment on updateObjective for the full reasoning). Compliance and Marketing
+  // Communications aren't backed by any live mutable state anywhere in this app yet (their data is
+  // static seed content used only for read-only aggregation, same as every other page that shows
+  // them) — directors see a real, correct read-only view there rather than a broken edit UI.
+  const [expandedDirectorDept, setExpandedDirectorDept] = useState<string | null>(null);
+  const directorDeptList = directorMeta
+    ? getRelevantDeptsForViewer(directorMeta.name, directorMeta.department, staffList).depts
+    : [];
+  const directorDeptHod = (dept: string) => staffList.find(s => s.dept === dept && s.hod)?.name;
+  const DIRECTOR_GOALS_BY_DEPT: Record<string, DeptGoal[]> = {
+    [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
+    [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals, [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
+  };
+  const LIVE_DEPT_NAMES = new Set([HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME]);
+
   // Department-level first, then team-level grouped by teamName — "arrange by department-level
   // followed by team-level... without overcrowding" per the request.
   const deptLevelGroups = departmentGoals.filter(g => g.level !== "team");
@@ -2549,6 +2589,81 @@ export function TeamSection() {
         </div>
       </div>
       {showRagInfo && <RAGInfoPanel onClose={() => setShowRagInfo(false)} />}
+
+      {directorMeta && (
+        <div className="space-y-3">
+          <h2 className="font-display text-2xl">Departments You Oversee</h2>
+          {directorDeptList.length === 0 ? (
+            <Card><p className="text-sm text-muted-foreground py-2">No department HODs currently list you as their leave supervisor.</p></Card>
+          ) : (
+            directorDeptList.map(dept => {
+              const isExpanded = expandedDirectorDept === dept;
+              const isLive = LIVE_DEPT_NAMES.has(dept);
+              const goals = DIRECTOR_GOALS_BY_DEPT[dept] ?? [];
+              const isOpsDept = dept === CREDIT_RISK_DEPT_NAME;
+              return (
+                <div key={dept} className="rounded-2xl border border-border/70 overflow-hidden">
+                  <button
+                    onClick={() => setExpandedDirectorDept(isExpanded ? null : dept)}
+                    className="w-full flex items-center justify-between gap-2 px-4 py-3.5 bg-muted/30 text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Building2 className="size-4 text-primary shrink-0" />
+                      <span className="font-medium text-sm">{dept}</span>
+                      <span className="text-[10px] text-muted-foreground">{goals.length} objective{goals.length === 1 ? "" : "s"} · HOD: {directorDeptHod(dept) ?? "—"}</span>
+                      {!isLive && (
+                        <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">Read-only</span>
+                      )}
+                    </div>
+                    {isExpanded ? <ChevronUp className="size-4 text-muted-foreground shrink-0" /> : <ChevronDown className="size-4 text-muted-foreground shrink-0" />}
+                  </button>
+                  {isExpanded && (
+                    <div className="p-4 space-y-3 bg-card">
+                      {goals.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-3">No objectives yet.</p>
+                      ) : isLive ? (
+                        goals.map((deptGoal, idx) => (
+                          <ObjectiveCard
+                            key={deptGoal.id}
+                            deptGoal={deptGoal}
+                            objectiveIndex={idx}
+                            allDeptGoals={goals}
+                            isHod={true}
+                            isTeamOkrEditor={false}
+                            viewedUserName={viewedUserName}
+                            isOps={isOpsDept}
+                            dept={dept}
+                            canOpenOwner={() => true}
+                            onOpenOwner={openOwner}
+                          />
+                        ))
+                      ) : (
+                        // Read-only — Compliance/Marketing Communications have no live mutable
+                        // state to edit yet (see the comment on directorDeptList above).
+                        goals.map(deptGoal => (
+                          <div key={deptGoal.id} className="rounded-xl border border-border/60 bg-muted/20 p-3.5 space-y-2">
+                            <div className="font-medium text-sm">{deptGoal.title}</div>
+                            <div className="space-y-1.5">
+                              {(deptGoal.keyResults ?? []).map(kr => (
+                                <div key={kr.id} className="flex items-center justify-between gap-2 text-xs border-t border-border/40 pt-1.5 first:border-0 first:pt-0">
+                                  <span className="flex-1 min-w-0 truncate">{kr.title}</span>
+                                  <span className="text-muted-foreground shrink-0">{ownerNames(kr.owner).join(", ")}</span>
+                                  <RagPill rag={kr.ragConfidence} value={ragConfidenceValue(kr.ragConfidence)} />
+                                  {kr.score !== undefined && <RagPill rag={scoreToRag(kr.score)} value={kr.score} />}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {/* ── Department OKRs subheader — mascot always on the left, no other symbol ── */}
       <div className="mb-5 flex items-center justify-between gap-4">

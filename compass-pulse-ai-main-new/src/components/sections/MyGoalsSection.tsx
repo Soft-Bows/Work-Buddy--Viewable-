@@ -1642,12 +1642,17 @@ function MyKeyResultCard({ kr, objective, isOps, viewerName }: { kr: KeyResult; 
     )}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-base leading-snug">{kr.title}</div>
-          {/* Small clarifying line — this performance goal is a Key Result, not a directly-assigned
-              Objective, so it's explicit what it means and where it fits. */}
-          <div className="text-[11px] text-muted-foreground mt-0.5">
-            Key Result — contributes to a {objective.level === "team" ? "team" : "department"} objective
-          </div>
+          {/* Same prominent-badge treatment as MyObjectiveCard — "Department Key Result ·
+              You're an owner" instead of a generic "Key Result — contributes to…" line, so the two
+              card types read consistently and it's equally obvious what you own either way. */}
+          <span className={cn(
+            "inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-lg border",
+            objective.level === "team" ? "text-violet-700 dark:text-violet-300 bg-violet-500/10 border-violet-500/25" : "text-primary bg-primary/10 border-primary/25"
+          )}>
+            <UserCircle2 className="size-3 shrink-0" />
+            {objective.level === "team" && objective.teamName ? `${objective.teamName} Key Result` : "Department Key Result"} · You're an owner
+          </span>
+          <div className="font-medium text-base leading-snug mt-1.5">{kr.title}</div>
           <div className="flex items-center gap-1.5 flex-wrap mt-2">
             <button
               onClick={() => focusObjective(objective.id, false)}
@@ -2095,20 +2100,18 @@ function MyObjectiveCard({ objective, allDeptGoals }: { objective: DeptGoal; all
     <Card className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <div className={cn("text-[10px] font-bold uppercase tracking-wide", objective.level === "team" ? "text-violet-600 dark:text-violet-400" : "text-primary")}>
-              {objective.level === "team" && objective.teamName ? `${objective.teamName}'s OKRs` : "Department OKRs"}
-            </div>
-            <span className="flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30">
-              <UserCircle2 className="size-2.5" /> You're an owner
-            </span>
-          </div>
-          {/* Small clarifying line — this performance goal is an assigned Objective itself, not a
-              Key Result under one, so it's explicit what it means and where it fits. */}
-          <div className="text-[11px] text-muted-foreground mt-0.5">
-            Assigned {objective.level === "team" ? "team" : "department"} objective — you're the owner, not just a contributor
-          </div>
-          <div className="font-medium text-base leading-snug mt-1">{objective.title}</div>
+          {/* One prominent badge instead of a title-style label plus a separate small clarifying
+              line underneath it — "Department Objective · You're an owner" says everything the two
+              lines used to (that it's a whole Objective, which OKR set it's under, and that you own
+              it outright) without needing both. */}
+          <span className={cn(
+            "inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-lg border",
+            objective.level === "team" ? "text-violet-700 dark:text-violet-300 bg-violet-500/10 border-violet-500/25" : "text-primary bg-primary/10 border-primary/25"
+          )}>
+            <UserCircle2 className="size-3 shrink-0" />
+            {objective.level === "team" && objective.teamName ? `${objective.teamName} Objective` : "Department Objective"} · You're an owner
+          </span>
+          <div className="font-medium text-base leading-snug mt-1.5">{objective.title}</div>
           {objective.description && <p className="text-xs text-muted-foreground mt-1">{objective.description}</p>}
           {objective.dueDate && <div className="text-xs text-muted-foreground mt-1.5">Due {formatDueDate(objective.dueDate)}</div>}
         </div>
@@ -2696,8 +2699,71 @@ function ManagerGoalsView() {
 
 // ── Main export ────────────────────────────────────────────────────────────────
 
+// Directors are free to set their own development goals — reuses the same generic
+// upsertTeamDevGoal/deleteTeamDevGoal map every HOD/leave-supervisor drawer already writes other
+// people's dev goals into, just keyed by the director's own real id instead of a direct report's.
+// Performance goals are deliberately not offered here: in this data model a "performance goal" is a
+// Key Result owned under a real department Objective, and a director owns no department of their
+// own to host one under — their real performance content is the departments they oversee, on the
+// Team OKRs page, not a freestanding personal KR set.
+function DirectorGoalsView() {
+  const { directorMeta, teamDevGoalsById, upsertTeamDevGoal, deleteTeamDevGoal } = useApp();
+  const [addingGoal, setAddingGoal] = useState(false);
+  if (!directorMeta) return null;
+  const devGoals = teamDevGoalsById[directorMeta.personaId] ?? [];
+
+  return (
+    <div className="space-y-6">
+      <div className="mb-2">
+        <h2 className="font-display text-2xl">My Goals</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Your own development goals — free-form, since a director's real performance content is the departments you oversee on the Team OKRs page, not a personal Key Result set.
+        </p>
+      </div>
+      <div>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <div className="size-1.5 rounded-full bg-amber shrink-0" />
+            <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Development Goals ({devGoals.length})</div>
+          </div>
+          {!addingGoal && (
+            <button onClick={() => setAddingGoal(true)} className="flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md bg-amber/15 text-amber-foreground border border-amber/30 hover:bg-amber/25 transition-colors">
+              <Plus className="size-3" /> Add a Goal
+            </button>
+          )}
+        </div>
+        {addingGoal && (
+          <div className="mb-3">
+            <AddDevGoalForm
+              onAdd={(g) => { upsertTeamDevGoal(directorMeta.personaId, g); setAddingGoal(false); }}
+              onCancel={() => setAddingGoal(false)}
+            />
+          </div>
+        )}
+        {devGoals.length === 0 && !addingGoal ? (
+          <div className="rounded-xl border-2 border-dashed border-border px-6 py-8 text-center text-sm text-muted-foreground">
+            No development goals set yet — add one to start tracking your own growth.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {devGoals.map((g) => (
+              <DevGoalCard
+                key={g.id}
+                goal={g}
+                onUpdate={(id, changes) => upsertTeamDevGoal(directorMeta.personaId, { ...g, ...changes, id })}
+                onDelete={(id) => deleteTeamDevGoal(directorMeta.personaId, id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function MyGoalsSection() {
   const { tier } = useApp();
   if (tier === "manager" || tier === "ops_hod") return <ManagerGoalsView />;
+  if (tier === "director1" || tier === "director2") return <DirectorGoalsView />;
   return <StaffGoalsView />;
 }

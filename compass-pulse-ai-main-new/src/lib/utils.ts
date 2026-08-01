@@ -210,6 +210,24 @@ export function hasPendingAck(item: { pendingAcknowledgementFor?: string[] }): b
 // Management's opsDepartmentGoals) owned by a given member, by name. This is the single source of
 // truth for "this member's performance goals" everywhere — My Goals, Team OKRs' member drawer, the
 // new-joiner/"without goals" 3-goal rules — replacing the old individually-created Goal objects.
+// Max Key Results any one person can own at once, department-wide — separate from (and in addition
+// to) the existing max-5-KRs-per-Objective cap. That one limits how big a single Objective's KR
+// list can get; this one limits how thin one person can be spread across every Objective in the
+// department at once.
+export const MAX_KRS_PER_OWNER = 5;
+
+// How many Key Results each name currently owns, across every Objective in the given goal lists —
+// the basis for both enforcing MAX_KRS_PER_OWNER and suggesting who else has room.
+export function krOwnerCounts(deptGoalLists: DeptGoal[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const objective of deptGoalLists) {
+    for (const kr of objective.keyResults ?? []) {
+      for (const name of ownerNames(kr.owner)) counts[name] = (counts[name] ?? 0) + 1;
+    }
+  }
+  return counts;
+}
+
 export function keyResultsOwnedBy(
   memberName: string,
   ...deptGoalLists: DeptGoal[][]

@@ -11,7 +11,9 @@ import { TeamHealthWidget } from "@/components/sections/TeamHealthWidget";
 import type { TeamMember, RAG, SkillAttachment, DeptGoal, PersonalDevGoal } from "@/lib/mockData";
 import { getDefaultSkillsForRole, getRegulatorExamsForRole, classifySkill, getSSGJobFunctionUrl, isHCWMDept, getIHRPBadgesForRole, ALL_SKILLS, IHRP_SKILLS_CATALOG } from "@/lib/skillsCatalog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { getRelevantDeptsForViewer } from "@/lib/insights";
+import { getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
+import { COMPLIANCE_DEPT_NAME, complianceTeamMembers, complianceDepartmentGoals } from "@/lib/complianceData";
+import { MARKETING_DEPT_NAME, marketingTeamMembers, marketingDepartmentGoals } from "@/lib/marketingData";
 
 // A category-grouped rendering for the "What Needs Your Attention" popups (both the manager/HOD and
 // staff versions) — a flat list of a dozen-plus different notification types read as noise; grouping
@@ -1030,7 +1032,7 @@ export function HomeSection() {
     allTeamMemberSkills, managerInputs, acknowledgedManagerInputs, opsMeta, teamDevGoalsById,
     nudgedGoalIds, setFocusedGoalId, pendingDevGoalRecs, deptGoalSkills, pendingGoalEditProposals,
     checkIns, setTeamMemberDrawerReturnHome, aiActivityLog, logAiActivity,
-    directorMeta, staffList,
+    directorMeta, staffList, hcwmTeamMembers, opsTeamMembersAll, hcwmDepartmentGoals,
   } = useApp();
 
   const isOpsTier = tier === "ops_hod" || tier === "ops_mgr1" || tier === "ops_mgr2";
@@ -1365,16 +1367,21 @@ export function HomeSection() {
     setDraftGoals(goals);
   };
 
-  // Directors are usual accounts with an added supervisory layer, not a bespoke isolated page —
-  // but they genuinely own no department/team roster of their own in this data model (see
-  // DirectorViewMeta in appContext.tsx), so the dense Department/Team OKRs + Team-at-a-Glance +
-  // Team Health widgets below (all built around owning a real team roster) would only ever show
-  // broken/empty states for them. A light, honest home instead: who they are, which departments
-  // they oversee (real data via getRelevantDeptsForViewer, not hardcoded), and quick links into
-  // where their real content actually lives — Team OKRs' Key Staff Challenges and Admin Console's
-  // Departmental Competency Gaps, both already-existing pages, not a new one.
+  // Directors are usual accounts with an added supervisory layer — their Home mirrors an HOD's own
+  // (Department/Team OKRs summary + Team-at-a-Glance), just built from real cross-department data
+  // (getRelevantDeptsForViewer) instead of one fixed roster, since a director's "team" is whichever
+  // HODs actually list them as their real leave supervisor per users.csv.
   if (directorMeta) {
     const { depts: directorDepts } = getRelevantDeptsForViewer(directorMeta.name, directorMeta.department, staffList);
+    const DIR_GOALS_BY_DEPT: Record<string, DeptGoal[]> = {
+      [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
+      [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals, [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
+    };
+    // Every department's own full roster, combined — Team-at-a-Glance needs the WHOLE set (not
+    // just the director's immediate HOD reports) so expanding a supervisor's row can still find
+    // *their* reports within the same department, exactly like the normal HOD flow does.
+    const allKnownMembers = [...hcwmTeamMembers, ...opsTeamMembersAll, ...complianceTeamMembers, ...marketingTeamMembers];
+
     return (
       <div className="space-y-6">
         <div
@@ -1388,37 +1395,78 @@ export function HomeSection() {
             <div className="text-sm text-white/80 mt-1">{directorMeta.designation}</div>
           </div>
         </div>
-        <Card>
-          <SectionTitle sub="Real-time, drawn straight from each department HOD's own leave-supervisor field — nothing hardcoded here.">
-            Departments You Oversee
-          </SectionTitle>
-          {directorDepts.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-2">No department HODs currently list you as their leave supervisor.</p>
-          ) : (
-            <ul className="space-y-2 py-2">
-              {directorDepts.map(dept => (
-                <li key={dept} className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg bg-muted/50">
-                  <Building2 className="size-4 text-primary shrink-0" />
-                  {dept}
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex flex-wrap gap-2 pt-3 mt-2 border-t border-border/60">
-            <button
-              onClick={() => setSection("team")}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground font-medium"
-            >
-              <Target className="size-3.5" /> Key Staff Challenges
-            </button>
-            <button
-              onClick={() => setSection("admin")}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-border font-medium"
-            >
-              <ExternalLink className="size-3.5" /> Departmental Competency Gaps
+
+        {/* ── Department/Team OKRs summary — one collapsed card per department you oversee, real
+            objective counts/confidence/score, not just a bare name list. Full editing (same rights
+            as any HOD, with the real HOD acknowledging your changes) lives on Team OKRs. ── */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-display text-xl">Department/Team OKRs</h2>
+            <button onClick={() => setSection("team")} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground font-medium">
+              <Target className="size-3.5" /> Open Team OKRs
             </button>
           </div>
+          {directorDepts.length === 0 ? (
+            <Card><p className="text-sm text-muted-foreground py-2">No department HODs currently list you as their leave supervisor.</p></Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {directorDepts.map(dept => {
+                const goals = DIR_GOALS_BY_DEPT[dept] ?? [];
+                const allKrs = goals.flatMap(g => g.keyResults ?? []);
+                const scored = allKrs.filter(k => k.score !== undefined);
+                const avgScore = scored.length > 0 ? scored.reduce((s, k) => s + (k.score ?? 0), 0) / scored.length : null;
+                return (
+                  <Card key={dept} className="space-y-2">
+                    <div className="flex items-center gap-1.5 text-sm font-semibold">
+                      <Building2 className="size-3.5 text-primary shrink-0" /> {dept}
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>{goals.length} objective{goals.length === 1 ? "" : "s"}</span>
+                      <span>{allKrs.length} key result{allKrs.length === 1 ? "" : "s"}</span>
+                      {avgScore !== null && <span className="font-medium text-foreground">Avg score {avgScore.toFixed(1)}</span>}
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ── Team at a Glance — your real direct-report HODs, per users.csv, same expand-to-see-
+            their-reports interaction any HOD's own view already has. ── */}
+        <Card>
+          <div className="mb-3">
+            <h2 className="font-display text-xl">Team At A Glance</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Department HODs who report directly to you</p>
+          </div>
+          <TeamAtAGlanceSection teamMembers={allKnownMembers} viewerName={directorMeta.name} isHodViewer={true} />
         </Card>
+
+        {/* Development Roadmap — tailored from the director's own real designation/department (not
+            borrowed from whichever staff persona happens to be switched in elsewhere), same SSG
+            Skills Framework routing every non-HCWM role gets. */}
+        <Card>
+          <SectionTitle sub="Your own role's track on the SSG Skills Framework for Financial Services (financial services sector).">
+            Development Roadmap
+          </SectionTitle>
+          <a
+            href={getSSGJobFunctionUrl(directorMeta.designation, directorMeta.department).url}
+            target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-xs text-primary hover:underline mt-2"
+          >
+            <ExternalLink className="size-3.5" />
+            View the full SSG Skills Framework for {getSSGJobFunctionUrl(directorMeta.designation, directorMeta.department).track}
+          </a>
+        </Card>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setSection("skills")}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-border font-medium"
+          >
+            <ExternalLink className="size-3.5" /> Organisational Competency Gaps (Skills Profile)
+          </button>
+        </div>
       </div>
     );
   }

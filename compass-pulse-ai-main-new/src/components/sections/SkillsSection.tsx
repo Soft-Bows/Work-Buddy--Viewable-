@@ -2,14 +2,16 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, SectionTitle, SkillAttachmentModal } from "@/components/ui-bits";
 import { useApp } from "@/lib/appContext";
-import type { SkillAttachment } from "@/lib/mockData";
+import type { SkillAttachment, DeptGoal } from "@/lib/mockData";
 import { pointsToast } from "@/lib/pointsToast";
-import { Check, Clock, Plus, Award, ArrowLeftRight, ExternalLink, CheckCircle2, XCircle, Search, Loader2, FileText, AlertTriangle } from "lucide-react";
+import { Check, Clock, Plus, Award, ArrowLeftRight, ExternalLink, CheckCircle2, XCircle, Search, Loader2, FileText, AlertTriangle, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatJobGrade } from "@/lib/utils";
 import { fetchPhillipJobsFn } from "@/lib/api/data.functions";
 import { SKILLS_BY_CATEGORY, getDefaultSkillsForRole, getRegulatorExamsForRole, getSkillCategoriesForRole, classifySkill, getSSGJobFunctionUrl, IHRP_SKILLS_CATALOG, isHCWMDept, getIHRPBadgesForRole, classifyIHRPBadge } from "@/lib/skillsCatalog";
-import { computeCompetencyGapRow, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
+import { computeCompetencyGapRow, computeChallengeThemes, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
+import { COMPLIANCE_DEPT_NAME, complianceDepartmentGoals, complianceTeamMembers } from "@/lib/complianceData";
+import { MARKETING_DEPT_NAME, marketingDepartmentGoals, marketingTeamMembers } from "@/lib/marketingData";
 
 // ── Job function picker data ───────────────────────────────────────────────────
 
@@ -205,10 +207,12 @@ export function SkillsSection() {
   const {
     skills, currentUser, addPendingSkill,
     tier, teamMembers, focusedSkillsMemberId, setFocusedSkillsMemberId,
-    staffMemberId, adminMemberId, allTeamMemberSkills, staffList, opsMeta,
+    staffMemberId, adminMemberId, allTeamMemberSkills, staffList, opsMeta, directorMeta,
     opsAllTeamMemberSkills, hcwmDepartmentGoals, opsDepartmentGoals, deptGoalSkills,
     managerDevGoals, staffDevGoals, adminDevGoals,
+    opsTeamMembersAll,
   } = useApp();
+  const isDirectorTier = tier === "director1" || tier === "director2";
   const [pending, setPending] = useState(skills.pending);
   const [optimisticPending, setOptimisticPending] = useState<string[]>([]);
   const [query, setQuery] = useState("");
@@ -240,7 +244,9 @@ export function SkillsSection() {
   // against allTeamMemberSkills (already correctly populated for both HCWM and ops personas).
   // This intentionally does NOT hardcode tier checks, so any future persona — whether a new
   // HOD, manager, or staff member with their own reports — picks this up automatically.
-  const effectiveViewerName = opsMeta
+  const effectiveViewerName = directorMeta
+    ? directorMeta.name
+    : opsMeta
     ? opsMeta.user.name
     : isManager
     ? currentUser.name
@@ -256,8 +262,11 @@ export function SkillsSection() {
   // other HODs reporting to them, per real users.csv supervisor/hod data) sees an aggregate across
   // every department those HOD reports themselves head. Same computation as the admin console's
   // org-wide "Organisational Competency Gaps" (src/lib/insights.ts), just scoped to fewer people.
-  const isHodViewer = (tier === "manager" && currentUser.hod) || tier === "ops_hod";
-  const GOALS_BY_DEPT: Record<string, { id: string }[]> = { [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals };
+  const isHodViewer = (tier === "manager" && currentUser.hod) || tier === "ops_hod" || isDirectorTier;
+  const GOALS_BY_DEPT: Record<string, { id: string }[]> = {
+    [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
+    [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals, [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
+  };
   const allMemberSkillsForGap = [...allTeamMemberSkills, ...opsAllTeamMemberSkills];
   const canonicalOwnDept = staffList.find(s => s.name === effectiveViewerName)?.dept ?? (opsMeta ? opsMeta.user.department : currentUser.department);
   const { depts: relevantDeptsForGap, isDirector: isDirectorGapView } = isHodViewer
@@ -271,9 +280,37 @@ export function SkillsSection() {
       )
     : null;
 
-  // Experience profile data — sourced from opsMeta for ops tiers, currentUser for manager, staffList for staff/admin
+  // ── Organisational Competency Gaps + Key Staff Challenges (org-wide, every department, not just
+  // the ones reporting to this director) — the same two sections Admin Console shows, mirrored here
+  // for a director "if they have 'director' in their designation," per the explicit ask, since
+  // directors don't have Admin Console access at all. Every other tier never computes any of this.
+  const isDirectorDesignation = isDirectorTier && !!directorMeta?.designation.toLowerCase().includes("director");
+  const ORG_MEMBERS_BY_DEPT: Record<string, typeof teamMembers> = {
+    [HCWM_DEPT_NAME]: teamMembers, [CREDIT_RISK_DEPT_NAME]: opsTeamMembersAll,
+    [COMPLIANCE_DEPT_NAME]: complianceTeamMembers, [MARKETING_DEPT_NAME]: marketingTeamMembers,
+  };
+  const ORG_GOALS_BY_DEPT: Record<string, DeptGoal[]> = {
+    [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
+    [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals, [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
+  };
+  const orgWideCompetencyGaps = isDirectorDesignation
+    ? Object.keys(ORG_GOALS_BY_DEPT)
+        .map(dept => computeCompetencyGapRow(dept, staffList.filter(s => s.dept === dept), GOALS_BY_DEPT, deptGoalSkills, allMemberSkillsForGap))
+        .filter(g => g.gapPct !== null)
+    : [];
+  const orgWideChallengeThemes = isDirectorDesignation
+    ? computeChallengeThemes(Object.values(ORG_MEMBERS_BY_DEPT).flat(), ORG_GOALS_BY_DEPT)
+    : [];
+  const [orgPanelOpen, setOrgPanelOpen] = useState(false);
+  const [expandedOrgTheme, setExpandedOrgTheme] = useState<string | null>(null);
+
+  // Experience profile data — sourced from directorMeta for directors, opsMeta for ops tiers,
+  // currentUser for manager, staffList for staff/admin
   const staffEntry = !isManager ? staffList.find(s => s.name === viewedMember?.name) : null;
-  const experienceProfile = isOpsTier && opsMeta
+  const directorStaffEntry = directorMeta ? staffList.find(s => s.id === directorMeta.personaId) : null;
+  const experienceProfile = directorMeta
+    ? { designation: directorMeta.designation, dept: directorMeta.department, grade: directorStaffEntry?.grade ?? 7, tenure: directorStaffEntry?.join.replace(" ago", "") ?? "—", reportsTo: directorStaffEntry?.supervisor !== "—" ? directorStaffEntry?.supervisor : null }
+    : isOpsTier && opsMeta
     ? { designation: opsMeta.user.designation, dept: opsMeta.user.department, grade: opsMeta.user.grade, tenure: `${opsMeta.user.tenureYears} yr${opsMeta.user.tenureYears !== 1 ? "s" : ""}`, reportsTo: null }
     : isManager
     ? { designation: currentUser.designation, dept: currentUser.department, grade: currentUser.grade, tenure: `${currentUser.tenureYears} yr${currentUser.tenureYears !== 1 ? "s" : ""}`, reportsTo: null }
@@ -507,6 +544,71 @@ export function SkillsSection() {
               <p className="text-sm text-muted-foreground text-center py-4">No team skills awaiting your review.</p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── Director-only: Organisational Competency Gaps + Key Staff Challenges, org-wide (every
+          department, not just the ones reporting to this director) — the same two sections Admin
+          Console shows, mirrored here since directors don't get Admin Console access at all. ── */}
+      {isDirectorDesignation && (
+        <div className="rounded-2xl border border-violet-500/25 overflow-hidden shadow-sm">
+          <button onClick={() => setOrgPanelOpen(v => !v)} className="w-full flex items-center justify-between gap-2 px-4 py-3.5 bg-gradient-to-r from-violet-500/10 via-violet-500/5 to-transparent border-b border-violet-500/20 text-left">
+            <div className="flex items-center gap-2">
+              <div className="size-6 rounded-full bg-violet-500/20 grid place-items-center shrink-0">
+                <AlertTriangle className="size-3 text-violet-600 dark:text-violet-300" />
+              </div>
+              <span className="text-base font-display">Organisational Competency Gaps &amp; Key Staff Challenges</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30">Org-wide</span>
+            </div>
+            {orgPanelOpen ? <ChevronUp className="size-4 text-muted-foreground shrink-0" /> : <ChevronDown className="size-4 text-muted-foreground shrink-0" />}
+          </button>
+          {orgPanelOpen && (
+            <div className="bg-card p-4 space-y-5">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Competency Gaps — every department</div>
+                {orgWideCompetencyGaps.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No department has tagged required skills on its OKRs yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {orgWideCompetencyGaps.map(g => (
+                      <div key={g.name} className="flex items-center justify-between gap-2 text-xs border-b border-border/50 last:border-0 pb-1.5 last:pb-0">
+                        <span className="font-medium">{g.name}</span>
+                        <span className={cn("font-semibold", (g.gapPct ?? 0) > 30 ? "text-rag-red" : "text-muted-foreground")}>{g.gapPct}% gap</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Key Staff Challenges — every department</div>
+                {orgWideChallengeThemes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No staff challenges reported yet.</p>
+                ) : (
+                  orgWideChallengeThemes.map(t => (
+                    <div key={t.theme} className="border-b border-border/60 last:border-0">
+                      <button onClick={() => setExpandedOrgTheme(v => v === t.theme ? null : t.theme)} className="w-full flex items-center justify-between py-2 text-left gap-2">
+                        <span className="text-sm truncate">{t.theme}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">{t.count} mention{t.count !== 1 ? "s" : ""}</span>
+                      </button>
+                      {expandedOrgTheme === t.theme && (
+                        <div className="pb-2.5 pl-3 space-y-1.5">
+                          {t.entries.map((e, i) => (
+                            <div key={i} className="rounded-lg border border-border/60 bg-muted/20 p-2">
+                              <div className="flex items-center justify-between gap-2 text-xs">
+                                <span className="font-semibold">{e.memberName}</span>
+                                {e.deptName && <span className="text-[10px] text-muted-foreground">{e.deptName}</span>}
+                              </div>
+                              <p className="text-xs text-foreground/80 mt-1 leading-relaxed">&ldquo;{e.remarkText}&rdquo;</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
