@@ -245,14 +245,30 @@ function SingaporeScene() {
   return (
     <Scene>
       <SkyLayer sky="linear-gradient(180deg, #CBD6EF 0%, #B6A9DE 26%, #DDEDE6 62%, #EEF7F2 100%)" glow="#E8C9F5" />
-      <svg className={`absolute bottom-0 inset-x-0 w-full h-[44vh] min-h-[250px] ${LANDMARK_OPACITY}`} viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
+      {/* Marina Bay Sands, redrawn big and bold rather than as three thin sticks — the towers now
+          take up a third of the canvas width and nearly the full landmark height, and the SkyPark
+          is one continuous, unmistakably boat-hulled deck (flat middle, both ends sweeping sharply
+          upward) instead of a shallow wave, so it reads at a glance instead of needing a caption. */}
+      <svg className={`absolute bottom-0 inset-x-0 w-full h-[48vh] min-h-[270px] ${LANDMARK_OPACITY}`} viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
         <path d="M0 178 Q110 158 220 170 T400 160 V220 H0 Z" fill="#A9D6C9" />
-        {/* Marina Bay Sands — three fanned towers carrying a single boat-shaped SkyPark deck */}
-        <polygon points="156,170 174,170 158,76 142,76" fill="#4A5C78" />
-        <polygon points="192,170 210,170 209,70 193,70" fill="#4A5C78" />
-        <polygon points="228,170 246,170 260,76 244,76" fill="#4A5C78" />
-        <path d="M136 78 Q201 48 266 78 Q258 60 201 56 Q144 60 136 78 Z" fill="#2CA097" />
-        <ellipse cx="201" cy="79" rx="66" ry="5" fill="#237E76" opacity="0.6" />
+        {/* Three towers, each markedly wider, fanning outward from vertical at the base */}
+        <polygon points="146,172 180,172 158,46 128,46" fill="#3E4C63" />
+        <polygon points="184,172 218,172 214,34 188,34" fill="#3E4C63" />
+        <polygon points="222,172 256,172 272,46 242,46" fill="#3E4C63" />
+        {/* Window banding for scale/texture */}
+        {[70, 90, 110, 130, 150].map(y => (
+          <rect key={y} x="126" y={y} width="150" height="2.5" fill="#2C374A" opacity="0.35" />
+        ))}
+        {/* The SkyPark — one continuous hull-shaped deck resting across all three towers */}
+        <path d="M118 50 Q118 30 145 24 L279 24 Q306 30 306 50 L296 50 Q296 36 275 33 L149 33 Q128 36 128 50 Z" fill="#F3D26A" />
+        <path d="M128 50 L296 50 L296 40 L128 40 Z" fill="#2CA097" />
+        <ellipse cx="212" cy="51" rx="95" ry="6" fill="#237E76" opacity="0.55" />
+        {/* Reflection in the bay, faint */}
+        <g opacity="0.18" transform="translate(0,344) scale(1,-1)">
+          <polygon points="146,172 180,172 158,46 128,46" fill="#3E4C63" />
+          <polygon points="184,172 218,172 214,34 188,34" fill="#3E4C63" />
+          <polygon points="222,172 256,172 272,46 242,46" fill="#3E4C63" />
+        </g>
         <path d="M0 195 Q120 180 240 190 T400 184 V220 H0 Z" fill="#CDE9DC" />
       </svg>
       {/* Vanda Miss Joaquim orchid, Singapore's national flower — bottom-right */}
@@ -311,22 +327,24 @@ function TurkeyScene() {
         ))}
         <path d="M0 195 Q120 180 240 190 T400 184 V220 H0 Z" fill="#EFD9B4" />
       </svg>
-      {/* A fleet of hot-air balloons, sized/placed for depth — the scene's centrepiece, matching the real Cappadocia sunrise launches */}
+      {/* Three big, unmistakable hot-air balloons instead of six small scattered ones — this is the
+          scene's one job, the same way Fuji is a single large triangle rather than several smaller
+          peaks. Each balloon gets a real onion/teardrop silhouette (a distinct shoulder above the
+          widest point, tapering to the burner), a bold candy-stripe panel pattern, and a clearly
+          drawn basket + criss-crossing rigging, not a flat dashed-outline circle. */}
       {[
-        { x: "10%", y: "10%", s: 1.15, c: "#E30A17" },
-        { x: "26%", y: "22%", s: 0.75, c: "#F3D26A" },
-        { x: "46%", y: "6%", s: 1.3, c: "#2F9C9E" },
-        { x: "64%", y: "20%", s: 0.85, c: "#E30A17" },
-        { x: "80%", y: "12%", s: 1.05, c: "#7B5CA8" },
-        { x: "90%", y: "28%", s: 0.6, c: "#2F9C9E" },
+        { x: "8%", y: "6%", s: 1.5, c: "#E30A17", c2: "#F6C9CC" },
+        { x: "58%", y: "0%", s: 1.85, c: "#2F9C9E", c2: "#CDEFEC" },
+        { x: "78%", y: "16%", s: 1.15, c: "#F0A83C", c2: "#FCE3B8" },
       ].map((b, i) => (
-        <svg key={i} className={`absolute ${FOREGROUND_OPACITY}`} style={{ left: b.x, top: b.y, width: 46 * b.s, height: 60 * b.s }} viewBox="0 0 40 52" fill="none">
-          <ellipse cx="20" cy="20" rx="18" ry="20" fill={b.c} />
-          <ellipse cx="20" cy="20" rx="18" ry="20" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="4 4" />
-          <path d="M8 30 L2 40 M32 30 L38 40 M20 34 L20 42" stroke="#7A5C4A" strokeWidth="1.2" />
-          <rect x="14" y="42" width="12" height="8" rx="1.5" fill="#7A5C4A" />
-          <line x1="10" y1="36" x2="14" y2="42" stroke="#7A5C4A" strokeWidth="1.5" />
-          <line x1="30" y1="36" x2="26" y2="42" stroke="#7A5C4A" strokeWidth="1.5" />
+        <svg key={i} className={`absolute ${FOREGROUND_OPACITY}`} style={{ left: b.x, top: b.y, width: 70 * b.s, height: 96 * b.s }} viewBox="0 0 70 96" fill="none">
+          <path d="M35 4 C14 4 6 30 6 46 C6 62 18 72 22 76 L48 76 C52 72 64 62 64 46 C64 30 56 4 35 4 Z" fill={b.c} />
+          {[1, 2, 3, 4].map(n => (
+            <path key={n} d={`M${8 + n * 12.5} 8 C${2 + n * 12.5} 26 ${2 + n * 12.5} 56 ${14 + n * 12.5} 75`} stroke={b.c2} strokeWidth="5" fill="none" opacity="0.85" />
+          ))}
+          <path d="M35 4 C14 4 6 30 6 46 C6 62 18 72 22 76 L48 76 C52 72 64 62 64 46 C64 30 56 4 35 4 Z" fill="none" stroke="#7A2A1C" strokeWidth="1.5" opacity="0.5" />
+          <path d="M22 76 L16 88 M48 76 L54 88 M35 78 L35 90" stroke="#5C4530" strokeWidth="2" strokeLinecap="round" />
+          <rect x="20" y="86" width="30" height="10" rx="2" fill="#7A5C4A" />
         </svg>
       ))}
     </Scene>

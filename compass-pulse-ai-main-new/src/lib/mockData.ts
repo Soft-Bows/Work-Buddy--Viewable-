@@ -162,7 +162,7 @@ export interface KeyResult {
   // department's HOD, minus the KR owner themselves (no point routing feedback to yourself) and
   // minus whoever has already responded. Cleared once challengeResponse is set.
   pendingChallengeResponseFor?: string[];
-  // The HOD's or Objective owner's reply — manual text, or AI-drafted (isAI) via the "Ask Pulse AI to
+  // The HOD's or Objective owner's reply — manual text, or AI-drafted (isAI) via the "Ask Work Buddy AI to
   // help draft this" affordance. Once set, pendingChallengeAckByOwner flips true so the KR owner is
   // prompted to acknowledge it.
   challengeResponse?: { text: string; date: string; respondedBy: string; isAI?: boolean };

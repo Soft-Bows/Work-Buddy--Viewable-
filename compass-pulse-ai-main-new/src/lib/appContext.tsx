@@ -317,7 +317,7 @@ interface AppCtx {
   agreeCoOwnerConfidence: (objectiveId: string, krId: string, isOps: boolean) => void;
   agreeCoOwnerScore: (objectiveId: string, krId: string, isOps: boolean) => void;
   // HOD or the Objective's own owner responds to an open challengeRemark — manual text, or
-  // AI-drafted (isAI) via the "Ask Pulse AI to help draft this" affordance. Flips the ball to the
+  // AI-drafted (isAI) via the "Ask Work Buddy AI to help draft this" affordance. Flips the ball to the
   // KR owner, who must then acknowledge it via acknowledgeChallengeResponse.
   respondToChallengeRemark: (objectiveId: string, krId: string, responseText: string, respondedBy: string, isOps: boolean, isAI?: boolean) => void;
   // Same shape, for the below-green quarterly-score remark cycle instead of the confidence one.

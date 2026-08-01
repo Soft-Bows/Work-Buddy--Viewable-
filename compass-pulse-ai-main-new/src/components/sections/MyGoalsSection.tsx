@@ -1761,7 +1761,7 @@ function MyKeyResultCard({ kr, objective, isOps, viewerName }: { kr: KeyResult; 
       )}
 
       {/* Challenge thread — the mandatory red/amber remark you shared, and your HOD's/objective
-          owner's response (manual or Pulse-AI-drafted), which you need to acknowledge. */}
+          owner's response (manual or Work Buddy AI-drafted), which you need to acknowledge. */}
       {kr.challengeRemark && (
         <div className="rounded-lg border border-amber-300/50 bg-amber-50/40 dark:bg-amber-900/10 dark:border-amber-700/30 p-3 space-y-2">
           <div className="flex items-center gap-1.5">
@@ -1772,7 +1772,7 @@ function MyKeyResultCard({ kr, objective, isOps, viewerName }: { kr: KeyResult; 
           {kr.challengeResponse && (
             <div className="rounded-md border border-primary/25 bg-primary/5 p-2 space-y-1">
               <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-primary">
-                {kr.challengeResponse.respondedBy}'s response{kr.challengeResponse.isAI && <span className="normal-case font-medium text-muted-foreground">(Pulse AI-assisted)</span>}
+                {kr.challengeResponse.respondedBy}'s response{kr.challengeResponse.isAI && <span className="normal-case font-medium text-muted-foreground">(Work Buddy AI-assisted)</span>}
               </div>
               <p className="text-xs text-foreground/85 leading-relaxed">{kr.challengeResponse.text}</p>
             </div>
@@ -1802,7 +1802,7 @@ function MyKeyResultCard({ kr, objective, isOps, viewerName }: { kr: KeyResult; 
                     className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-primary/30 bg-primary/5 text-primary text-[11px] font-medium disabled:opacity-50"
                   >
                     {draftingAiResponse ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
-                    Ask Pulse AI to help draft this
+                    Ask Work Buddy AI to help draft this
                   </button>
                   <button
                     onClick={() => {
@@ -1844,7 +1844,7 @@ function MyKeyResultCard({ kr, objective, isOps, viewerName }: { kr: KeyResult; 
           {kr.scoreResponse && (
             <div className="rounded-md border border-primary/25 bg-primary/5 p-2 space-y-1">
               <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-primary">
-                {kr.scoreResponse.respondedBy}'s response{kr.scoreResponse.isAI && <span className="normal-case font-medium text-muted-foreground">(Pulse AI-assisted)</span>}
+                {kr.scoreResponse.respondedBy}'s response{kr.scoreResponse.isAI && <span className="normal-case font-medium text-muted-foreground">(Work Buddy AI-assisted)</span>}
               </div>
               <p className="text-xs text-foreground/85 leading-relaxed">{kr.scoreResponse.text}</p>
             </div>
@@ -1874,7 +1874,7 @@ function MyKeyResultCard({ kr, objective, isOps, viewerName }: { kr: KeyResult; 
                     className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-primary/30 bg-primary/5 text-primary text-[11px] font-medium disabled:opacity-50"
                   >
                     {draftingAiScoreResponse ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
-                    Ask Pulse AI to help draft this
+                    Ask Work Buddy AI to help draft this
                   </button>
                   <button
                     onClick={() => {

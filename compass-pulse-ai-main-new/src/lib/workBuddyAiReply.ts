@@ -1,12 +1,12 @@
-// Pulse AI's reply logic — shared by the floating global assistant (AIAssistant.tsx) and the
-// inline "Ask Pulse AI" box inside a 1:1 check-in (CheckInSection.tsx), so the same question gets
+// Work Buddy AI's reply logic — shared by the floating global assistant (AIAssistant.tsx) and the
+// inline "Ask Work Buddy AI" box inside a 1:1 check-in (CheckInSection.tsx), so the same question gets
 // the same answer regardless of where it's asked. No live LLM call — same deterministic, ordered
 // keyword-rule pattern as every other "AI" feature in this app (see AI_REC_RULES in
 // MyGoalsSection.tsx, the challenge classifier in insights.ts, generatePrepTalkingPoints in
 // checkIns.ts). Once this app is wired to the company's actual LLM/chatbot system, this file is the
-// single seam to swap: everything that calls mockPulseAiReply() would call the real service instead
+// single seam to swap: everything that calls mockWorkBuddyAiReply() would call the real service instead
 // without any UI changes.
-export function mockPulseAiReply(q: string, context?: { checkInMemberName?: string }): string {
+export function mockWorkBuddyAiReply(q: string, context?: { checkInMemberName?: string }): string {
   const t = q.toLowerCase();
   if (context?.checkInMemberName) {
     const name = context.checkInMemberName.split(" ")[0];

@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from "react";
-import { MessageCircle, X, Sparkles, Send } from "lucide-react";
+import { X, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { mockPulseAiReply } from "@/lib/pulseAiReply";
+import { mockWorkBuddyAiReply } from "@/lib/workBuddyAiReply";
 
 interface Msg { role: "user" | "ai"; text: string }
 
 const SEED: Msg[] = [
-  { role: "ai", text: "Hi Sarah — I'm Pulse AI. I can draft responses, summarise team patterns, recommend learning, and answer questions about our Human Capital policies. What's on your mind?" },
+  { role: "ai", text: "Hi Sarah — I'm Work Buddy AI. I can draft responses, summarise team patterns, recommend learning, and answer questions about our Human Capital policies. What's on your mind?" },
 ];
 
 const SUGGESTIONS = [
@@ -30,32 +30,39 @@ export function AIAssistant() {
     setInput("");
     setThinking(true);
     await new Promise((r) => setTimeout(r, 1200));
-    const reply = mockPulseAiReply(text);
+    const reply = mockWorkBuddyAiReply(text);
     setThinking(false);
     setMsgs((m) => [...m, { role: "ai", text: reply }]);
   };
 
   return (
     <>
+      {/* Same mascot used on the login page, given a little more personality here than a generic
+          sparkle icon — headphones (default, "I'm listening") crossfades to a wink on hover, purely
+          via opacity so there's no layout jump or JS state needed for the swap. */}
       <button
         onClick={() => setOpen(true)}
+        title="Work Buddy AI"
         className={cn(
-          "fixed bottom-6 right-6 z-30 size-14 rounded-full bg-amber text-amber-foreground shadow-xl flex items-center justify-center hover:scale-105 transition-transform glow-amber",
+          "group fixed bottom-6 right-6 z-30 size-16 rounded-full bg-amber shadow-xl flex items-center justify-center hover:scale-105 transition-transform glow-amber overflow-hidden",
           open && "hidden"
         )}
       >
-        <Sparkles className="size-6" />
+        <img src="/mascot/headphones.png" alt="" draggable={false} className="absolute inset-0 size-full object-contain p-1 select-none opacity-100 group-hover:opacity-0 transition-opacity duration-200" />
+        <img src="/mascot/winking-stars.png" alt="Work Buddy AI" draggable={false} className="absolute inset-0 size-full object-contain p-1 select-none opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
       </button>
 
       {open && (
         <div className="fixed inset-x-4 bottom-4 sm:inset-x-auto sm:bottom-6 sm:right-6 z-30 sm:w-[420px] h-[min(70vh,600px)] sm:h-[600px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
           <div className="px-4 py-3 bg-primary text-primary-foreground flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="size-8 rounded-full bg-amber text-amber-foreground grid place-items-center"><Sparkles className="size-4" /></div>
+              <div className="size-8 rounded-full bg-amber grid place-items-center overflow-hidden shrink-0">
+                <img src="/mascot/headphones.png" alt="" draggable={false} className="size-full object-contain p-0.5 select-none" />
+              </div>
               <div>
-                <div className="font-medium text-sm">Pulse AI</div>
+                <div className="font-medium text-sm">Work Buddy AI</div>
                 {/* No live LLM call — same rule-based pattern as every other "AI" feature in this
-                    app (see pulseAiReply.ts's own header comment). "Claude Sonnet" here used to
+                    app (see workBuddyAiReply.ts's own header comment). "Claude Sonnet" here used to
                     claim a real model connection that doesn't exist; this is the honest label until
                     this is actually wired to the company's LLM/chatbot system. */}
                 <div className="text-[10px] opacity-70">Rule-based assistant · always-on</div>
