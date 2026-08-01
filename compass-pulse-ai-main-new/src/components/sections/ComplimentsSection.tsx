@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui-bits";
 import { useApp } from "@/lib/appContext";
 import { Send, Search } from "lucide-react";
-import { toast } from "sonner";
+import { pointsToast } from "@/lib/pointsToast";
 
 function HeartSparkSVG() {
   return (
@@ -50,7 +50,7 @@ export function ComplimentsSection() {
     if (!ok) return;
     setConfetti(true);
     void logCompliment(recipient);
-    toast.success(`Compliment sent to ${recipient} · +25 pts`);
+    pointsToast(`Compliment sent to ${recipient} · +25 pts`);
     setTimeout(() => setConfetti(false), 1800);
     setText(""); setRecipient(""); setBadge(null); setQuery("");
   };
@@ -62,7 +62,7 @@ export function ComplimentsSection() {
       <div className="mb-5">
         <div className="flex items-center gap-3">
           <HeartSparkSVG />
-          <h2 className="font-display text-2xl">Send Compliments</h2>
+          <h2 className="font-display text-2xl">Send Your Appreciation!</h2>
           <CherrySVG />
         </div>
         <p className="text-sm text-muted-foreground mt-1">Recognise a colleague with a meaningful note + value badge.</p>
@@ -107,7 +107,7 @@ export function ComplimentsSection() {
 
         <div>
           <label className="text-xs uppercase tracking-widest text-muted-foreground">Value badge</label>
-          <div className="grid grid-cols-4 gap-2 mt-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
             {corporateValues.map((v) => (
               <button
                 key={v.id}

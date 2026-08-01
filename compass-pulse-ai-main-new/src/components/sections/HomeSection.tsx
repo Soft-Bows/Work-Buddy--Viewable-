@@ -1,12 +1,16 @@
-import { useState, useEffect } from "react";
-import { Card, SectionTitle, RagPill } from "@/components/ui-bits";
+import { useState, useEffect, type CSSProperties } from "react";
+import { Card, SectionTitle, SkillAttachmentModal, SkillsNeededPicker, WatercolorWash } from "@/components/ui-bits";
 import { useApp } from "@/lib/appContext";
-import { CheckCircle2, Circle, Clock, X, Pencil, Trash2, Plus, Gift, Laptop, Flag, Target, ExternalLink, AlertCircle } from "lucide-react";
+import { CheckCircle2, Circle, Clock, X, Pencil, Trash2, Plus, Gift, Laptop, Target, ExternalLink, AlertCircle, Bell, PartyPopper, ChevronDown, ChevronRight, Send, ListChecks } from "lucide-react";
 import { TeamDrawer } from "@/components/sections/TeamSection";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-import type { TeamMember, RAG } from "@/lib/mockData";
-import { getDefaultSkillsForRole, getRegulatorExamsForRole, classifySkill, getIBFJobFunctionUrl, isHCWMDept, getIHRPBadgesForRole } from "@/lib/skillsCatalog";
+import { pointsToast } from "@/lib/pointsToast";
+import { cn, isAmongOwners, keyResultsOwnedBy, objectivesOwnedBy, isPendingAckFor, objectiveConfidence, objectiveConfidenceValue, objectiveScore, scoreToRag } from "@/lib/utils";
+import { daysSinceLastCheckIn, CHECK_IN_CADENCE_DAYS } from "@/lib/checkIns";
+import { TeamHealthWidget } from "@/components/sections/TeamHealthWidget";
+import type { TeamMember, RAG, SkillAttachment, DeptGoal, PersonalDevGoal } from "@/lib/mockData";
+import { getDefaultSkillsForRole, getRegulatorExamsForRole, classifySkill, getIBFJobFunctionUrl, isHCWMDept, getIHRPBadgesForRole, ALL_SKILLS, IHRP_SKILLS_CATALOG } from "@/lib/skillsCatalog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Returns true if dueDate ("YYYY-MM") falls in this or next calendar month
 function isDueWithinOneMonth(dueDate: string): boolean {
@@ -66,7 +70,6 @@ function getRedemptionDate(): string {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type DeptGoal = { id: string; title: string; owner: string; progress: number; weightage: number; dueDate?: string; ragQ1?: string; ragQ2?: string; ragQ3?: string; ragQ4?: string };
 
 // Get the current quarter key
 function currentQuarterKey(): "Q1" | "Q2" | "Q3" | "Q4" {
@@ -78,32 +81,528 @@ function currentQuarterKey(): "Q1" | "Q2" | "Q3" | "Q4" {
 }
 
 // Compute the effective RAG for a dept goal for the current quarter
+// Monthly confidence for a department/team Objective — derived purely from its Key Results'
+// ragConfidence (objectiveConfidence in utils.ts), same source of truth as the Team OKRs page.
+// Previously this derived a RAG from the deprecated per-member Goal.quarters array (linkedDept +
+// weightage), which was empty for real CSV-synced team members and stale for the two hand-authored
+// personas — exactly the kind of drift that left the Home page's Department OKR cards out of sync
+// with real Team OKRs assignments. isConfirmed/isMixed are kept in the return shape for the
+// existing call sites, but are now always resolved (objectiveConfidence never needs manual
+// confirmation) — there is no more "mixed, needs confirmation" state in the OKR model.
 function computeDeptRag(
   deptGoal: DeptGoal,
-  teamMembers: TeamMember[],
+  _teamMembers: TeamMember[],
 ): { rag: RAG | null; isConfirmed: boolean; isMixed: boolean } {
-  const qKey = currentQuarterKey();
-  const storedRag = deptGoal[`rag${qKey}` as keyof DeptGoal] as string | undefined;
+  const rag = (deptGoal.keyResults?.length ?? 0) > 0 ? objectiveConfidence(deptGoal) : null;
+  return { rag, isConfirmed: true, isMixed: false };
+}
 
-  if (storedRag && ["red", "amber", "green"].includes(storedRag)) {
-    return { rag: storedRag as RAG, isConfirmed: true, isMixed: false };
-  }
+// Team cards cycle through this palette by team name (not row index — the team row can now mix
+// several teams together, capped at 5 cards), so two cards from the same team always match even
+// though they're no longer grouped under their own row.
+const HOME_TEAM_ROW_COLORS = [
+  { border: "border-l-teal-500", chip: "bg-teal-500 text-white", text: "text-teal-700 dark:text-teal-300", cardBorder: "border-teal-300/60 dark:border-teal-500/40", cardBg: "bg-teal-50/60 dark:bg-teal-900/10", dot: "bg-teal-500" },
+  { border: "border-l-violet-500", chip: "bg-violet-500 text-white", text: "text-violet-700 dark:text-violet-300", cardBorder: "border-violet-300/60 dark:border-violet-500/40", cardBg: "bg-violet-50/60 dark:bg-violet-900/10", dot: "bg-violet-500" },
+  { border: "border-l-rose-500", chip: "bg-rose-500 text-white", text: "text-rose-700 dark:text-rose-300", cardBorder: "border-rose-300/60 dark:border-rose-500/40", cardBg: "bg-rose-50/60 dark:bg-rose-900/10", dot: "bg-rose-500" },
+  { border: "border-l-amber-500", chip: "bg-amber-500 text-white", text: "text-amber-700 dark:text-amber-300", cardBorder: "border-amber-300/60 dark:border-amber-500/40", cardBg: "bg-amber-50/60 dark:bg-amber-900/10", dot: "bg-amber-500" },
+  { border: "border-l-blue-500", chip: "bg-blue-500 text-white", text: "text-blue-700 dark:text-blue-300", cardBorder: "border-blue-300/60 dark:border-blue-500/40", cardBg: "bg-blue-50/60 dark:bg-blue-900/10", dot: "bg-blue-500" },
+];
+const HOME_DEPT_ROW_COLOR = { chip: "bg-primary text-primary-foreground", text: "text-primary", cardBorder: "border-primary/40", cardBg: "bg-primary/5", dot: "bg-primary" };
+const HOME_TEAM_ROW_CAP = 5;
 
-  // Compute from contributors' linked goal RAG for current quarter
-  const ownerNames = deptGoal.owner ? deptGoal.owner.split(",").map(s => s.trim()) : [];
-  const rags = teamMembers
-    .filter(m => !ownerNames.includes(m.name))
-    .flatMap(m =>
-      m.goals
-        .filter(g => g.linkedDept === deptGoal.id && (g.weightage ?? 0) >= 1)
-        .map(g => g.quarters.find(q => q.q === qKey)?.rag)
-    )
-    .filter(Boolean) as RAG[];
+const DEPT_WASH_BLOBS = [
+  { color: "#3B82F6", style: { top: "-20%", left: "0%", width: "40%", height: "180%" } },
+  { color: "#6366F1", style: { top: "10%", left: "55%", width: "35%", height: "150%" } },
+];
+const TEAM_WASH_BLOBS = [
+  { color: "#14B8A6", style: { top: "-15%", left: "-5%", width: "35%", height: "170%" } },
+  { color: "#8B5CF6", style: { top: "20%", left: "35%", width: "35%", height: "150%" } },
+  { color: "#F43F5E", style: { top: "-10%", left: "70%", width: "35%", height: "170%" } },
+];
 
-  if (rags.length === 0) return { rag: null, isConfirmed: false, isMixed: false };
-  const unique = [...new Set(rags)];
-  if (unique.length === 1) return { rag: unique[0], isConfirmed: false, isMixed: false };
-  return { rag: null, isConfirmed: false, isMixed: true };
+// The Home page's "Department/Team OKRs" — one row for department-level Objectives, then one
+// shared row (capped at 5 cards) for every qualifying team-level Objective, each washed in its own
+// soft watercolour background so the two sets read as visually distinct at a glance. The team row
+// only shows for viewers who actually have a stake in that team (the HOD, the team's own owner,
+// someone who reports to that owner, or anyone with an individual Key Result under it), so the
+// section doesn't dump every team's OKRs on every viewer. Wherever the viewer owns a Key Result —
+// department or team level — it's nested inside that Objective's own card, so it's obvious which
+// larger OKR their individual work ladders up to, without a separate section to scan.
+function DeptTeamOkrSection({
+  objectives, viewerName, isHodViewer, teamMembers, deptGoalSkills, onViewAllTeamOkrs,
+}: {
+  objectives: DeptGoal[];
+  viewerName: string;
+  isHodViewer: boolean;
+  teamMembers: TeamMember[];
+  deptGoalSkills: Record<string, string[]>;
+  onViewAllTeamOkrs: () => void;
+}) {
+  const deptObjectives = objectives.filter(g => (g.level ?? "department") === "department");
+  const teamObjectivesAll = objectives.filter(g => g.level === "team");
+
+  const viewerMember = teamMembers.find(m => m.name === viewerName);
+  const ownsAnyTeam = teamObjectivesAll.some(g => isAmongOwners(g.owner, viewerName));
+  const hasLinkedIndividualKR = teamObjectivesAll.some(g => (g.keyResults ?? []).some(kr => isAmongOwners(kr.owner, viewerName)));
+  const reportsToTeamOwner = viewerMember ? teamObjectivesAll.some(g => isAmongOwners(g.owner, viewerMember.directManager)) : false;
+  const showTeamOkrs = isHodViewer || ownsAnyTeam || hasLinkedIndividualKR || reportsToTeamOwner;
+
+  const qualifyingTeamObjectives = showTeamOkrs ? teamObjectivesAll : [];
+  const teamNames = Array.from(new Set(qualifyingTeamObjectives.map(g => g.teamName || "Team")));
+  const teamObjectives = qualifyingTeamObjectives.slice(0, HOME_TEAM_ROW_CAP);
+  const hiddenTeamCount = qualifyingTeamObjectives.length - teamObjectives.length;
+  const colorForTeam = (g: DeptGoal) => HOME_TEAM_ROW_COLORS[teamNames.indexOf(g.teamName || "Team") % HOME_TEAM_ROW_COLORS.length];
+
+  const renderCard = (g: DeptGoal, color: typeof HOME_DEPT_ROW_COLOR) => {
+    const { rag, isConfirmed, isMixed } = computeDeptRag(g, teamMembers);
+    const confidenceValue = rag ? objectiveConfidenceValue(g) : undefined;
+    const score = objectiveScore(g);
+    const myKrs = (g.keyResults ?? []).filter(kr => isAmongOwners(kr.owner, viewerName));
+    return (
+      <Card key={g.id} className={cn("p-2.5 border", color.cardBorder, color.cardBg)}>
+        {/* Title/owner previously used plain default-foreground/muted-foreground text on top of the
+            card's own translucent colour wash — legible, but flat, disconnected from the card's own
+            colour identity. Keeping the wash exactly as translucent as before, just giving the text
+            itself more presence: the title now picks up the row's own saturated colour + bold
+            weight, and the owner line moves off low-contrast muted grey onto full foreground. */}
+        <div className="text-[9px] uppercase tracking-widest text-foreground/70 font-semibold truncate">{g.owner}</div>
+        <div className={cn("font-bold text-xs mt-0.5 leading-snug", color.text)}>{g.title}</div>
+        {/* Confidence + Score side by side, both word + numeric value — mirrors Team OKRs'
+            FieldBadge/RagPill treatment (previously this only showed a single bare "GREEN"/"AMBER"
+            word with no numeric value and no separate Score at all, unlike the Team OKRs page). */}
+        <div className="mt-1.5 flex items-center gap-3 flex-wrap">
+          {isMixed && !isConfirmed ? (
+            <div className="flex items-center gap-1 text-[9px] text-amber-foreground bg-rag-amber/10 border border-rag-amber/30 rounded px-1.5 py-0.5">
+              <AlertCircle className="size-2.5 shrink-0" />
+              <span>Needs confirmation</span>
+            </div>
+          ) : rag ? (
+            <>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[7px] uppercase tracking-widest font-bold text-muted-foreground/70">Confidence</span>
+                <div className="flex items-center gap-1">
+                  <span className={cn("size-2.5 rounded-full shrink-0", rag === "green" ? "bg-rag-green" : rag === "amber" ? "bg-rag-amber" : "bg-rag-red")} />
+                  <span className={cn("text-[10px] font-semibold", rag === "green" ? "text-rag-green" : rag === "amber" ? "text-amber-foreground" : "text-rag-red")}>
+                    {rag.toUpperCase()}{confidenceValue !== undefined && <span className="font-normal opacity-70"> {confidenceValue.toFixed(1)}</span>}
+                  </span>
+                </div>
+              </div>
+              {score !== undefined && (() => {
+                const scoreRag = scoreToRag(score);
+                return (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[7px] uppercase tracking-widest font-bold text-muted-foreground/70">Score</span>
+                    <div className="flex items-center gap-1">
+                      <span className={cn("size-2.5 rounded-full shrink-0", scoreRag === "green" ? "bg-rag-green" : scoreRag === "amber" ? "bg-rag-amber" : "bg-rag-red")} />
+                      <span className={cn("text-[10px] font-semibold", scoreRag === "green" ? "text-rag-green" : scoreRag === "amber" ? "text-amber-foreground" : "text-rag-red")}>
+                        {score.toFixed(1)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </>
+          ) : (
+            <div className="text-[9px] text-muted-foreground/60">No {currentQuarterKey()} data yet</div>
+          )}
+        </div>
+        {g.dueDate && (
+          <div className="mt-1 text-[9px] text-muted-foreground/70">
+            Due {new Date(g.dueDate + "-01").toLocaleDateString("en-SG", { month: "short", year: "numeric" })}
+          </div>
+        )}
+        {(deptGoalSkills[g.id]?.length ?? 0) > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {deptGoalSkills[g.id]!.slice(0, 2).map(skill => (
+              <span key={skill} className="text-[8px] px-1 py-0.5 rounded-full bg-teal/10 text-teal border border-teal/20 truncate max-w-full">
+                {skill}
+              </span>
+            ))}
+            {deptGoalSkills[g.id]!.length > 2 && (
+              <span className="text-[8px] px-1 py-0.5 rounded-full bg-muted text-muted-foreground">
+                +{deptGoalSkills[g.id]!.length - 2}
+              </span>
+            )}
+          </div>
+        )}
+        {myKrs.length > 0 && (
+          // A strong, unmissable "this is yours" box — same sky-blue ownership treatment (border-2
+          // + saturated wash) used for owned Objectives/Key Results on the Team OKRs page, not just
+          // a thin dashed top-border, so "you own a KR inside this objective" reads at a glance
+          // instead of blending into the rest of the card.
+          <div className="mt-2 rounded-lg border-2 border-sky-400/80 dark:border-sky-600/70 bg-sky-50/85 dark:bg-sky-950/30 ring-1 ring-sky-200 dark:ring-sky-800/50 p-1.5">
+            <div className="text-[8px] uppercase tracking-widest font-bold flex items-center gap-1 text-sky-700 dark:text-sky-300">
+              <ListChecks className="size-2.5" /> Your KR{myKrs.length > 1 ? "s" : ""}
+            </div>
+            {/* Mirrors Team OKRs' confidence/score treatment (dot + RAG word, + numeric value once
+                scored) at this card's smaller scale — previously title-only, with no way to tell a
+                KR's status without leaving the Home page. */}
+            <ul className="mt-1 space-y-1">
+              {myKrs.map(kr => {
+                const scoreRag = kr.score !== undefined ? scoreToRag(kr.score) : null;
+                return (
+                  <li key={kr.id} className="text-[9px] leading-snug bg-background/80 rounded px-1 py-0.5">
+                    <div className="text-foreground/80" title={kr.title}>{kr.title}</div>
+                    <div className="mt-0.5 flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-foreground/70" title="Monthly confidence">
+                        <span className={cn("size-1.5 rounded-full shrink-0",
+                          kr.ragConfidence === "green" ? "bg-rag-green" : kr.ragConfidence === "amber" ? "bg-rag-amber" : "bg-rag-red")} />
+                        {kr.ragConfidence.toUpperCase()}
+                      </span>
+                      {scoreRag && (
+                        <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold text-foreground/70" title="Quarterly score">
+                          <span className={cn("size-1.5 rounded-full shrink-0",
+                            scoreRag === "green" ? "bg-rag-green" : scoreRag === "amber" ? "bg-rag-amber" : "bg-rag-red")} />
+                          {kr.score!.toFixed(1)}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </Card>
+    );
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="relative py-1">
+        <WatercolorWash blobs={DEPT_WASH_BLOBS} />
+        <div className="flex items-center gap-1.5 mb-2 pl-2.5 border-l-4 border-l-primary">
+          <span className={cn("size-1.5 rounded-full", HOME_DEPT_ROW_COLOR.dot)} />
+          <span className={cn("text-[10px] uppercase tracking-widest font-bold", HOME_DEPT_ROW_COLOR.text)}>Department OKRs</span>
+        </div>
+        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(deptObjectives.length, 1)}, minmax(0, 1fr))` }}>
+          {deptObjectives.map(g => renderCard(g, HOME_DEPT_ROW_COLOR))}
+        </div>
+      </div>
+      {teamObjectives.length > 0 && (
+        <div className="relative py-1">
+          <WatercolorWash blobs={TEAM_WASH_BLOBS} />
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-1.5 pl-2.5 border-l-4 border-l-teal-500">
+              <span className="size-1.5 rounded-full bg-teal-500" />
+              <span className="text-[10px] uppercase tracking-widest font-bold text-teal-700 dark:text-teal-300">
+                {/* Mirrors the Team OKRs page's own "X's OKRs" label whenever exactly one team's set is
+                    shown here — falls back to a generic label if the row happens to mix teams. */}
+                {(() => {
+                  const shownTeamNames = Array.from(new Set(teamObjectives.map(g => g.teamName || "Team")));
+                  return shownTeamNames.length === 1 ? `${shownTeamNames[0]}'s OKRs` : "Team OKRs";
+                })()}
+              </span>
+            </div>
+            {hiddenTeamCount > 0 && (
+              <button
+                onClick={onViewAllTeamOkrs}
+                className="text-[10px] font-medium text-teal-700 dark:text-teal-300 hover:underline shrink-0"
+              >
+                +{hiddenTeamCount} more on Team OKRs →
+              </button>
+            )}
+          </div>
+          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(teamObjectives.length, 1)}, minmax(0, 1fr))` }}>
+            {teamObjectives.map(g => renderCard(g, colorForTeam(g)))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Team At A Glance ──────────────────────────────────────────────────────────
+
+// Identifies which leave supervisor a row belongs to (their own row and their collapsed sub-team
+// both share the same colour) — rendered as a soft watercolour wash (WatercolorWash, a handful of
+// blurred translucent blobs) behind the row rather than a flat, edge-to-edge pastel fill. A flat
+// fill on every row meant two adjacent rows from different supervisor groups butted up against each
+// other as a hard, contrasting colour-block boundary; a blurred wash has no hard edge, so adjacent
+// rows blend into each other instead of visually competing. Deliberately amber/rose-free: amber is
+// reserved app-wide for "needs your attention" (the pending bell, ack banners) and rose isn't used
+// as a brand hue anywhere else in Team OKRs/Team-at-a-Glance. Every hue below (sky, violet, teal,
+// indigo, cyan) already has the same meaning-neutral "group identity" role elsewhere in this app
+// (sky = ownership highlight, indigo = confidence/score, teal = skills), so a row here reads as part
+// of the same visual system instead of a one-off palette.
+const GLANCE_SUPERVISOR_PASTELS = [
+  { hex: "#0EA5E9", text: "text-sky-700 dark:text-sky-300", border: "border-sky-300 dark:border-sky-700/50" },
+  { hex: "#8B5CF6", text: "text-violet-700 dark:text-violet-300", border: "border-violet-300 dark:border-violet-700/50" },
+  { hex: "#14B8A6", text: "text-teal-700 dark:text-teal-300", border: "border-teal-300 dark:border-teal-700/50" },
+  { hex: "#6366F1", text: "text-indigo-700 dark:text-indigo-300", border: "border-indigo-300 dark:border-indigo-700/50" },
+  { hex: "#06B6D4", text: "text-cyan-700 dark:text-cyan-300", border: "border-cyan-300 dark:border-cyan-700/50" },
+];
+
+const CELEBRATION_WINDOW_DAYS = 14;
+
+function daysSinceDate(dateStr?: string): number {
+  if (!dateStr) return Infinity;
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
+}
+
+interface PendingItem { label: string; onClick: () => void }
+
+// Home page "Team At A Glance": HOD viewers get a hierarchical view (their own direct reports
+// fully shown; any direct report who is themself a leave supervisor becomes a toggle revealing their
+// reports as narrower, pastel-tinted rows) so the org shape is visible without leaving the page.
+// Non-HOD viewers just see their own direct reports, same row styling, no expand affordance — they
+// only ever see people who report to them. RAG/goal-count badges are gone; rows instead surface two
+// signals: an amber bell when the viewer has a pending action for that person (skill approval, goal
+// approval, RAG ack, or an unresolved remark — each deep-links to where it's resolved, same
+// setFocusedTeamMemberId/setFocusedSkillsMemberId + setSection pattern the notification panels
+// already use), and a celebration icon when they've completed a development goal within the last
+// two weeks (opens their dev-goal list with it highlighted, and a one-shot "send encouragement note"
+// that awards +5 points to both people).
+function TeamAtAGlanceSection({
+  teamMembers, viewerName, isHodViewer,
+}: {
+  teamMembers: TeamMember[];
+  viewerName: string;
+  isHodViewer: boolean;
+}) {
+  const {
+    setFocusedTeamMemberId, setSection, setFocusedSkillsMemberId, teamMemberPendingSkills,
+    staffMemberId, adminMemberId, opsMeta, staffDevGoals, adminDevGoals, teamDevGoalsById,
+    sendEncouragementNote, currentUser, departmentGoals, teamOkrEditors, focusObjective,
+    setTeamMemberDrawerReturnHome,
+  } = useApp();
+
+  const [expandedSupervisor, setExpandedSupervisor] = useState<string | null>(null);
+  const [pendingPopupFor, setPendingPopupFor] = useState<string | null>(null);
+  const [celebrationFor, setCelebrationFor] = useState<TeamMember | null>(null);
+
+  // Which id the currently-viewed persona actually is — needed both to resolve their own dev goals
+  // (if they happen to be one of the switchable slots) and as the "sender" side of an encouragement
+  // note's +5 points.
+  const viewerId = teamMembers.find(m => m.name === viewerName)?.id
+    ?? (viewerName === currentUser.name ? "u0" : (opsMeta?.personaId ?? "u0"));
+
+  const devGoalsFor = (m: TeamMember): PersonalDevGoal[] => {
+    if (m.id === staffMemberId) return staffDevGoals;
+    if (m.id === adminMemberId) return adminDevGoals;
+    if (opsMeta && m.id === opsMeta.personaId) return opsMeta.devGoals;
+    return teamDevGoalsById[m.id] ?? [];
+  };
+
+  const pendingItemsFor = (m: TeamMember): PendingItem[] => {
+    const items: PendingItem[] = [];
+    const pendingSkill = teamMemberPendingSkills.find(p => p.memberId === m.id);
+    if (pendingSkill && pendingSkill.pending.length > 0) {
+      items.push({
+        label: `${pendingSkill.pending.length} skill${pendingSkill.pending.length > 1 ? "s" : ""} awaiting your approval`,
+        onClick: () => { setFocusedSkillsMemberId(m.id); setSection("skills"); },
+      });
+    }
+    // Counterproposals this member has raised on a performance goal they own — a real, live signal
+    // read straight off the current Objective/Key Result data (departmentGoals), not the retired
+    // per-member Goal/remarks model. That old model is never rendered anywhere in the app any more
+    // (TeamDrawer's "Performance Goals" list is Key-Result-based), so flagging it here produced a
+    // bell with nothing behind it once clicked — exactly the "static/erroneous pending item" bug.
+    // Only surfaced to a viewer who can actually resolve it (HOD for any objective, or the delegated
+    // team-OKR editor for that specific team's objectives), matching TeamSection's own canEdit rule.
+    const canResolve = (dg: DeptGoal) =>
+      isHodViewer || (dg.level === "team" && !!dg.teamName && teamOkrEditors[dg.teamName] === viewerName);
+    let counterproposalCount = 0;
+    let counterproposalObjectiveId: string | null = null;
+    for (const dg of departmentGoals) {
+      if (!canResolve(dg)) continue;
+      if (dg.counterProposal && dg.owner === m.name) {
+        counterproposalCount++;
+        counterproposalObjectiveId ??= dg.id;
+      }
+      for (const kr of dg.keyResults ?? []) {
+        if (kr.counterProposal && isAmongOwners(kr.owner, m.name)) {
+          counterproposalCount++;
+          counterproposalObjectiveId ??= dg.id;
+        }
+      }
+    }
+    if (counterproposalCount > 0 && counterproposalObjectiveId) {
+      const objectiveId = counterproposalObjectiveId;
+      items.push({
+        label: `${counterproposalCount} counterproposal${counterproposalCount > 1 ? "s" : ""} awaiting your review`,
+        onClick: () => focusObjective(objectiveId, true),
+      });
+    }
+    return items;
+  };
+
+  const celebrationGoalFor = (m: TeamMember): PersonalDevGoal | undefined =>
+    devGoalsFor(m).find(g => g.completed && !g.encouragementSent && daysSinceDate(g.completedDate) <= CELEBRATION_WINDOW_DAYS);
+
+  const directReports = teamMembers.filter(m => m.directManager === viewerName);
+  // Assign each supervising direct report their own pastel, in encounter order, so it's stable and
+  // every supervisor among the HOD's reports gets a visually distinct identity colour.
+  const supervisingReports = directReports.filter(m => teamMembers.some(x => x.directManager === m.name));
+  const colorForSupervisor = (name: string) =>
+    GLANCE_SUPERVISOR_PASTELS[Math.max(0, supervisingReports.findIndex(m => m.name === name)) % GLANCE_SUPERVISOR_PASTELS.length];
+
+  const renderRow = (m: TeamMember, opts: { narrow?: boolean; pastel?: typeof GLANCE_SUPERVISOR_PASTELS[number] }) => {
+    const pending = pendingItemsFor(m);
+    const celebrationGoal = celebrationGoalFor(m);
+    const isSupervisor = teamMembers.some(x => x.directManager === m.name);
+    const isExpanded = expandedSupervisor === m.name;
+    const rowPastel = isHodViewer && isSupervisor ? colorForSupervisor(m.name) : opts.pastel;
+
+    return (
+      <div key={m.id}>
+        <div
+          className={cn(
+            "relative flex items-center gap-2 border-b border-l-[3px] border-border/60 last:border-b-0 rounded-lg pl-2 pr-1 -mx-2 transition-colors group overflow-hidden",
+            opts.narrow ? "py-1.5" : "py-2",
+            pending.length > 0 ? "bg-rag-amber/10 hover:bg-rag-amber/15 border-l-rag-amber" : rowPastel ? cn("hover:brightness-95", rowPastel.border) : "hover:bg-muted/50 border-l-transparent",
+          )}
+        >
+          {!pending.length && rowPastel && (
+            <WatercolorWash blobs={[{ color: rowPastel.hex, style: { top: "-40%", left: "-4%", width: "45%", height: "180%" } }]} />
+          )}
+          <button
+            onClick={() => {
+              if (isHodViewer && isSupervisor) { setExpandedSupervisor(isExpanded ? null : m.name); return; }
+              setTeamMemberDrawerReturnHome(true);
+              setFocusedTeamMemberId(m.id); setSection("team");
+            }}
+            className="flex items-center gap-3 flex-1 min-w-0 text-left"
+          >
+            <div className={cn(
+              "rounded-full bg-secondary text-primary grid place-items-center font-medium shrink-0",
+              opts.narrow ? "size-7 text-xs" : "size-9 text-sm"
+            )}>{m.avatar}</div>
+            <div className="flex-1 min-w-0">
+              <div className={cn("font-medium group-hover:text-primary transition-colors truncate flex items-center gap-1", opts.narrow ? "text-xs" : "text-sm", rowPastel?.text)}>
+                {m.name}
+                {isHodViewer && isSupervisor && (isExpanded ? <ChevronDown className="size-3 shrink-0" /> : <ChevronRight className="size-3 shrink-0" />)}
+              </div>
+              {!opts.narrow && <div className="text-xs text-muted-foreground truncate">{m.role}</div>}
+            </div>
+          </button>
+          {celebrationGoal && (
+            <button
+              onClick={() => setCelebrationFor(m)}
+              title="Just completed a development goal — celebrate it"
+              className="size-7 rounded-full bg-rag-green/15 text-rag-green grid place-items-center shrink-0 hover:bg-rag-green/25 transition-colors"
+            >
+              <PartyPopper className="size-3.5" />
+            </button>
+          )}
+          {pending.length > 0 && (
+            <button
+              onClick={() => setPendingPopupFor(m.id)}
+              title="Action needed"
+              className="size-7 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-400 grid place-items-center shrink-0 hover:bg-amber-500/30 transition-colors"
+            >
+              <Bell className="size-3.5" />
+            </button>
+          )}
+        </div>
+        {isHodViewer && isSupervisor && isExpanded && (
+          <div className={cn("ml-6 pl-2 border-l-2 space-y-0.5 py-1", rowPastel?.border ?? "border-border")}>
+            {teamMembers.filter(x => x.directManager === m.name).map(x => renderRow(x, { narrow: true, pastel: rowPastel }))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-0.5">
+      {directReports.length === 0 && (
+        <p className="text-sm text-muted-foreground py-2">No direct reports yet.</p>
+      )}
+      {directReports.map(m => renderRow(m, {}))}
+
+      {pendingPopupFor && (() => {
+        const m = teamMembers.find(x => x.id === pendingPopupFor);
+        if (!m) return null;
+        const items = pendingItemsFor(m);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setPendingPopupFor(null)}>
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+            <div className="relative bg-background rounded-2xl shadow-2xl border border-border w-full max-w-sm mx-4 p-5 space-y-3" onClick={e => e.stopPropagation()}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="font-display text-lg">{m.name} — action needed</div>
+                <button onClick={() => setPendingPopupFor(null)} className="size-7 rounded-full hover:bg-muted grid place-items-center shrink-0"><X className="size-3.5" /></button>
+              </div>
+              <div className="space-y-2">
+                {items.map((item, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { item.onClick(); setPendingPopupFor(null); }}
+                    className="w-full flex items-center justify-between gap-2 text-left text-sm px-3 py-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15 transition-colors"
+                  >
+                    {item.label}
+                    <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {celebrationFor && (
+        <CelebrationPopup
+          member={celebrationFor}
+          goals={devGoalsFor(celebrationFor)}
+          onSend={(goalId) => {
+            sendEncouragementNote(viewerId, celebrationFor.id, goalId);
+            pointsToast(`Encouragement sent to ${celebrationFor.name} 🎉 — +5 pts each`);
+            setCelebrationFor(null);
+          }}
+          onClose={() => setCelebrationFor(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function CelebrationPopup({ member, goals, onSend, onClose }: {
+  member: TeamMember; goals: PersonalDevGoal[]; onSend: (goalId: string) => void; onClose: () => void;
+}) {
+  const highlighted = goals.find(g => g.completed && !g.encouragementSent && daysSinceDate(g.completedDate) <= CELEBRATION_WINDOW_DAYS);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div className="relative bg-background rounded-2xl shadow-2xl border border-border w-full max-w-md mx-4 p-6 space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="font-display text-lg flex items-center gap-2"><PartyPopper className="size-5 text-rag-green" /> {member.name}'s development goals</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{member.role}</div>
+          </div>
+          <button onClick={onClose} className="size-7 rounded-full hover:bg-muted grid place-items-center shrink-0"><X className="size-3.5" /></button>
+        </div>
+        <div className="space-y-2 max-h-64 overflow-y-auto">
+          {goals.length === 0 && <p className="text-sm text-muted-foreground">No development goals yet.</p>}
+          {goals.map(g => (
+            <div
+              key={g.id}
+              className={cn(
+                "rounded-lg border px-3 py-2.5 text-sm",
+                g.id === highlighted?.id ? "border-rag-green/50 bg-rag-green/10" : "border-border"
+              )}
+            >
+              <div className="flex items-center gap-1.5 font-medium">
+                {g.completed && <CheckCircle2 className="size-3.5 text-rag-green shrink-0" />}
+                {g.title}
+                {g.id === highlighted?.id && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rag-green/20 text-rag-green font-semibold">Just completed 🎉</span>
+                )}
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">{g.description}</div>
+            </div>
+          ))}
+        </div>
+        {highlighted && (
+          <button
+            onClick={() => onSend(highlighted.id)}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            <Send className="size-4" /> Send encouragement note · +5 pts each
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ── Multi-owner picker (supports selecting multiple names, stored as comma-separated string) ──
@@ -169,20 +668,27 @@ function MultiOwnerPicker({ value, onChange, staffNames }: { value: string; onCh
   );
 }
 
+// SkillsNeededPicker now lives in ui-bits.tsx, shared with Team OKRs' Objective/Key Result cards.
+
 // ── Goal Editor Modal (HOD only) ─────────────────────────────────────────────
 
 function GoalEditorModal({
   initialGoals,
   onSave,
   onClose,
+  effectiveDept,
 }: {
   initialGoals: DeptGoal[];
   onSave: (goals: DeptGoal[]) => Promise<void>;
   onClose: () => void;
+  effectiveDept: string;
 }) {
-  const { staffList, currentUser } = useApp();
+  const { staffList, currentUser, deptGoalSkills, updateGoalSkills } = useApp();
   // Include HOD (currentUser) as a selectable owner alongside team members
   const staffNames = [currentUser.name, ...staffList.map(s => s.name)];
+  // HCWM HODs tag from the full IHRP Skills Badges catalog; every other department's HOD tags
+  // from the full IBF Skills Framework catalog — the same catalogs shown on the Skills Profile page.
+  const skillCatalog = isHCWMDept(effectiveDept) ? IHRP_SKILLS_CATALOG : ALL_SKILLS;
 
   const [draft, setDraft] = useState<DeptGoal[]>(initialGoals.map(g => ({ ...g })));
   const [saving, setSaving] = useState(false);
@@ -227,7 +733,7 @@ function GoalEditorModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
       <div
-        className="relative bg-background border border-border rounded-2xl shadow-2xl w-[600px] max-h-[88vh] flex flex-col"
+        className="relative bg-background border border-border rounded-2xl shadow-2xl w-[calc(100vw-2rem)] sm:w-[600px] max-h-[88vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -322,6 +828,15 @@ function GoalEditorModal({
                       (goal[ragKey] as string) === "amber" ? "text-amber-foreground" : "text-rag-red"
                     )}>✓ confirmed</span>
                   )}
+                </div>
+                {/* Skills needed — feeds the admin Organisational Competency Gaps computation */}
+                <div className="flex items-start gap-2 pt-1">
+                  <span className="text-xs text-muted-foreground shrink-0 mt-2">Skills Needed</span>
+                  <SkillsNeededPicker
+                    value={deptGoalSkills[goal.id] ?? []}
+                    onChange={skills => updateGoalSkills(goal.id, skills)}
+                    catalog={skillCatalog}
+                  />
                 </div>
               </div>
 
@@ -444,12 +959,13 @@ function LaptopLightbulbSVG() {
 
 export function HomeSection() {
   const {
-    tier, departmentGoals, teamMembers, onboardingMilestones, devMilestones,
+    tier, departmentGoals, opsDepartmentGoals, teamMembers, onboardingMilestones, devMilestones,
     currentUser, points, setSection, saveDepartmentGoals, setFocusedTeamMemberId,
     staffMemberId, adminMemberId,
     staffDevGoals, adminDevGoals, teamMemberPendingSkills, setFocusedSkillsMemberId,
     allTeamMemberSkills, managerInputs, acknowledgedManagerInputs, opsMeta, teamDevGoalsById,
-    nudgedGoalIds, setFocusedGoalId,
+    nudgedGoalIds, setFocusedGoalId, pendingDevGoalRecs, deptGoalSkills, pendingGoalEditProposals,
+    checkIns, setTeamMemberDrawerReturnHome,
   } = useApp();
 
   const isOpsTier = tier === "ops_hod" || tier === "ops_mgr1" || tier === "ops_mgr2";
@@ -462,11 +978,14 @@ export function HomeSection() {
   const effectiveName = opsMeta ? opsMeta.user.name : currentUser.name;
   const effectiveDept = opsMeta ? opsMeta.user.department : currentUser.department;
   const displayPoints = opsMeta ? opsMeta.user.pointsYTD : points;
+  // This viewer's own id when they're the HOD — used to scope goal-edit-proposal notifications to
+  // the HOD who actually needs to act on them.
+  const viewerHodId = isHod ? (tier === "ops_hod" ? (opsMeta?.personaId ?? "u21") : "u0") : null;
+  const myPendingGoalEditProposals = viewerHodId ? pendingGoalEditProposals.filter(p => p.hodId === viewerHodId) : [];
 
   const [pendingOpen, setPendingOpen] = useState(false);
   const [staffPendingOpen, setStaffPendingOpen] = useState(false);
   const [activeMember, setActiveMember] = useState<TeamMember | null>(null);
-  const [showGoalEditor, setShowGoalEditor] = useState(false);
 
   // Draft goals kept in sync with server state between saves
   const [draftGoals, setDraftGoals] = useState<DeptGoal[]>(
@@ -496,7 +1015,11 @@ export function HomeSection() {
   // goals. Within the window, framed as a points-earning opportunity; past day 30, framed as
   // a deduction that has already applied.
   const goalStatusNotifsFor = (m: TeamMember, goTo: () => void) => {
-    const perfCount = m.goals.length;
+    // Performance goals = Objectives/Key Results this member owns in the live OKR data, not the
+    // deprecated per-member `goals` array — using the latter here is what let a HOD's Team OKRs
+    // assignment go completely unreflected on the Home page (see keyResultsOwnedBy/objectivesOwnedBy
+    // in utils.ts, the same computation MyGoalsSection already uses for "total performance goals").
+    const perfCount = keyResultsOwnedBy(m.name, departmentGoals, opsDepartmentGoals).length + objectivesOwnedBy(m.name, departmentGoals, opsDepartmentGoals).length;
     const devCount = devGoalCountFor(m.id);
     const daysIn = daysSinceJoin(m.joinDate);
     const withinWindow = daysIn <= GOAL_WINDOW_DAYS;
@@ -600,14 +1123,50 @@ export function HomeSection() {
         }))
     );
 
+  // Monthly RAG-confidence nudge for every Key Result the viewer owns — a soft reminder (no
+  // penalty; see act18/checkOverduePenalties), so this only ever shows a notification, never a
+  // point deduction.
+  const staleConfidenceKrs = departmentGoals.flatMap(dg =>
+    (dg.keyResults ?? [])
+      .filter(k => isAmongOwners(k.owner, effectiveName) && !isPendingAckFor(k, effectiveName) && (!k.ragConfidenceUpdatedDate || daysSinceJoin(k.ragConfidenceUpdatedDate) > 30))
+      .map(k => ({ dg, k }))
+  );
+
+  // Check-in cadence nudge — same "Reminder" treatment as the stale-confidence nudge just below,
+  // reusing this same opt-in popup (never a standalone banner/badge) so it surfaces exactly where a
+  // manager already looks for "what needs my attention," instead of adding new always-visible
+  // chrome to Team-at-a-Glance's per-row bells. Direct reports only, capped so a HOD who's behind
+  // on many check-ins doesn't get an alarming wall of identical reminders.
+  const overdueCheckInNudges = isHod
+    ? teamMembers
+        .filter(m => directReportIds.has(m.id))
+        .map(m => ({ member: m, days: daysSinceLastCheckIn(checkIns, effectiveName, m.name) }))
+        .filter(x => x.days === null || x.days > CHECK_IN_CADENCE_DAYS)
+        .slice(0, 5)
+    : [];
+
   const allNotifItems = [
     ...nudgedNotifItems,
+    ...overdueCheckInNudges.map(({ member, days }) => ({
+      icon: "💬",
+      title: `Check in with ${member.name}`,
+      sub: days === null ? "No check-in logged yet" : `Last check-in was ${days} days ago — recommended cadence is every 30 days`,
+      time: "Reminder",
+      action: () => { setPendingOpen(false); setTeamMemberDrawerReturnHome(true); setFocusedTeamMemberId(member.id); setSection("team"); },
+    })),
+    ...staleConfidenceKrs.map(({ dg, k }) => ({
+      icon: "🔄",
+      title: `Update RAG confidence — "${k.title}"`,
+      sub: `Recommended monthly cadence · last updated ${k.ragConfidenceUpdatedDate ?? "never"} · part of "${dg.title}"`,
+      time: "Reminder",
+      action: () => { setPendingOpen(false); setSection("team"); },
+    })),
     ...mixedRagGoals.map(g => ({
       icon: "🔀",
       title: `${g.title} — ${currentQuarterKey()} progress status needs confirmation`,
       sub: "Team members have differing statuses — please confirm the overall quarterly progress status",
       time: "Action Required",
-      action: () => { setPendingOpen(false); setShowGoalEditor(true); },
+      action: () => { setPendingOpen(false); setSection("team"); },
     })),
     ...teamMembers
       .filter(m => directReportIds.has(m.id))
@@ -627,6 +1186,22 @@ export function HomeSection() {
       sub: `"${goal.title}" · Review the ${goal.ragPendingApproval} progress status to earn +10 pts; overdue reviews incur −10 pts`,
       time: "Status Pending",
       action: () => { setPendingOpen(false); setFocusedTeamMemberId(member.id); setSection("team"); },
+    })),
+    // A direct supervisor proposed a change to a report's contributing goal — HOD review, no penalty SLA
+    ...myPendingGoalEditProposals.filter(p => p.source === "supervisor").map(p => ({
+      icon: "✏️",
+      title: `${p.proposedBy} proposed a change to ${p.memberName}'s goal — pending your review`,
+      sub: `"${p.goalTitle}" · Review and adjust % contribution as needed before saving`,
+      time: "Pending Review",
+      action: () => { setPendingOpen(false); setFocusedTeamMemberId(p.memberId); setSection("team"); },
+    })),
+    // A staff member proposed a change to their own goal — HOD accept/reject within 7 working days
+    ...myPendingGoalEditProposals.filter(p => p.source === "self").map(p => ({
+      icon: "✏️",
+      title: `${p.memberName} proposed a change to their goal — pending your approval`,
+      sub: `"${p.goalTitle}" · Review within 7 working days: accept or reject, with an optional remark — or a 5-point penalty applies`,
+      time: "Pending Approval",
+      action: () => { setPendingOpen(false); setFocusedTeamMemberId(p.memberId); setSection("team"); },
     })),
     // Overdue approvals: -10 pts automatically deducted per goal after 7 working days
     ...overdueApprovalByMember.map(({ member, goals }) => ({
@@ -687,7 +1262,7 @@ export function HomeSection() {
   ];
 
   const handleSaveGoals = async (goals: DeptGoal[]) => {
-    await saveDepartmentGoals(goals);
+    await saveDepartmentGoals(goals.map(g => ({ ...g, weightage: g.weightage ?? 0 })));
     setDraftGoals(goals);
   };
 
@@ -696,7 +1271,7 @@ export function HomeSection() {
       {isManager && (
         <>
           {/* ── Metric cards ── */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div
               className="relative overflow-hidden rounded-xl p-5 cursor-pointer hover:opacity-95 transition-opacity shadow-sm"
               style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 55%, #1D4ED8 100%)" }}
@@ -744,79 +1319,32 @@ export function HomeSection() {
             </div>
           </div>
 
-          {/* ── Department Goals ── */}
+          {/* ── Department/Team OKRs ── */}
           <div>
             <div className="flex items-center justify-between mb-5">
               <div>
                 <div className="flex items-center gap-2.5 mb-1">
                   <LaptopLightbulbSVG />
-                  <h2 className="font-display text-2xl">Team Goals</h2>
+                  <h2 className="font-display text-2xl">Department/Team OKRs</h2>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">2026 Objectives for {effectiveDept}</p>
               </div>
-              {isHod && (
-                <button
-                  onClick={() => setShowGoalEditor(true)}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors px-3 py-1.5 rounded-lg hover:bg-muted"
-                >
-                  <Pencil className="size-3.5" />
-                  Edit Goals
-                </button>
-              )}
             </div>
 
-            <div className="grid grid-cols-5 gap-3">
-              {draftGoals.map(g => {
-                const { rag, isConfirmed, isMixed } = computeDeptRag(g, teamMembers);
-                return (
-                  <Card
-                    key={g.id}
-                    className={cn("p-4 group", isHod && "cursor-pointer hover:border-primary/30 hover:shadow-md transition-all")}
-                    onClick={isHod ? () => setShowGoalEditor(true) : undefined}
-                  >
-                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">{g.owner}</div>
-                    <div className="font-medium text-sm mt-2 leading-snug">{g.title}</div>
-                    <div className="mt-4 space-y-1.5">
-                      {isMixed && !isConfirmed ? (
-                        <div className="flex items-center gap-1 text-[10px] text-amber-foreground bg-rag-amber/10 border border-rag-amber/30 rounded-md px-2 py-1">
-                          <AlertCircle className="size-3 shrink-0" />
-                          <span>Confirm progress status</span>
-                        </div>
-                      ) : rag ? (
-                        <div className="flex items-center gap-1.5">
-                          <div className={cn(
-                            "size-3 rounded-full shrink-0",
-                            rag === "green" ? "bg-rag-green" : rag === "amber" ? "bg-rag-amber" : "bg-rag-red"
-                          )} />
-                          <span className={cn(
-                            "text-xs font-semibold",
-                            rag === "green" ? "text-rag-green" : rag === "amber" ? "text-amber-foreground" : "text-rag-red"
-                          )}>
-                            {rag.toUpperCase()}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="text-[10px] text-muted-foreground/60">No {currentQuarterKey()} data yet</div>
-                      )}
-                    </div>
-                    {g.dueDate && (
-                      <div className="mt-2 text-[10px] text-muted-foreground/70">
-                        Due {new Date(g.dueDate + "-01").toLocaleDateString("en-SG", { month: "short", year: "numeric" })}
-                      </div>
-                    )}
-                    {isHod && (
-                      <div className="mt-2 text-[10px] text-transparent group-hover:text-primary/50 transition-colors flex items-center gap-1">
-                        <Pencil className="size-2.5" />Click to edit
-                      </div>
-                    )}
-                  </Card>
-                );
-              })}
-            </div>
+            <DeptTeamOkrSection
+              objectives={draftGoals}
+              viewerName={effectiveName}
+              isHodViewer={isHod}
+              teamMembers={teamMembers}
+              deptGoalSkills={deptGoalSkills}
+              onViewAllTeamOkrs={() => setSection("team")}
+            />
           </div>
 
+          <TeamHealthWidget mode="manager" viewerName={effectiveName} viewerDept={effectiveDept} />
+
           {/* ── Team At A Glance + Roadmap ── */}
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <div className="mb-5">
                 <div className="flex items-center gap-2.5">
@@ -824,38 +1352,7 @@ export function HomeSection() {
                   <h2 className="font-display text-2xl">Team At A Glance</h2>
                 </div>
               </div>
-              <div className="space-y-1">
-                {[...teamMembers]
-                  .filter(m => m.directManager === effectiveName)
-                  .sort((a, b) => ({ red: 0, amber: 1, green: 2 }[a.rag] ?? 3) - ({ red: 0, amber: 1, green: 2 }[b.rag] ?? 3))
-                  .map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => { setFocusedTeamMemberId(m.id); setSection("team"); }}
-                    className="flex items-center gap-3 py-2 border-b border-border/60 last:border-0 w-full text-left hover:bg-muted/50 rounded-lg px-2 -mx-2 transition-colors group"
-                  >
-                    <div className="size-9 rounded-full bg-secondary text-primary grid place-items-center font-medium text-sm shrink-0">{m.avatar}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium group-hover:text-primary transition-colors">{m.name}</div>
-                      <div className="text-xs text-muted-foreground">{m.role}</div>
-                    </div>
-                    {m.goals.length === 0 ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-rag-red/10 text-rag-red border border-rag-red/30 shrink-0">
-                        <Flag className="size-3" /> No Goals Set
-                      </span>
-                    ) : m.goals.length < 3 ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-rag-amber/15 text-amber-foreground border border-rag-amber/40 shrink-0">
-                        <Flag className="size-3" /> Incomplete ({m.goals.length}/3)
-                      </span>
-                    ) : (
-                      <>
-                        <RagPill rag={m.rag} />
-                        <div className="text-xs text-muted-foreground shrink-0">{m.goals.length} goals</div>
-                      </>
-                    )}
-                  </button>
-                ))}
-              </div>
+              <TeamAtAGlanceSection teamMembers={teamMembers} viewerName={effectiveName} isHodViewer={isHod} />
             </Card>
 
             <Card>
@@ -910,7 +1407,11 @@ export function HomeSection() {
           : [];
 
         const staffDevGoalCount = currentStaffDevGoals.length;
-        const staffPerfGoalCount = staffMember?.goals.length ?? 0;
+        // Performance goals = Objectives/Key Results this member owns in the live OKR data (see
+        // goalStatusNotifsFor above for the same fix and why the old `goals.length` was stale/wrong).
+        const staffPerfGoalCount = staffMember
+          ? keyResultsOwnedBy(staffMember.name, departmentGoals, opsDepartmentGoals).length + objectivesOwnedBy(staffMember.name, departmentGoals, opsDepartmentGoals).length
+          : 0;
         const staffRagPendingGoals = staffMember?.goals.filter(g => g.approved && g.ragPendingApproval) ?? [];
         const staffDaysIn = daysSinceJoin(opsMeta ? opsMeta.user.joinDate : staffMember?.joinDate);
         const staffWithinWindow = staffDaysIn <= GOAL_WINDOW_DAYS;
@@ -982,6 +1483,19 @@ export function HomeSection() {
               time: "Acknowledge",
               action: () => { setStaffPendingOpen(false); setSection("mygoals"); },
             })),
+          ...(pendingDevGoalRecs[currentStaffMemberId] ?? []).map(rec => {
+            const daysElapsed = workingDaysSince(rec.recommendedDate);
+            const isOverdue = daysElapsed >= 7;
+            return {
+              icon: isOverdue ? "🔴" : "🎓",
+              title: `Recommended development goal: ${rec.title}`,
+              sub: isOverdue
+                ? `${rec.recommendedBy} recommended this — response overdue, −5 pts applied. Acknowledge or decline now.`
+                : `${rec.recommendedBy} recommended this — acknowledge or decline within ${7 - daysElapsed} more working day${7 - daysElapsed !== 1 ? "s" : ""} or −5 pts applies`,
+              time: isOverdue ? "Overdue" : "Acknowledge",
+              action: () => { setStaffPendingOpen(false); setSection("mygoals"); },
+            };
+          }),
           // Team notifications — only surfaced when the viewed staff member manages direct reports
           ...(staffMemberHasTeam ? teamMembers
             .filter(m => staffTeamDirectReportIds.has(m.id))
@@ -1026,7 +1540,7 @@ export function HomeSection() {
         return (
           <>
             {/* ── Staff metric cards (same as manager, no Team at a Glance) ── */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div
                 className="relative overflow-hidden rounded-xl p-5 cursor-pointer hover:opacity-95 transition-opacity shadow-sm"
                 style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 55%, #1D4ED8 100%)" }}
@@ -1068,57 +1582,35 @@ export function HomeSection() {
               </div>
             </div>
 
-            {/* ── Department Goals (read-only) ── */}
+            {/* ── Department/Team OKRs (read-only) ── */}
             <div>
               <div className="flex items-center gap-2.5 mb-1">
                 <LaptopLightbulbSVG />
-                <h2 className="font-display text-2xl">Team Goals</h2>
+                <h2 className="font-display text-2xl">Department/Team OKRs</h2>
               </div>
               <p className="text-sm text-muted-foreground mt-1 mb-5">2026 Objectives for {effectiveDept}</p>
-              <div className="grid grid-cols-5 gap-3">
-                {draftGoals.map(g => {
-                  const { rag, isMixed, isConfirmed } = computeDeptRag(g, teamMembers);
-                  return (
-                    <Card key={g.id} className="p-4">
-                      <div className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">{g.owner}</div>
-                      <div className="font-medium text-sm mt-2 leading-snug">{g.title}</div>
-                      <div className="mt-4 space-y-1.5">
-                        {isMixed && !isConfirmed ? (
-                          <div className="flex items-center gap-1 text-[10px] text-amber-foreground bg-rag-amber/10 border border-rag-amber/30 rounded-md px-2 py-1">
-                            <AlertCircle className="size-3 shrink-0" />
-                            <span>Pending confirmation</span>
-                          </div>
-                        ) : rag ? (
-                          <div className="flex items-center gap-1.5">
-                            <div className={cn(
-                              "size-3 rounded-full shrink-0",
-                              rag === "green" ? "bg-rag-green" : rag === "amber" ? "bg-rag-amber" : "bg-rag-red"
-                            )} />
-                            <span className={cn(
-                              "text-xs font-semibold",
-                              rag === "green" ? "text-rag-green" : rag === "amber" ? "text-amber-foreground" : "text-rag-red"
-                            )}>
-                              {rag.toUpperCase()}
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="text-[10px] text-muted-foreground/60">No {currentQuarterKey()} data yet</div>
-                        )}
-                      </div>
-                      {g.dueDate && (
-                        <div className="mt-2 text-[10px] text-muted-foreground/70">
-                          Due {new Date(g.dueDate + "-01").toLocaleDateString("en-SG", { month: "short", year: "numeric" })}
-                        </div>
-                      )}
-                    </Card>
-                  );
-                })}
-              </div>
+              <DeptTeamOkrSection
+                objectives={draftGoals}
+                viewerName={staffMember?.name ?? ""}
+                isHodViewer={false}
+                teamMembers={teamMembers}
+                deptGoalSkills={deptGoalSkills}
+                onViewAllTeamOkrs={() => setSection("team")}
+              />
             </div>
+
+            {staffMember && (
+              <TeamHealthWidget
+                mode="staff"
+                viewerName={staffMember.name}
+                viewerDept={effectiveDept}
+                managerName={staffMember.directManager}
+              />
+            )}
 
             {/* ── Team At A Glance + Roadmap (side by side when staff manages a team) ── */}
             {staffMemberHasTeam ? (
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                   <div className="mb-5">
                     <div className="flex items-center gap-2.5">
@@ -1126,38 +1618,7 @@ export function HomeSection() {
                       <h2 className="font-display text-2xl">Team At A Glance</h2>
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    {teamMembers
-                      .filter(m => m.directManager === staffMember!.name)
-                      .sort((a, b) => ({ red: 0, amber: 1, green: 2 }[a.rag] ?? 3) - ({ red: 0, amber: 1, green: 2 }[b.rag] ?? 3))
-                      .map(m => (
-                        <button
-                          key={m.id}
-                          onClick={() => { setFocusedTeamMemberId(m.id); setSection("team"); }}
-                          className="flex items-center gap-3 py-2 border-b border-border/60 last:border-0 w-full text-left hover:bg-muted/50 rounded-lg px-2 -mx-2 transition-colors group"
-                        >
-                          <div className="size-9 rounded-full bg-secondary text-primary grid place-items-center font-medium text-sm shrink-0">{m.avatar}</div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium group-hover:text-primary transition-colors">{m.name}</div>
-                            <div className="text-xs text-muted-foreground">{m.role}</div>
-                          </div>
-                          {m.goals.length === 0 ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-rag-red/10 text-rag-red border border-rag-red/30 shrink-0">
-                              <Flag className="size-3" /> No Goals Set
-                            </span>
-                          ) : m.goals.length < 3 ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-rag-amber/15 text-amber-foreground border border-rag-amber/40 shrink-0">
-                              <Flag className="size-3" /> Incomplete ({m.goals.length}/3)
-                            </span>
-                          ) : (
-                            <>
-                              <RagPill rag={m.rag} />
-                              <div className="text-xs text-muted-foreground shrink-0">{m.goals.length} goals</div>
-                            </>
-                          )}
-                        </button>
-                      ))}
-                  </div>
+                  <TeamAtAGlanceSection teamMembers={teamMembers} viewerName={staffMember!.name} isHodViewer={false} />
                 </Card>
                 <Card>
                   <div className="mb-5">
@@ -1188,7 +1649,7 @@ export function HomeSection() {
               <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setStaffPendingOpen(false)}>
                 <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
                 <div
-                  className="relative bg-background border border-border rounded-2xl shadow-2xl w-[500px] max-h-[80vh] flex flex-col"
+                  className="relative bg-background border border-border rounded-2xl shadow-2xl w-[calc(100vw-2rem)] sm:w-[500px] max-h-[80vh] flex flex-col"
                   onClick={e => e.stopPropagation()}
                 >
                   <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
@@ -1295,15 +1756,6 @@ export function HomeSection() {
 
       {/* Team drawer from pending actions */}
       {activeMember && <TeamDrawer member={activeMember} onClose={() => setActiveMember(null)} />}
-
-      {/* HOD goal editor modal */}
-      {showGoalEditor && isHod && (
-        <GoalEditorModal
-          initialGoals={draftGoals}
-          onSave={handleSaveGoals}
-          onClose={() => setShowGoalEditor(false)}
-        />
-      )}
     </div>
   );
 }
@@ -1336,9 +1788,24 @@ function Roadmap({ items }: { items: { id: string; name: string; date: string; c
 }
 
 
+const ROADMAP_DEV_GOAL_MAX = 10;
+
 function DevelopmentRoadmap() {
-  const { tier, skills, allTeamMemberSkills, staffMemberId, adminMemberId, currentUser, teamMembers, staffList, addPendingSkill, opsMeta } = useApp();
+  const {
+    tier, skills, allTeamMemberSkills, staffMemberId, adminMemberId, currentUser, teamMembers, staffList, addPendingSkill, opsMeta,
+    staffDevGoals, adminDevGoals, managerDevGoals, upsertStaffDevGoal, upsertAdminDevGoal, upsertManagerDevGoal,
+    awardMemberPoints, flagGoalPendingDueDate,
+  } = useApp();
   const isOpsTier = tier === "ops_hod" || tier === "ops_mgr1" || tier === "ops_mgr2";
+  const isAdmin = tier === "admin";
+  const isStaff = tier === "staff";
+
+  // Resolve the viewer's own dev-goal list/upsert function and id — same resolution StaffGoalsView
+  // (MyGoalsSection.tsx) uses — so "Add as Development Goal" writes to the right place regardless
+  // of which persona is currently being viewed.
+  const currentDevGoals = opsMeta ? opsMeta.devGoals : isAdmin ? adminDevGoals : isStaff ? staffDevGoals : managerDevGoals;
+  const upsertDevGoal = opsMeta ? opsMeta.upsertDevGoal : isAdmin ? upsertAdminDevGoal : isStaff ? upsertStaffDevGoal : upsertManagerDevGoal;
+  const devGoalMemberId = opsMeta ? opsMeta.personaId : isAdmin ? adminMemberId : isStaff ? staffMemberId : "u0";
 
   // Resolve the viewed user's role/dept/grade for IBF-matched skill recommendations
   const viewedMemberId = tier === "admin" ? adminMemberId : tier === "staff" ? staffMemberId : null;
@@ -1361,7 +1828,7 @@ function DevelopmentRoadmap() {
     ? "https://ihrp.sg/skill-badges-overview/"
     : getIBFJobFunctionUrl(designation, dept).url;
   const roadmapTrack = isHCWM
-    ? "HR Professionals"
+    ? "Human Capital Professionals"
     : getIBFJobFunctionUrl(designation, dept).track;
 
   const grouped: [string, string[], string][] = [];
@@ -1389,10 +1856,36 @@ function DevelopmentRoadmap() {
     if (examItems.length > 0) grouped.push(["Regulatory Examinations", examItems, "bg-orange-400"]);
   }
 
-  const handleSubmit = (skill: string) => {
-    if (pendingSkills.includes(skill)) return;
-    void addPendingSkill(skill);
-    toast.success(`"${skill}" submitted for approval · your manager will be notified`);
+  // Marking complete requires a supporting certificate, same as a development goal's completion —
+  // opens the shared upload modal instead of submitting directly.
+  const [attachModalSkill, setAttachModalSkill] = useState<string | null>(null);
+  const handleCertificateUpload = (attachment: SkillAttachment) => {
+    if (!attachModalSkill) return;
+    void addPendingSkill(attachModalSkill, attachment);
+    toast.success(`"${attachModalSkill}" submitted for approval · your manager will be notified`);
+    setAttachModalSkill(null);
+  };
+
+  // "Add as a new development goal" — creates the goal immediately without a due date, flags it for
+  // the highlighted due-date prompt on My Goals. Points are only earned for a user's very first
+  // development goal — every subsequent one is unpaid (points instead come from getting the
+  // resulting skill approved onto the verified profile).
+  const handleAddAsGoal = (skill: string) => {
+    if (currentDevGoals.length >= ROADMAP_DEV_GOAL_MAX) {
+      toast.error(`Maximum ${ROADMAP_DEV_GOAL_MAX} development goals reached`);
+      return;
+    }
+    const isFirstDevGoal = currentDevGoals.length === 0;
+    const id = `dg${Date.now()}`;
+    upsertDevGoal({
+      id, title: skill,
+      description: "Recommended for your role — added from your Development Roadmap.",
+      dueDate: "", completed: false,
+    });
+    flagGoalPendingDueDate(devGoalMemberId, id);
+    if (isFirstDevGoal) awardMemberPoints(devGoalMemberId, 10);
+    const msg = `"${skill}" added${isFirstDevGoal ? " · +10 pts" : ""} — check out your refreshed development goals list on My Goals.`;
+    if (isFirstDevGoal) pointsToast(msg); else toast.success(msg);
   };
 
   const totalItems = grouped.reduce((sum, [, items]) => sum + items.length, 0);
@@ -1410,21 +1903,64 @@ function DevelopmentRoadmap() {
             </div>
             <div className="space-y-2 pl-3 border-l border-border/60">
               {skillList.map(skill => {
+                // Mutually exclusive: only one path — direct submission or a linked development
+                // goal — can be active for a given recommendation at any one time.
                 const isPending = pendingSkills.includes(skill);
+                const alreadyGoal = currentDevGoals.some(g => g.title === skill);
+                const completeDisabled = isPending || alreadyGoal;
+                const addGoalDisabled = alreadyGoal || isPending;
+                const completeTooltip = isPending
+                  ? "Pending manager approval"
+                  : alreadyGoal
+                  ? "Complete the linked development goal on My Goals to submit this"
+                  : "Mark as complete — submit for manager approval to update your skills profile";
+                const addGoalTooltip = alreadyGoal
+                  ? "Already a development goal"
+                  : isPending
+                  ? "Already submitted for manager approval"
+                  : "Add as a new development goal";
                 return (
-                  <div key={skill} className="flex items-center gap-2.5">
-                    <button
-                      onClick={() => handleSubmit(skill)}
-                      disabled={isPending}
-                      className="shrink-0 disabled:cursor-default"
-                      title={isPending ? "Pending manager approval" : "Click to submit for approval"}
-                    >
-                      {isPending ? (
-                        <Clock className="size-3.5 text-amber-foreground" />
-                      ) : (
-                        <Circle className="size-3.5 text-muted-foreground hover:text-primary transition-colors cursor-pointer" />
-                      )}
-                    </button>
+                  <div key={skill} className="flex items-center gap-2">
+                    <TooltipProvider delayDuration={150}>
+                      {/* Icon-only, permanently colour-tinted so each action reads at a glance
+                          without needing a visible text label (keeps the row compact). */}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => setAttachModalSkill(skill)}
+                            disabled={completeDisabled}
+                            className={cn(
+                              "size-6 rounded-full border grid place-items-center shrink-0 transition-colors disabled:cursor-default",
+                              isPending
+                                ? "text-amber-foreground bg-amber/15 border-amber/35"
+                                : alreadyGoal
+                                ? "text-muted-foreground/40 bg-muted/40 border-border/60"
+                                : "text-rag-green bg-rag-green/10 border-rag-green/30 hover:bg-rag-green/20 cursor-pointer",
+                            )}
+                          >
+                            {isPending ? <Clock className="size-3.5" /> : <CheckCircle2 className="size-3.5" />}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{completeTooltip}</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => handleAddAsGoal(skill)}
+                            disabled={addGoalDisabled}
+                            className={cn(
+                              "size-6 rounded-full border grid place-items-center shrink-0 transition-colors disabled:cursor-default",
+                              addGoalDisabled
+                                ? "text-muted-foreground/40 bg-muted/40 border-border/60"
+                                : "text-teal bg-teal/10 border-teal/30 hover:bg-teal/20 cursor-pointer",
+                            )}
+                          >
+                            <Plus className="size-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{addGoalTooltip}</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     <span className={cn("text-sm flex-1", isPending && "text-amber-foreground/80")}>
                       {skill}
                     </span>
@@ -1443,7 +1979,7 @@ function DevelopmentRoadmap() {
           Showing up to 6 recommended skills &amp; certifications for your role, excluding verified skills.
         </p>
         <p className="text-[10px] text-muted-foreground/70 leading-relaxed">
-          Click to submit acquired skills or certifications for manager approval.
+          Mark as complete to submit for manager approval, or add as a development goal to work toward it first.
         </p>
         <p className="text-[10px] text-muted-foreground/70 leading-relaxed">
           <a
@@ -1453,12 +1989,19 @@ function DevelopmentRoadmap() {
             className="underline underline-offset-2 hover:text-primary transition-colors"
           >
             {isHCWM
-              ? "Click here to view IHRP Skills Badges for HR Professionals"
+              ? "Click here to view IHRP Skills Badges for Human Capital Professionals"
               : `Click here to view the full IBF Skills Framework for ${roadmapTrack}`
             }
           </a>
         </p>
       </div>
+      {attachModalSkill && (
+        <SkillAttachmentModal
+          skillName={attachModalSkill}
+          onSubmit={handleCertificateUpload}
+          onClose={() => setAttachModalSkill(null)}
+        />
+      )}
     </div>
   );
 }

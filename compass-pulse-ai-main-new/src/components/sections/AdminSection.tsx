@@ -1,32 +1,30 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Card, SectionTitle } from "@/components/ui-bits";
 import { useApp } from "@/lib/appContext";
-import { BarChart3, AlertTriangle, Sparkles, Download, Search, ChevronDown, ChevronUp, ChevronRight, X, UserX, UserCheck, Laptop, Loader2, Calendar, Pencil, Plus, Trash2, Settings2, Save } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { BarChart3, AlertTriangle, Download, Upload, Search, ChevronDown, ChevronUp, ChevronRight, X, UserX, UserCheck, Laptop, Loader2, Calendar, Pencil, Plus, Trash2, Settings2, Save, CheckCircle2, XCircle } from "lucide-react";
+import { cn, stripLeadingZero, pilotTestActivity, recognizeTrigger, workingDaysSince } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Activity } from "@/lib/mockData";
+import { CATEGORY_LABELS, AUDIENCE_LABELS } from "@/lib/mockData";
 import { getRedeemedRewardsFn, disableStaffFn, enableStaffFn, getStaffPointsLogFn, getOrgNetPointsFn } from "@/lib/api/data.functions";
+import { exportActivitiesToExcel, parseActivityImportFile, validateImportRows, type ImportValidationResult } from "@/lib/activityImportExport";
+import { computeChallengeThemes, computeCompetencyGapRow, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
+import { AiGovernancePanel } from "@/components/sections/AiGovernancePanel";
 
 // ── PhillipCapital department list ────────────────────────────────────────────
+// Matches the 9 real department values found in Staff Listing 2 — keep this in sync
+// with scripts/sync-users-from-staff-listing.mjs's source data, otherwise imported
+// staff in an unlisted department silently disappear from these grouped views.
 const PC_DEPARTMENTS = [
   "Human Capital & Workplace Management",
   "Affluent Markets",
-  "Finance",
-  "IT - Singapore",
-  "IT Operations & Services",
   "Operations - Equities",
   "Operations - Unit Trust",
   "Partnership",
-  "Contract For Difference",
-  "Public Markets",
-  "Corporate Sales",
-  "Phillip Investor Centre",
-  "Client Relations And Sales Channel",
-  "Application Support Helpdesk",
-  "Investment Solutions",
-  "Managed Accounts",
-  "Corporate Development (B2B)",
-  "Internal Audit",
+  "CFD Market Making",
+  "Group Compliance",
+  "Credit Risk Management (F.K.A. Credit Admin)",
+  "Accounts Processing Unit",
 ];
 
 // ── Mock action plan data per manager ─────────────────────────────────────────
@@ -49,19 +47,19 @@ const MANAGER_ACTION_PLANS: {
       { title: "Book: The Coaching Habit (Bungay Stanier)", done: false },
     ],
   },
-  { id: "u21", name: "Eliza Lim", dept: "Affluent Markets",
+  { id: "u21", name: "Nadia Yong", dept: "Credit Risk Management (F.K.A. Credit Admin)",
     items: [
-      { title: "MAS SFA Refresher (Dealing & Advisory)", done: true },
-      { title: "Q2 AUM Growth Review with Regional Head", done: true },
-      { title: "Digital Onboarding Platform Readiness Check", done: false },
-      { title: "Private Banking Leadership Workshop", done: false },
+      { title: "MAS Credit Risk Regulatory Update Briefing", done: true },
+      { title: "Q2 Portfolio Credit Quality Review with Group Risk", done: true },
+      { title: "AI Credit Scoring Model Readiness Check", done: false },
+      { title: "Credit Risk Leadership Workshop", done: false },
     ],
   },
-  { id: "u22", name: "Brandon Lim", dept: "Affluent Markets",
+  { id: "u22", name: "Victor Lai", dept: "Credit Risk Management (F.K.A. Credit Admin)",
     items: [
-      { title: "MAS SFA Refresher (Dealing & Advisory)", done: true },
-      { title: "Q2 Trade Execution Quality Review", done: false },
-      { title: "CFP Module 1 Enrolment", done: false },
+      { title: "MAS Credit Risk Regulatory Update Briefing", done: true },
+      { title: "Q2 Credit Approval Turnaround Review", done: false },
+      { title: "Advanced Credit Risk Modelling Enrolment", done: false },
     ],
   },
 ];
@@ -378,7 +376,7 @@ function StaffProfilePopup({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             {[
               { label: "Name", value: staff.name },
               { label: "Designation", value: staff.role },
@@ -474,18 +472,6 @@ function StaffProfilePopup({
 
 // ── Activity Management Panel ─────────────────────────────────────────────────
 
-const AUDIENCE_LABELS: Record<Activity["audience"], string> = {
-  all: "All Staff",
-  manager: "Managers & HODs",
-  hod: "HODs Only",
-};
-const CATEGORY_LABELS: Record<Activity["category"], string> = {
-  goal: "Goal",
-  recognition: "Recognition",
-  skill: "Skill",
-  engagement: "Engagement",
-  penalty: "Penalty",
-};
 const CATEGORY_COLORS: Record<Activity["category"], string> = {
   goal: "bg-primary/10 text-primary border-primary/20",
   recognition: "bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-900/20 dark:text-pink-300 dark:border-pink-700/30",
@@ -528,7 +514,7 @@ const AUDIENCE_SECTIONS: { key: Activity["audience"]; label: string; desc: strin
 // ── Inline ActivityForm ────────────────────────────────────────────────────────
 
 function ActivityForm({
-  draft, setDraft, onSave, onCancel, saveLabel, liveActivityNames,
+  draft, setDraft, onSave, onCancel, saveLabel, liveActivityNames, mode, allActivityNames, currentName,
 }: {
   draft: Partial<Omit<Activity, "id">>;
   setDraft: (fn: (prev: typeof draft) => typeof draft) => void;
@@ -536,43 +522,87 @@ function ActivityForm({
   onCancel: () => void;
   saveLabel: string;
   liveActivityNames: string[];
+  // "add" keeps the existing dropdown + custom-text behavior. "edit" is dropdown-only — every
+  // activity that actually does something in this dashboard is wired to a specific point-awarding
+  // call site elsewhere, so renaming an existing activity must reuse another known catalog entry's
+  // name (live or draft), never free text.
+  mode: "add" | "edit";
+  allActivityNames?: string[];
+  currentName?: string;
 }) {
-  const showCustomInput = !draft.name || (!liveActivityNames.includes(draft.name) && draft.name !== "");
+  const [pilotErrors, setPilotErrors] = useState<string[]>([]);
+  const [triggerAcknowledged, setTriggerAcknowledged] = useState(false);
+  const showCustomInput = mode === "add" && (!draft.name || (!liveActivityNames.includes(draft.name) && draft.name !== ""));
+  const editNameOptions = mode === "edit"
+    ? Array.from(new Set([currentName, ...(allActivityNames ?? [])].filter((n): n is string => !!n)))
+    : [];
+
+  // "Pilot test" for the trigger text itself: does the dashboard actually recognize this as
+  // something it can act on? Unlike pilotTestActivity's hard checks, this is a soft heuristic — an
+  // unrecognized trigger might describe a real process that just isn't wired up yet, so it can't be
+  // authoritatively rejected, only flagged for the admin to confirm they understand the limitation.
+  const triggerResolution = draft.timelineTrigger?.trim() ? recognizeTrigger(draft.timelineTrigger) : null;
+  const triggerNeedsAck = !!draft.timelineTrigger?.trim() && !triggerResolution;
+
+  const handleSave = () => {
+    const errors = pilotTestActivity(draft);
+    if (errors.length > 0) { setPilotErrors(errors); return; }
+    if (triggerNeedsAck && !triggerAcknowledged) { setPilotErrors(["Confirm you understand the \"Starting from when?\" trigger below before saving."]); return; }
+    setPilotErrors([]);
+    onSave();
+  };
 
   return (
     <div className="space-y-4 rounded-xl border border-primary/25 bg-primary/5 p-4 animate-in slide-in-from-top-1 duration-150">
 
-      {/* Activity name — dropdown of live activities + custom text fallback */}
+      {/* Activity name */}
       <div>
         <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Activity Name</label>
-        <p className="text-[10px] text-muted-foreground/70 mt-0.5 mb-1.5">
-          Choose an existing live activity to re-use its name, or type a custom one. Only activities that are set to <em>Live</em> appear in this list.
-        </p>
-        <select
-          value={liveActivityNames.includes(draft.name ?? "") ? draft.name : ""}
-          onChange={e => setDraft(p => ({ ...p, name: e.target.value }))}
-          className="w-full text-sm rounded-lg border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          <option value="">— Select a live activity or type custom below —</option>
-          {liveActivityNames.map(n => <option key={n} value={n}>{n}</option>)}
-        </select>
-        <input
-          type="text"
-          placeholder="Custom activity name…"
-          value={showCustomInput ? (draft.name ?? "") : ""}
-          onChange={e => setDraft(p => ({ ...p, name: e.target.value }))}
-          className="w-full mt-1.5 text-sm rounded-lg border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
-        />
+        {mode === "edit" ? (
+          <>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5 mb-1.5">
+              Editing can only reassign this activity to another known activity in the dashboard's catalog (live or draft) — custom text isn't supported here, since undefined activities have no real tracking behind them.
+            </p>
+            <select
+              value={editNameOptions.includes(draft.name ?? "") ? draft.name : ""}
+              onChange={e => setDraft(p => ({ ...p, name: e.target.value }))}
+              className="w-full text-sm rounded-lg border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {editNameOptions.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </>
+        ) : (
+          <>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5 mb-1.5">
+              Choose an existing live activity to re-use its name, or type a custom one. Only activities that are set to <em>Live</em> appear in this list.
+            </p>
+            <select
+              value={liveActivityNames.includes(draft.name ?? "") ? draft.name : ""}
+              onChange={e => setDraft(p => ({ ...p, name: e.target.value }))}
+              className="w-full text-sm rounded-lg border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">— Select a live activity or type custom below —</option>
+              {liveActivityNames.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+            <input
+              type="text"
+              placeholder="Custom activity name…"
+              value={showCustomInput ? (draft.name ?? "") : ""}
+              onChange={e => setDraft(p => ({ ...p, name: e.target.value }))}
+              className="w-full mt-1.5 text-sm rounded-lg border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </>
+        )}
       </div>
 
       {/* Points + Category + Audience row */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
           <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Points Awarded</label>
           <input
             type="number"
             value={draft.points ?? 0}
-            onChange={e => setDraft(p => ({ ...p, points: Number(e.target.value) }))}
+            onChange={e => setDraft(p => ({ ...p, points: Number(stripLeadingZero(e.target.value)) }))}
             className="w-full mt-1.5 text-sm rounded-lg border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
           />
           <div className="text-[10px] text-muted-foreground mt-1">Use a negative number for a penalty activity</div>
@@ -606,7 +636,7 @@ function ActivityForm({
       {/* Timeline */}
       <div className="rounded-lg border border-border/60 bg-background p-3 space-y-3">
         <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Completion Timeline</div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="text-[10px] text-muted-foreground">Complete within (days)</label>
             <input
@@ -614,7 +644,7 @@ function ActivityForm({
               min={1}
               placeholder="e.g. 7"
               value={draft.timelineDays ?? ""}
-              onChange={e => setDraft(p => ({ ...p, timelineDays: e.target.value ? Number(e.target.value) : undefined }))}
+              onChange={e => setDraft(p => ({ ...p, timelineDays: e.target.value ? Number(stripLeadingZero(e.target.value)) : undefined }))}
               className="w-full mt-1 text-sm rounded-lg border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
@@ -630,6 +660,34 @@ function ActivityForm({
           </div>
         </div>
         <p className="text-[10px] text-muted-foreground/70">Leave blank if this activity has no fixed deadline.</p>
+
+        {/* Trigger recognition — "pilot tests" whether the dashboard can actually act on this text */}
+        {draft.timelineTrigger?.trim() && (
+          triggerResolution ? (
+            <div className="flex items-start gap-2 rounded-lg border border-rag-green/30 bg-rag-green/5 px-2.5 py-2">
+              <CheckCircle2 className="size-3.5 text-rag-green shrink-0 mt-0.5" />
+              <div className="text-[10px] text-rag-green/90">Recognized — will pull from {triggerResolution}.</div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-amber-300/50 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-700/30 px-2.5 py-2 space-y-1.5">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-[10px] text-amber-800 dark:text-amber-300">
+                  Not recognized — the dashboard has no live mechanism wired to this trigger description, so it won't automatically enforce a deadline for it.
+                </div>
+              </div>
+              <label className="flex items-start gap-2 cursor-pointer pl-0.5">
+                <input
+                  type="checkbox"
+                  checked={triggerAcknowledged}
+                  onChange={e => setTriggerAcknowledged(e.target.checked)}
+                  className="rounded mt-0.5 shrink-0"
+                />
+                <span className="text-[10px] text-amber-800 dark:text-amber-300">I understand this trigger isn't recognized and won't be automatically enforced.</span>
+              </label>
+            </div>
+          )
+        )}
       </div>
 
       {/* Compulsory + Live checkboxes with explanations */}
@@ -658,7 +716,7 @@ function ActivityForm({
               min={0}
               placeholder="e.g. 10"
               value={draft.penaltyPoints ?? ""}
-              onChange={e => setDraft(p => ({ ...p, penaltyPoints: e.target.value ? Number(e.target.value) : undefined }))}
+              onChange={e => setDraft(p => ({ ...p, penaltyPoints: e.target.value ? Number(stripLeadingZero(e.target.value)) : undefined }))}
               className="w-full mt-1.5 text-sm rounded-lg border border-rag-red/30 bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <p className="text-[10px] text-muted-foreground/70 mt-1">Enter a positive number — it will be applied as a deduction (e.g. 10 → −10 pts).</p>
@@ -682,8 +740,20 @@ function ActivityForm({
         </div>
       </div>
 
+      {/* Pilot-test errors — blocks Save until the timeline configuration is coherent */}
+      {pilotErrors.length > 0 && (
+        <div className="rounded-lg border border-rag-red/30 bg-rag-red/5 px-3 py-2.5 animate-in slide-in-from-top-1 duration-150">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-rag-red">
+            <XCircle className="size-3.5" /> Pilot test failed — fix before this can go live
+          </div>
+          <ul className="mt-1.5 space-y-1 list-disc list-inside">
+            {pilotErrors.map((e, i) => <li key={i} className="text-[11px] text-rag-red/90">{e}</li>)}
+          </ul>
+        </div>
+      )}
+
       <div className="flex gap-2 pt-1">
-        <button onClick={onSave} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
+        <button onClick={handleSave} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity">
           <Save className="size-3" /> {saveLabel}
         </button>
         <button onClick={onCancel} className="px-3 py-1.5 rounded-lg border border-border text-xs hover:bg-muted transition-colors">Cancel</button>
@@ -757,33 +827,114 @@ function ActivityRow({
 
 // ── ActivityManagementPanel ────────────────────────────────────────────────────
 
+function ImportResultsDialog({ result, onClose }: { result: ImportValidationResult; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-card border border-border rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6 space-y-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2">
+          <Upload className="size-5 text-primary" />
+          <div className="font-semibold text-sm">Import Results</div>
+        </div>
+
+        {result.valid.length > 0 && (
+          <div className="flex items-start gap-2 rounded-lg border border-rag-green/30 bg-rag-green/5 px-3 py-2.5">
+            <CheckCircle2 className="size-4 text-rag-green shrink-0 mt-0.5" />
+            <div className="text-xs">
+              <strong>{result.valid.length}</strong> activit{result.valid.length === 1 ? "y" : "ies"} updated and live immediately.
+            </div>
+          </div>
+        )}
+
+        {result.errors.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-rag-red">
+              <XCircle className="size-3.5" /> {result.errors.length} row{result.errors.length === 1 ? "" : "s"} skipped — action required
+            </div>
+            {result.errors.map((err, i) => (
+              <div key={i} className="rounded-lg border border-rag-red/25 bg-rag-red/5 px-3 py-2.5">
+                <div className="text-xs font-medium">{err.name} <span className="text-[10px] text-muted-foreground">({err.id})</span></div>
+                <ul className="mt-1 space-y-0.5 list-disc list-inside">
+                  {err.reasons.map((r, j) => <li key={j} className="text-[11px] text-rag-red/90">{r}</li>)}
+                </ul>
+              </div>
+            ))}
+            <p className="text-[10px] text-muted-foreground">Fix these rows in the source file (or re-export and re-edit) and upload again.</p>
+          </div>
+        )}
+
+        {result.warnings.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="size-3.5" /> {result.warnings.length} row{result.warnings.length === 1 ? "" : "s"} applied with a warning
+            </div>
+            {result.warnings.map((w, i) => (
+              <div key={i} className="rounded-lg border border-amber-300/50 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-700/30 px-3 py-2.5">
+                <div className="text-xs font-medium">{w.name} <span className="text-[10px] text-muted-foreground">({w.id})</span></div>
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5">{w.message}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {result.valid.length === 0 && result.errors.length === 0 && result.warnings.length === 0 && (
+          <p className="text-xs text-muted-foreground">No recognizable rows were found in this file.</p>
+        )}
+
+        <button onClick={onClose} className="w-full px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90">
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ActivityManagementPanel({
   activities,
   onAdd,
   onUpdate,
   onDelete,
+  onBulkUpsert,
 }: {
   activities: Activity[];
   onAdd: (a: Omit<Activity, "id">) => void;
   onUpdate: (id: string, changes: Partial<Activity>) => void;
   onDelete: (id: string) => void;
+  onBulkUpsert: (updates: { id: string; changes: Partial<Activity> }[]) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Partial<Activity>>({});
+  const [editingOriginalName, setEditingOriginalName] = useState<string | undefined>(undefined);
   // Which audience section is showing the "Add Activity" form
   const [addingForAudience, setAddingForAudience] = useState<Activity["audience"] | null>(null);
   const [newDraft, setNewDraft] = useState<Omit<Activity, "id">>(mkBlankDraft());
+  // Sections start collapsed — "only unfold upon clicking"
+  const [expandedSections, setExpandedSections] = useState<Set<Activity["audience"]>>(new Set());
+  const [importResult, setImportResult] = useState<ImportValidationResult | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Live activity names for the dropdown (excludes the activity currently being edited)
+  const toggleSection = (key: Activity["audience"]) =>
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+
+  // Live activity names for the Add-mode dropdown (excludes the activity currently being edited)
   const liveActivityNames = activities.filter(a => a.live && a.id !== editingId).map(a => a.name);
+  // All distinct activity names (live + draft) for the Edit-mode dropdown, excluding the one being edited
+  const allActivityNames = Array.from(new Set(activities.filter(a => a.id !== editingId).map(a => a.name)));
 
   const startEdit = (a: Activity) => {
     setEditingId(a.id);
     setEditDraft({ ...a });
+    setEditingOriginalName(a.name);
     setAddingForAudience(null);
   };
-  const cancelEdit = () => { setEditingId(null); setEditDraft({}); };
+  const cancelEdit = () => { setEditingId(null); setEditDraft({}); setEditingOriginalName(undefined); };
 
   const saveEdit = () => {
     if (!editingId) return;
@@ -810,6 +961,27 @@ function ActivityManagementPanel({
     if (!window.confirm(`Remove "${a.name}" from the activity catalog? This cannot be undone.`)) return;
     onDelete(a.id);
     toast.success(`"${a.name}" removed`);
+  };
+
+  const handleExport = () => {
+    exportActivitiesToExcel(activities);
+    toast.success("Activity catalog exported — Staff / Manager / HOD sheets");
+  };
+
+  const handleImportClick = () => fileInputRef.current?.click();
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    try {
+      const rows = await parseActivityImportFile(file);
+      const result = validateImportRows(rows, activities);
+      if (result.valid.length > 0) onBulkUpsert(result.valid);
+      setImportResult(result);
+    } catch {
+      toast.error("Couldn't read that file — make sure it's a .xlsx or .csv export from this dashboard.");
+    }
   };
 
   // Group activities by category within each audience section
@@ -843,90 +1015,125 @@ function ActivityManagementPanel({
 
       {open && (
         <div className="bg-card border-t border-border p-6 space-y-5">
-          <p className="text-xs text-muted-foreground">
-            Changes apply immediately across all user dashboards. Activities are grouped by audience — expand each section to manage its activities by category.
-          </p>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <p className="text-xs text-muted-foreground max-w-md">
+              Changes apply immediately across all user dashboards. Click a section below to expand it.
+            </p>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleExport}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted transition-colors"
+              >
+                <Download className="size-3.5" /> Export to Excel
+              </button>
+              <button
+                onClick={handleImportClick}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted transition-colors"
+              >
+                <Upload className="size-3.5" /> Import Updates
+              </button>
+              <input ref={fileInputRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={handleFileSelected} />
+            </div>
+          </div>
 
           {AUDIENCE_SECTIONS.map(section => {
             const catMap = byCategoryWithin(section.key);
             const totalInSection = activities.filter(a => a.audience === section.key).length;
+            const isExpanded = expandedSections.has(section.key);
             return (
               <div key={section.key} className={cn("rounded-xl border overflow-hidden", section.borderClass)}>
-                {/* Section header */}
-                <div className={cn("px-4 py-3 flex items-center justify-between", section.headerClass)}>
-                  <div>
-                    <div className="text-sm font-semibold">{section.label}</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">{section.desc} · {totalInSection} activit{totalInSection === 1 ? "y" : "ies"}</div>
+                {/* Section header — click to expand/collapse */}
+                <button
+                  onClick={() => toggleSection(section.key)}
+                  className={cn("w-full px-4 py-3 flex items-center justify-between text-left", section.headerClass)}
+                >
+                  <div className="flex items-center gap-2">
+                    {isExpanded ? <ChevronUp className="size-4 text-muted-foreground shrink-0" /> : <ChevronDown className="size-4 text-muted-foreground shrink-0" />}
+                    <div>
+                      <div className="text-sm font-semibold">{section.label}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">{section.desc} · {totalInSection} activit{totalInSection === 1 ? "y" : "ies"}</div>
+                    </div>
                   </div>
-                  {addingForAudience !== section.key && (
-                    <button
-                      onClick={() => startAdd(section.key)}
+                  {isExpanded && addingForAudience !== section.key && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={e => { e.stopPropagation(); startAdd(section.key); }}
+                      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); startAdd(section.key); } }}
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90"
                     >
                       <Plus className="size-3" /> Add
-                    </button>
+                    </span>
                   )}
-                </div>
+                </button>
 
-                <div className="p-4 space-y-4">
-                  {/* "Add" form injected at top of the correct section */}
-                  {addingForAudience === section.key && (
-                    <ActivityForm
-                      draft={newDraft}
-                      setDraft={fn => setNewDraft(prev => fn(prev) as Omit<Activity, "id">)}
-                      onSave={saveNew}
-                      onCancel={cancelAdd}
-                      saveLabel="Add Activity"
-                      liveActivityNames={liveActivityNames}
-                    />
-                  )}
+                {isExpanded && (
+                  <div className="p-4 space-y-4">
+                    {/* "Add" form injected at top of the correct section */}
+                    {addingForAudience === section.key && (
+                      <ActivityForm
+                        mode="add"
+                        draft={newDraft}
+                        setDraft={fn => setNewDraft(prev => fn(prev) as Omit<Activity, "id">)}
+                        onSave={saveNew}
+                        onCancel={cancelAdd}
+                        saveLabel="Add Activity"
+                        liveActivityNames={liveActivityNames}
+                      />
+                    )}
 
-                  {/* Category sub-groups */}
-                  {catMap.size === 0 && addingForAudience !== section.key && (
-                    <p className="text-xs text-muted-foreground text-center py-2">No activities yet. Click Add to create one.</p>
-                  )}
-                  {(Object.keys(CATEGORY_LABELS) as Activity["category"][])
-                    .filter(cat => catMap.has(cat))
-                    .map(cat => {
-                      const items = catMap.get(cat)!;
-                      return (
-                        <div key={cat}>
-                          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-2">
-                            <span className={cn("px-1.5 py-0.5 rounded-full border", CATEGORY_COLORS[cat])}>{CATEGORY_LABELS[cat]}</span>
-                            <span className="text-muted-foreground/50">—</span>
-                            <span>{items.length} activit{items.length === 1 ? "y" : "ies"}</span>
+                    {/* Category sub-groups */}
+                    {catMap.size === 0 && addingForAudience !== section.key && (
+                      <p className="text-xs text-muted-foreground text-center py-2">No activities yet. Click Add to create one.</p>
+                    )}
+                    {(Object.keys(CATEGORY_LABELS) as Activity["category"][])
+                      .filter(cat => catMap.has(cat))
+                      .map(cat => {
+                        const items = catMap.get(cat)!;
+                        return (
+                          <div key={cat}>
+                            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-2">
+                              <span className={cn("px-1.5 py-0.5 rounded-full border", CATEGORY_COLORS[cat])}>{CATEGORY_LABELS[cat]}</span>
+                              <span className="text-muted-foreground/50">—</span>
+                              <span>{items.length} activit{items.length === 1 ? "y" : "ies"}</span>
+                            </div>
+                            <div className="space-y-2">
+                              {items.map(a => (
+                                <div key={a.id}>
+                                  {editingId === a.id ? (
+                                    <ActivityForm
+                                      mode="edit"
+                                      draft={editDraft}
+                                      setDraft={fn => setEditDraft(prev => fn(prev))}
+                                      onSave={saveEdit}
+                                      onCancel={cancelEdit}
+                                      saveLabel="Save Changes"
+                                      liveActivityNames={liveActivityNames}
+                                      allActivityNames={allActivityNames}
+                                      currentName={editingOriginalName}
+                                    />
+                                  ) : (
+                                    <ActivityRow
+                                      activity={a}
+                                      onEdit={() => startEdit(a)}
+                                      onDelete={() => confirmDelete(a)}
+                                    />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                          <div className="space-y-2">
-                            {items.map(a => (
-                              <div key={a.id}>
-                                {editingId === a.id ? (
-                                  <ActivityForm
-                                    draft={editDraft}
-                                    setDraft={fn => setEditDraft(prev => fn(prev))}
-                                    onSave={saveEdit}
-                                    onCancel={cancelEdit}
-                                    saveLabel="Save Changes"
-                                    liveActivityNames={liveActivityNames}
-                                  />
-                                ) : (
-                                  <ActivityRow
-                                    activity={a}
-                                    onEdit={() => startEdit(a)}
-                                    onDelete={() => confirmDelete(a)}
-                                  />
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
+                        );
+                      })}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
       )}
+
+      {importResult && <ImportResultsDialog result={importResult} onClose={() => setImportResult(null)} />}
     </div>
   );
 }
@@ -934,7 +1141,11 @@ function ActivityManagementPanel({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function AdminSection() {
-  const { staffList, liveActivities, addActivity, updateActivity, deleteActivity, updateSupervisor } = useApp();
+  const {
+    staffList, liveActivities, addActivity, updateActivity, deleteActivity, bulkUpsertActivities, updateSupervisor,
+    departmentGoals, opsDepartmentGoals, allTeamMemberSkills, opsAllTeamMemberSkills, deptGoalSkills,
+    teamMembers, opsTeamMembersAll, disabledStaffList,
+  } = useApp();
 
   const [showActionPlan, setShowActionPlan] = useState(false);
 
@@ -943,6 +1154,45 @@ export function AdminSection() {
   const [selectedDept, setSelectedDept] = useState<string | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<typeof staffList[0] | null>(null);
   const [localStaffStatuses, setLocalStaffStatuses] = useState<Record<string, "active" | "disabled">>({});
+
+  // Accounts auto-disabled because the sync script detected a Last Day of Service in users.csv —
+  // distinct from the manual admin toggle above. Valid for re-enabling within 30 working days of
+  // detection; past that they're archived (still visible, but read-only).
+  const [showDisabledAccounts, setShowDisabledAccounts] = useState(false);
+  const [locallyEnabledIds, setLocallyEnabledIds] = useState<Set<string>>(new Set());
+  const [enablingId, setEnablingId] = useState<string | null>(null);
+  const visibleDisabledStaff = disabledStaffList.filter(s => !locallyEnabledIds.has(s.id));
+
+  const handleEnableDisabledAccount = async (id: string, name: string) => {
+    setEnablingId(id);
+    try {
+      await enableStaffFn({ data: { userId: id } });
+      setLocallyEnabledIds(prev => new Set(prev).add(id));
+      toast.success(`${name}'s account has been re-enabled`);
+    } catch {
+      toast.error("Failed to re-enable account");
+    } finally {
+      setEnablingId(null);
+    }
+  };
+
+  const exportDisabledAccountsCsv = () => {
+    const header = "id,name,email,department,role,supervisor,last_day_of_service,disabled_detected_date,working_days_since_detected,status";
+    const csv = header + "\n" + visibleDisabledStaff.map(s => {
+      const daysSince = s.disabledDetectedDate ? workingDaysSince(s.disabledDetectedDate) : 0;
+      const status = daysSince >= 30 ? "Archived" : "Disabled";
+      return [s.id, s.name, s.email, s.dept, s.role, s.supervisor, s.lastDayOfService, s.disabledDetectedDate, daysSince, status]
+        .map(v => String(v).includes(",") ? `"${v}"` : v)
+        .join(",");
+    }).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "disabled_accounts.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const effectiveStaff = staffList.map(s => ({
     ...s,
@@ -957,6 +1207,56 @@ export function AdminSection() {
       activeCount: effectiveStaff.filter(s => s.dept === dept && s.status === "active").length,
     })).filter(g => g.staff.length > 0);
   }, [effectiveStaff]);
+
+  // Organisational Competency Gaps — contrasts the skills HODs have tagged as needed on their
+  // department's team goals against the skills that department's team members actually possess.
+  // Each department's team-goal set lives in its own silo (HCWM via `departmentGoals`, Credit Risk
+  // Management via `opsDepartmentGoals`) rather than a single dept-keyed array, so the goals source
+  // is resolved per department name here.
+  const GOALS_BY_DEPT: Record<string, { id: string }[]> = {
+    [HCWM_DEPT_NAME]: departmentGoals,
+    [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
+  };
+  const allMemberSkills = useMemo(
+    () => [...allTeamMemberSkills, ...opsAllTeamMemberSkills],
+    [allTeamMemberSkills, opsAllTeamMemberSkills]
+  );
+
+  // Job-family groups — derived dynamically from whatever job families are present in staffList,
+  // so it grows on its own as more staff/departments are added.
+  const jobFamilyGroups = useMemo(() => {
+    const families = [...new Set(effectiveStaff.map(s => s.jobFamily).filter(f => f && f !== "—"))];
+    return families
+      .map(fam => ({ name: fam, staff: effectiveStaff.filter(s => s.jobFamily === fam) }))
+      .filter(g => g.staff.length > 0);
+  }, [effectiveStaff]);
+
+  // Shared gap computation (src/lib/insights.ts) — a group's required skills come from every
+  // department any of its members belong to (a department view has exactly one; a job-family view
+  // may span several, though in today's dataset each job family sits inside a single department).
+  // Possessed skills stay scoped to just that group's own members, so job-family view narrows the
+  // lens even though skills are only tagged at department-goal level.
+  const competencyGapsByDept = useMemo(
+    () => deptGroups.map(({ dept, staff }) => computeCompetencyGapRow(dept, staff, GOALS_BY_DEPT, deptGoalSkills, allMemberSkills)),
+    [deptGroups, departmentGoals, opsDepartmentGoals, deptGoalSkills, allMemberSkills]
+  );
+  const competencyGapsByJobFamily = useMemo(
+    () => jobFamilyGroups.map(({ name, staff }) => computeCompetencyGapRow(name, staff, GOALS_BY_DEPT, deptGoalSkills, allMemberSkills)),
+    [jobFamilyGroups, departmentGoals, opsDepartmentGoals, deptGoalSkills, allMemberSkills]
+  );
+
+  const [gapView, setGapView] = useState<"dept" | "jobFamily">("dept");
+  const [showAllGaps, setShowAllGaps] = useState(false);
+  const [expandedGap, setExpandedGap] = useState<string | null>(null);
+  const activeCompetencyGaps = gapView === "dept" ? competencyGapsByDept : competencyGapsByJobFamily;
+  // Ranked biggest gap → smallest; untagged groups (no data yet) sort to the bottom, not the top.
+  const sortedGaps = [...activeCompetencyGaps].sort((a, b) => {
+    if (a.gapPct === null) return 1;
+    if (b.gapPct === null) return -1;
+    return b.gapPct - a.gapPct;
+  });
+  const visibleGaps = showAllGaps ? sortedGaps : sortedGaps.slice(0, 5);
+  const switchGapView = (v: "dept" | "jobFamily") => { setGapView(v); setShowAllGaps(false); setExpandedGap(null); };
 
   const handleDisable = async (staff: typeof staffList[0]) => {
     const isActive = (localStaffStatuses[staff.id] ?? staff.status) === "active";
@@ -1049,7 +1349,17 @@ export function AdminSection() {
     MANAGER_ACTION_PLANS.reduce((a, m) => a + getCompletion(m.items), 0) / MANAGER_ACTION_PLANS.length
   );
   const pendingManagerCount = MANAGER_ACTION_PLANS.filter(m => getCompletion(m.items) < 100).length;
-  const SKILL_GAP_COUNT = 2;
+  // Flagged = departments with tagged required skills and a gap over 30% (department framing,
+  // independent of whichever view — dept or job family — is currently toggled on below)
+  const SKILL_GAP_COUNT = competencyGapsByDept.filter(d => d.gapPct !== null && d.gapPct > 30).length;
+
+  // ── Key Staff Challenges — real-time, derived from staff's own remarks on their goal progress ──
+  // (src/lib/insights.ts — shared with the HOD/Director-scoped section on the Team OKRs page)
+  const challengeThemes = useMemo(
+    () => computeChallengeThemes([...teamMembers, ...opsTeamMembersAll], [departmentGoals, opsDepartmentGoals]),
+    [teamMembers, opsTeamMembersAll, departmentGoals, opsDepartmentGoals]
+  );
+  const [expandedTheme, setExpandedTheme] = useState<string | null>(null);
 
   return (
     <div className="space-y-6">
@@ -1074,7 +1384,7 @@ export function AdminSection() {
       </div>
 
       {/* ── Top 2 metric cards ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Average Manager Action Plan Completion Rate */}
         <div
           className="relative overflow-hidden rounded-xl p-5 cursor-pointer hover:opacity-95 transition-opacity shadow-sm"
@@ -1188,6 +1498,82 @@ export function AdminSection() {
                 ))}
               </div>
             )}
+
+            {/* ── Disabled Accounts (Last Day of Service detected) ─────────────── */}
+            <div className="pt-3 mt-3 border-t border-border/60">
+              <button
+                onClick={() => setShowDisabledAccounts(v => !v)}
+                className="w-full flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-2">
+                  <UserX className="size-4 text-rag-red/80" />
+                  <div className="text-left">
+                    <div className="text-sm font-semibold">Disabled Accounts</div>
+                    <div className="text-xs text-muted-foreground">{visibleDisabledStaff.length} detected via Last Day of Service in users.csv</div>
+                  </div>
+                </div>
+                {showDisabledAccounts ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+              </button>
+
+              {showDisabledAccounts && (
+                <div className="mt-3 space-y-2">
+                  {visibleDisabledStaff.length > 0 && (
+                    <div className="flex justify-end">
+                      <button
+                        onClick={exportDisabledAccountsCsv}
+                        className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border border-border hover:bg-muted transition-colors"
+                      >
+                        <Download className="size-3.5" /> Export CSV
+                      </button>
+                    </div>
+                  )}
+                  {visibleDisabledStaff.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-4">No accounts currently disabled.</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                      {visibleDisabledStaff.map(s => {
+                        const daysSince = s.disabledDetectedDate ? workingDaysSince(s.disabledDetectedDate) : 0;
+                        const isArchived = daysSince >= 30;
+                        return (
+                          <div
+                            key={s.id}
+                            className={cn(
+                              "flex items-center gap-3 px-3 py-2.5 rounded-lg border",
+                              isArchived ? "border-border bg-muted/30" : "border-rag-red/20 bg-rag-red/5"
+                            )}
+                          >
+                            <div className="size-8 rounded-full bg-gradient-to-br from-rag-red/30 to-rag-red/10 flex items-center justify-center text-[10px] font-bold text-rag-red shrink-0">
+                              {s.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium">{s.name}</div>
+                              <div className="text-xs text-muted-foreground truncate">{s.role} · {s.dept}</div>
+                              <div className="text-[10px] text-muted-foreground mt-0.5">
+                                Last day of service {s.lastDayOfService || "—"} · detected {s.disabledDetectedDate || "—"} · {daysSince} working day{daysSince !== 1 ? "s" : ""} ago
+                              </div>
+                            </div>
+                            {isArchived ? (
+                              <span className="text-[10px] px-2 py-1 rounded-full bg-muted text-muted-foreground border border-border shrink-0">Archived</span>
+                            ) : (
+                              <button
+                                onClick={() => void handleEnableDisabledAccount(s.id, s.name)}
+                                disabled={enablingId === s.id}
+                                className="flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 shrink-0 transition-opacity"
+                              >
+                                <UserCheck className="size-3" /> Enable
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-muted-foreground/70 pl-1">
+                    Re-enabling is available for 30 working days from detection. Past that window, accounts are archived and can only be reactivated by re-syncing an active row from the Staff Listing.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </Card>
@@ -1302,52 +1688,115 @@ export function AdminSection() {
         onAdd={addActivity}
         onUpdate={updateActivity}
         onDelete={deleteActivity}
+        onBulkUpsert={bulkUpsertActivities}
       />
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <SectionTitle sub="By department & job function.">L&D Competency Gaps</SectionTitle>
-          {[
-            { dept: "Engineering", gap: 62, eff: 38, alert: true },
-            { dept: "Marketing", gap: 41, eff: 55 },
-            { dept: "Finance", gap: 28, eff: 71 },
-            { dept: "Compliance", gap: 19, eff: 82 },
-          ].map((d) => (
-            <div key={d.dept} className="py-3 border-b border-border/60 last:border-0">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+            <SectionTitle sub="How the skills your HODs have flagged as essential for team goals stack up against the skills your people already have.">Organisational Competency Gaps</SectionTitle>
+            <div className="flex items-center gap-1 bg-muted rounded-full p-0.5 shrink-0">
+              <button
+                onClick={() => switchGapView("dept")}
+                className={cn("px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors", gapView === "dept" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              >
+                By Department
+              </button>
+              <button
+                onClick={() => switchGapView("jobFamily")}
+                className={cn("px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors", gapView === "jobFamily" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              >
+                By Job Family
+              </button>
+            </div>
+          </div>
+          {visibleGaps.map((d) => (
+            <div key={d.name} className="py-3 border-b border-border/60 last:border-0">
               <div className="flex items-center justify-between mb-1">
                 <div className="text-sm font-medium flex items-center gap-2">
-                  {d.dept}
-                  {d.alert && <span className="text-[10px] px-1.5 py-0.5 rounded bg-rag-red/15 text-rag-red border border-rag-red/30">FLAGGED</span>}
+                  {d.name}
+                  {d.gapPct !== null && d.gapPct > 30 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-rag-red/15 text-rag-red border border-rag-red/30">FLAGGED</span>
+                  )}
                 </div>
-                <div className="text-xs text-muted-foreground">Gap {d.gap}% · Effectiveness {d.eff}%</div>
+                <div className="text-xs text-muted-foreground">
+                  {d.gapPct === null ? "No skills tagged yet" : `Gap ${d.gapPct}%`}
+                </div>
               </div>
               <div className="h-1.5 bg-muted rounded-full overflow-hidden flex">
-                <div className="bg-rag-red" style={{ width: `${d.gap}%` }} />
-                <div className="bg-rag-green" style={{ width: `${d.eff}%` }} />
+                <div className="bg-rag-red" style={{ width: `${d.gapPct ?? 0}%` }} />
+                <div className="bg-rag-green" style={{ width: `${100 - (d.gapPct ?? 0)}%` }} />
               </div>
+              {d.missing.length > 0 && (
+                <button
+                  onClick={() => setExpandedGap(v => v === d.name ? null : d.name)}
+                  className="w-full flex items-center gap-1 mt-1.5 text-[10px] text-rag-red/80 hover:text-rag-red transition-colors"
+                >
+                  {expandedGap === d.name ? <ChevronUp className="size-2.5 shrink-0" /> : <ChevronDown className="size-2.5 shrink-0" />}
+                  {d.missing.length} missing skill{d.missing.length !== 1 ? "s" : ""}
+                </button>
+              )}
+              {expandedGap === d.name && d.missing.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {d.missing.map(skill => (
+                    <span key={skill} className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-rag-red/10 text-rag-red border border-rag-red/25">
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
+          {sortedGaps.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">No department data available yet.</p>
+          )}
+          {sortedGaps.length > 5 && (
+            <button
+              onClick={() => setShowAllGaps(v => !v)}
+              className="w-full text-center text-xs text-primary hover:underline pt-2"
+            >
+              {showAllGaps ? "Show top 5 only" : `View all ${sortedGaps.length} ${gapView === "dept" ? "departments" : "job families"}`}
+            </button>
+          )}
         </Card>
 
-        <Card className="border-amber/30">
-          <div className="flex items-center gap-2 mb-1">
-            <Sparkles className="size-4 text-amber-foreground" />
-            <div className="text-xs uppercase tracking-widest text-amber-foreground">AI-synthesised</div>
-          </div>
-          <SectionTitle sub="Distilled from staff remarks across all goal updates this quarter.">Key Staff Challenges</SectionTitle>
-          {[
-            { theme: "Stakeholder alignment & decision velocity", count: 18 },
-            { theme: "Resource & capacity for cross-functional work", count: 14 },
-            { theme: "Career path clarity for mid-tenure ICs", count: 11 },
-            { theme: "Tooling gaps in analytics & reporting", count: 9 },
-          ].map((c) => (
-            <div key={c.theme} className="flex items-center justify-between py-2.5 border-b border-border/60 last:border-0">
-              <div className="text-sm">{c.theme}</div>
-              <div className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{c.count} mentions</div>
+        <Card>
+          <SectionTitle sub="Distilled in real time from staff's own remarks on their goal-progress updates.">Key Staff Challenges</SectionTitle>
+          {challengeThemes.map((t) => (
+            <div key={t.theme} className="border-b border-border/60 last:border-0">
+              <button
+                onClick={() => setExpandedTheme(v => v === t.theme ? null : t.theme)}
+                className="w-full flex items-center justify-between py-2.5 text-left gap-2"
+              >
+                <div className="text-sm flex items-center gap-1.5 min-w-0">
+                  {expandedTheme === t.theme ? <ChevronUp className="size-3 text-muted-foreground shrink-0" /> : <ChevronDown className="size-3 text-muted-foreground shrink-0" />}
+                  <span className="truncate">{t.theme}</span>
+                </div>
+                <div className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">{t.count} mention{t.count !== 1 ? "s" : ""}</div>
+              </button>
+              {expandedTheme === t.theme && (
+                <div className="pb-3 pl-4 space-y-2">
+                  {t.entries.map((e, i) => (
+                    <div key={i} className="rounded-lg border border-border/60 bg-muted/20 p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold">{e.memberName}</span>
+                        <span className="text-[10px] text-muted-foreground truncate">{e.goalTitle}</span>
+                      </div>
+                      <p className="text-xs text-foreground/80 mt-1 leading-relaxed">&ldquo;{e.remarkText}&rdquo;</p>
+                      <div className="text-[10px] text-muted-foreground mt-1">Linked to: {e.linkedDeptTitle}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
+          {challengeThemes.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">No staff challenges reported yet.</p>
+          )}
         </Card>
       </div>
+
+      <AiGovernancePanel />
     </div>
   );
 }

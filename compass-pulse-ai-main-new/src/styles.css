@@ -138,6 +138,154 @@
   --ring: oklch(0.72 0.18 25);
 }
 
+/* ── Country theme skins — one per network office location, picked from the sidebar's compact
+   theme switcher (see src/lib/themes.ts + Sidebar.tsx). Each swaps only the accent/sidebar colours
+   (primary, secondary, accent, ring, sidebar*) — background/card/border/muted stay the neutral
+   default so body text contrast never degrades regardless of which theme is active. Two hues per
+   theme: one for the primary accent (buttons, links, "Owner"/highlight chips, etc.) and one for the
+   sidebar, each loosely inspired by a landmark's own colour story (e.g. Sydney Harbour's sunset
+   coral against the bridge's steel-blue). No dark-mode variants — the app has no dark mode toggle. */
+.theme-australia {   /* Sydney Harbour Bridge at sunset — coral sky, steel-blue harbour */
+  --primary: oklch(0.60 0.19 25); --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.045 25); --secondary-foreground: oklch(0.42 0.16 25);
+  --accent: oklch(0.955 0.035 225); --accent-foreground: oklch(0.48 0.16 225);
+  --ring: oklch(0.60 0.19 25);
+  --sidebar: oklch(0.36 0.15 225); --sidebar-foreground: oklch(0.97 0.010 250);
+  --sidebar-primary: oklch(0.86 0.15 25); --sidebar-primary-foreground: oklch(0.26 0.08 25);
+  --sidebar-accent: oklch(0.44 0.14 225); --sidebar-accent-foreground: oklch(0.97 0.010 250);
+  --sidebar-border: oklch(0.44 0.14 225); --sidebar-ring: oklch(0.86 0.15 25);
+}
+.theme-cambodia {   /* Angkor Wat sandstone at dawn, jungle green */
+  --primary: oklch(0.62 0.15 45); --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.045 45); --secondary-foreground: oklch(0.42 0.16 45);
+  --accent: oklch(0.955 0.035 140); --accent-foreground: oklch(0.44 0.14 140);
+  --ring: oklch(0.62 0.15 45);
+  --sidebar: oklch(0.34 0.10 140); --sidebar-foreground: oklch(0.97 0.010 250);
+  --sidebar-primary: oklch(0.86 0.15 45); --sidebar-primary-foreground: oklch(0.26 0.08 45);
+  --sidebar-accent: oklch(0.42 0.10 140); --sidebar-accent-foreground: oklch(0.97 0.010 250);
+  --sidebar-border: oklch(0.42 0.10 140); --sidebar-ring: oklch(0.86 0.15 45);
+}
+.theme-china-hk {   /* Great Wall — imperial red & gold */
+  --primary: oklch(0.55 0.20 18); --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.045 18); --secondary-foreground: oklch(0.42 0.18 18);
+  --accent: oklch(0.955 0.04 45); --accent-foreground: oklch(0.46 0.15 45);
+  --ring: oklch(0.55 0.20 18);
+  --sidebar: oklch(0.32 0.15 18); --sidebar-foreground: oklch(0.97 0.010 250);
+  --sidebar-primary: oklch(0.86 0.15 45); --sidebar-primary-foreground: oklch(0.26 0.08 45);
+  --sidebar-accent: oklch(0.40 0.14 18); --sidebar-accent-foreground: oklch(0.97 0.010 250);
+  --sidebar-border: oklch(0.40 0.14 18); --sidebar-ring: oklch(0.86 0.15 45);
+}
+.theme-india {   /* Taj Mahal at sunrise — marigold saffron, Mughal rose */
+  --primary: oklch(0.66 0.16 55); --primary-foreground: oklch(0.20 0.06 55);
+  --secondary: oklch(0.94 0.05 55); --secondary-foreground: oklch(0.42 0.16 55);
+  --accent: oklch(0.955 0.04 340); --accent-foreground: oklch(0.48 0.16 340);
+  --ring: oklch(0.66 0.16 55);
+  --sidebar: oklch(0.36 0.13 340); --sidebar-foreground: oklch(0.97 0.010 250);
+  --sidebar-primary: oklch(0.86 0.15 55); --sidebar-primary-foreground: oklch(0.26 0.08 55);
+  --sidebar-accent: oklch(0.44 0.12 340); --sidebar-accent-foreground: oklch(0.97 0.010 250);
+  --sidebar-border: oklch(0.44 0.12 340); --sidebar-ring: oklch(0.86 0.15 55);
+}
+.theme-indonesia {   /* Borobudur & rice terraces — lush terrace green, volcanic terracotta */
+  --primary: oklch(0.58 0.15 145); --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.045 145); --secondary-foreground: oklch(0.40 0.14 145);
+  --accent: oklch(0.955 0.035 30); --accent-foreground: oklch(0.46 0.14 30);
+  --ring: oklch(0.58 0.15 145);
+  --sidebar: oklch(0.34 0.11 145); --sidebar-foreground: oklch(0.97 0.010 250);
+  --sidebar-primary: oklch(0.84 0.15 30); --sidebar-primary-foreground: oklch(0.26 0.08 30);
+  --sidebar-accent: oklch(0.42 0.10 145); --sidebar-accent-foreground: oklch(0.97 0.010 250);
+  --sidebar-border: oklch(0.42 0.10 145); --sidebar-ring: oklch(0.84 0.15 30);
+}
+.theme-japan {   /* Mount Fuji & cherry blossoms — sakura pink, Fuji blue-grey */
+  --primary: oklch(0.72 0.13 350); --primary-foreground: oklch(0.24 0.06 350);
+  --secondary: oklch(0.95 0.03 350); --secondary-foreground: oklch(0.46 0.14 350);
+  --accent: oklch(0.955 0.02 220); --accent-foreground: oklch(0.46 0.08 220);
+  --ring: oklch(0.72 0.13 350);
+  --sidebar: oklch(0.36 0.06 220); --sidebar-foreground: oklch(0.97 0.010 250);
+  --sidebar-primary: oklch(0.86 0.10 350); --sidebar-primary-foreground: oklch(0.28 0.08 350);
+  --sidebar-accent: oklch(0.44 0.06 220); --sidebar-accent-foreground: oklch(0.97 0.010 250);
+  --sidebar-border: oklch(0.44 0.06 220); --sidebar-ring: oklch(0.86 0.10 350);
+}
+.theme-malaysia {   /* Petronas Towers — steel blue, KL night indigo */
+  --primary: oklch(0.56 0.17 230); --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.04 230); --secondary-foreground: oklch(0.42 0.15 230);
+  --accent: oklch(0.955 0.035 280); --accent-foreground: oklch(0.48 0.15 280);
+  --ring: oklch(0.56 0.17 230);
+  --sidebar: oklch(0.34 0.14 280); --sidebar-foreground: oklch(0.97 0.010 250);
+  --sidebar-primary: oklch(0.84 0.13 90); --sidebar-primary-foreground: oklch(0.28 0.08 90);
+  --sidebar-accent: oklch(0.42 0.13 280); --sidebar-accent-foreground: oklch(0.97 0.010 250);
+  --sidebar-border: oklch(0.42 0.13 280); --sidebar-ring: oklch(0.84 0.13 90);
+}
+.theme-singapore {   /* Gardens by the Bay — supertree emerald, twilight violet */
+  --primary: oklch(0.58 0.15 185); --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.04 185); --secondary-foreground: oklch(0.40 0.14 185);
+  --accent: oklch(0.955 0.035 280); --accent-foreground: oklch(0.48 0.15 280);
+  --ring: oklch(0.58 0.15 185);
+  --sidebar: oklch(0.34 0.13 280); --sidebar-foreground: oklch(0.97 0.010 250);
+  --sidebar-primary: oklch(0.84 0.14 185); --sidebar-primary-foreground: oklch(0.24 0.08 185);
+  --sidebar-accent: oklch(0.42 0.12 280); --sidebar-accent-foreground: oklch(0.97 0.010 250);
+  --sidebar-border: oklch(0.42 0.12 280); --sidebar-ring: oklch(0.84 0.14 185);
+}
+.theme-thailand {   /* Wat Arun — temple gold, river turquoise */
+  --primary: oklch(0.72 0.15 70); --primary-foreground: oklch(0.24 0.08 70);
+  --secondary: oklch(0.95 0.05 70); --secondary-foreground: oklch(0.44 0.15 70);
+  --accent: oklch(0.955 0.035 195); --accent-foreground: oklch(0.46 0.14 195);
+  --ring: oklch(0.72 0.15 70);
+  --sidebar: oklch(0.34 0.11 195); --sidebar-foreground: oklch(0.97 0.010 250);
+  --sidebar-primary: oklch(0.86 0.15 70); --sidebar-primary-foreground: oklch(0.28 0.08 70);
+  --sidebar-accent: oklch(0.42 0.10 195); --sidebar-accent-foreground: oklch(0.97 0.010 250);
+  --sidebar-border: oklch(0.42 0.10 195); --sidebar-ring: oklch(0.86 0.15 70);
+}
+.theme-turkey {   /* Hagia Sophia & Cappadocia — Bosphorus turquoise, sandstone terracotta */
+  --primary: oklch(0.60 0.14 190); --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.04 190); --secondary-foreground: oklch(0.42 0.14 190);
+  --accent: oklch(0.955 0.035 30); --accent-foreground: oklch(0.46 0.14 30);
+  --ring: oklch(0.60 0.14 190);
+  --sidebar: oklch(0.36 0.11 30); --sidebar-foreground: oklch(0.97 0.010 250);
+  --sidebar-primary: oklch(0.84 0.13 190); --sidebar-primary-foreground: oklch(0.24 0.08 190);
+  --sidebar-accent: oklch(0.44 0.10 30); --sidebar-accent-foreground: oklch(0.97 0.010 250);
+  --sidebar-border: oklch(0.44 0.10 30); --sidebar-ring: oklch(0.84 0.13 190);
+}
+.theme-uk {   /* Tower Bridge & Big Ben — heritage navy, telephone-box red */
+  --primary: oklch(0.48 0.14 260); --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.03 260); --secondary-foreground: oklch(0.40 0.14 260);
+  --accent: oklch(0.955 0.04 15); --accent-foreground: oklch(0.46 0.17 15);
+  --ring: oklch(0.48 0.14 260);
+  --sidebar: oklch(0.30 0.10 260); --sidebar-foreground: oklch(0.97 0.010 250);
+  --sidebar-primary: oklch(0.62 0.19 15); --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.38 0.09 260); --sidebar-accent-foreground: oklch(0.97 0.010 250);
+  --sidebar-border: oklch(0.38 0.09 260); --sidebar-ring: oklch(0.62 0.19 15);
+}
+.theme-uae {   /* Burj Khalifa & desert dunes — sand gold, skyscraper steel blue */
+  --primary: oklch(0.70 0.13 75); --primary-foreground: oklch(0.24 0.08 75);
+  --secondary: oklch(0.95 0.05 75); --secondary-foreground: oklch(0.44 0.14 75);
+  --accent: oklch(0.955 0.03 230); --accent-foreground: oklch(0.46 0.13 230);
+  --ring: oklch(0.70 0.13 75);
+  --sidebar: oklch(0.32 0.09 230); --sidebar-foreground: oklch(0.97 0.010 250);
+  --sidebar-primary: oklch(0.84 0.14 75); --sidebar-primary-foreground: oklch(0.28 0.08 75);
+  --sidebar-accent: oklch(0.40 0.08 230); --sidebar-accent-foreground: oklch(0.97 0.010 250);
+  --sidebar-border: oklch(0.40 0.08 230); --sidebar-ring: oklch(0.84 0.14 75);
+}
+.theme-usa {   /* Golden Gate Bridge & Lady Liberty — international orange, patina green */
+  --primary: oklch(0.58 0.19 35); --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.05 35); --secondary-foreground: oklch(0.42 0.17 35);
+  --accent: oklch(0.955 0.035 165); --accent-foreground: oklch(0.44 0.13 165);
+  --ring: oklch(0.58 0.19 35);
+  --sidebar: oklch(0.34 0.11 165); --sidebar-foreground: oklch(0.97 0.010 250);
+  --sidebar-primary: oklch(0.84 0.16 35); --sidebar-primary-foreground: oklch(0.26 0.08 35);
+  --sidebar-accent: oklch(0.42 0.10 165); --sidebar-accent-foreground: oklch(0.97 0.010 250);
+  --sidebar-border: oklch(0.42 0.10 165); --sidebar-ring: oklch(0.84 0.16 35);
+}
+.theme-vietnam {   /* Ha Long Bay & Hoi An lanterns — emerald karsts, lantern gold */
+  --primary: oklch(0.56 0.14 170); --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.94 0.04 170); --secondary-foreground: oklch(0.40 0.13 170);
+  --accent: oklch(0.955 0.04 45); --accent-foreground: oklch(0.46 0.15 45);
+  --ring: oklch(0.56 0.14 170);
+  --sidebar: oklch(0.32 0.10 170); --sidebar-foreground: oklch(0.97 0.010 250);
+  --sidebar-primary: oklch(0.86 0.15 45); --sidebar-primary-foreground: oklch(0.26 0.08 45);
+  --sidebar-accent: oklch(0.40 0.09 170); --sidebar-accent-foreground: oklch(0.97 0.010 250);
+  --sidebar-border: oklch(0.40 0.09 170); --sidebar-ring: oklch(0.86 0.15 45);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
@@ -145,8 +293,18 @@
 
   html, body {
     font-family: var(--font-sans);
-    background-color: var(--color-background);
     color: var(--color-foreground);
+  }
+
+  /* Background colour lives on <html> only, not <body>. When both have an explicit
+     background-color, <html>'s becomes the canvas background (painted at the very bottom, per the
+     CSS painting order) while <body>'s own background paints as a normal in-flow block box — which
+     sits ABOVE any negative z-index fixed content (like ThemedBackdrop's country-themed scenery,
+     `fixed inset-0 -z-10`), fully covering it. Dropping it from <body> was the fix — with only
+     <html> painted, the negative-z-index backdrop shows through in the areas <body>'s own content
+     doesn't otherwise cover, exactly as intended. */
+  html {
+    background-color: var(--color-background);
   }
 
   h1, h2, h3, .font-display {
@@ -170,5 +328,45 @@
   @keyframes pulseRed {
     0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--rag-red) 50%, transparent); }
     50% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--rag-red) 0%, transparent); }
+  }
+  /* The action-taking icon's gentle pulse — used dashboard-wide wherever something needs a response */
+  .pulse-action {
+    animation: pulseAction 2s ease-in-out infinite;
+  }
+  @keyframes pulseAction {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--amber) 45%, transparent); }
+    50% { box-shadow: 0 0 0 5px color-mix(in oklab, var(--amber) 0%, transparent); }
+  }
+  /* Ambient icons drifting down each country theme's backdrop — see ThemedBackdrop.tsx. Each one
+     gets its own fall duration/delay/drift inline, this just supplies the shared fall+spin path. */
+  .petal-fall {
+    animation-name: petalFall;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+  @keyframes petalFall {
+    0% { transform: translate(0, -10vh) rotate(0deg); opacity: 0; }
+    10% { opacity: 0.85; }
+    90% { opacity: 0.85; }
+    100% { transform: translate(var(--petal-drift, 40px), 110vh) rotate(340deg); opacity: 0; }
+  }
+  /* Miniature country-themed icons popping around the cursor on click — see ThemeClickBurst.tsx. */
+  .click-icon-pop {
+    animation: clickIconPop 0.9s ease-out forwards;
+  }
+  @keyframes clickIconPop {
+    0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+    20% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--pop-dx, 0px)), calc(-50% + var(--pop-dy, -40px))) scale(0.7); opacity: 0; }
+  }
+  /* Themed food icons popping around a points-earned toast — see pointsToast.tsx. */
+  .points-food-pop {
+    animation: pointsFoodPop 1.3s ease-out forwards;
+  }
+  @keyframes pointsFoodPop {
+    0% { transform: scale(0.3) translateY(6px); opacity: 0; }
+    30% { transform: scale(1.15) translateY(-4px); opacity: 1; }
+    70% { transform: scale(1) translateY(-10px); opacity: 1; }
+    100% { transform: scale(0.85) translateY(-18px); opacity: 0; }
   }
 }

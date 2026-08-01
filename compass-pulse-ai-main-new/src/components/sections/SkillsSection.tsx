@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, SectionTitle } from "@/components/ui-bits";
+import { Card, SectionTitle, SkillAttachmentModal } from "@/components/ui-bits";
 import { useApp } from "@/lib/appContext";
-import { Check, Clock, Plus, Sparkles, ExternalLink, CheckCircle2, XCircle, Search, Loader2 } from "lucide-react";
+import type { SkillAttachment } from "@/lib/mockData";
+import { pointsToast } from "@/lib/pointsToast";
+import { Check, Clock, Plus, Award, ArrowLeftRight, ExternalLink, CheckCircle2, XCircle, Search, Loader2, FileText, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, formatJobGrade } from "@/lib/utils";
 import { fetchPhillipJobsFn } from "@/lib/api/data.functions";
 import { SKILLS_BY_CATEGORY, getDefaultSkillsForRole, getRegulatorExamsForRole, getSkillCategoriesForRole, classifySkill, getIBFJobFunctionUrl, IHRP_SKILLS_CATALOG, isHCWMDept, getIHRPBadgesForRole, classifyIHRPBadge } from "@/lib/skillsCatalog";
+import { computeCompetencyGapRow, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
 
 // ── Job function picker data ───────────────────────────────────────────────────
 
@@ -44,14 +47,6 @@ function isSameRole(jobTitle: string, currentDesignation: string): boolean {
   if (jKw.length === 0 || dKw.length === 0) return false;
   const overlap = jKw.filter(w => dKw.includes(w));
   return overlap.length / Math.max(jKw.length, dKw.length) >= 0.75;
-}
-
-// Maps our simplified 1-6 grade to PhillipCapital's full grade code string.
-function pcGradeLabel(grade: number): string {
-  if (grade >= 5) return `Vice President ${grade}`;
-  if (grade >= 3) return `Assistant Vice President ${grade}`;
-  if (grade >= 2) return `Assistant Manager ${grade}`;
-  return `Senior Executive ${grade}`;
 }
 
 function BookSparkSVG() {
@@ -112,7 +107,7 @@ function TeamMemberSkillCard({
   verified: string[];
   highlighted: boolean;
 }) {
-  const { endorseTeamMemberSkill, rejectTeamMemberSkill } = useApp();
+  const { endorseTeamMemberSkill, rejectTeamMemberSkill, skillAttachments, markAttachmentViewed } = useApp();
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -123,7 +118,7 @@ function TeamMemberSkillCard({
 
   const handleEndorse = async (skill: string) => {
     await endorseTeamMemberSkill(memberId, skill);
-    toast.success(`Endorsed "${skill}" for ${memberName} (+5 pts)`);
+    pointsToast(`Endorsed "${skill}" for ${memberName} (+5 pts)`);
   };
 
   const handleReject = async (skill: string) => {
@@ -158,28 +153,46 @@ function TeamMemberSkillCard({
           )}
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {pending.map(skill => (
-            <span
-              key={skill}
-              className="inline-flex items-center gap-0.5 pl-2.5 pr-0.5 py-0.5 rounded-full bg-gradient-to-r from-amber/15 to-amber/5 border border-amber/30 text-[10px] font-medium text-amber-foreground shadow-sm"
-            >
-              {skill}
-              <button
-                onClick={() => handleEndorse(skill)}
-                title="Approve"
-                className="ml-1 p-0.5 rounded-full text-rag-green hover:bg-rag-green/25 hover:scale-110 transition-all"
+          {pending.map(skill => {
+            const attachment = skillAttachments[`${memberId}:${skill}`];
+            const mustViewFirst = !!attachment && !attachment.viewed;
+            return (
+              <span
+                key={skill}
+                className="inline-flex items-center gap-0.5 pl-2.5 pr-0.5 py-0.5 rounded-full bg-gradient-to-r from-amber/15 to-amber/5 border border-amber/30 text-[10px] font-medium text-amber-foreground shadow-sm"
               >
-                <CheckCircle2 className="size-3" />
-              </button>
-              <button
-                onClick={() => handleReject(skill)}
-                title="Reject"
-                className="p-0.5 rounded-full text-destructive/60 hover:text-destructive hover:bg-destructive/15 hover:scale-110 transition-all"
-              >
-                <XCircle className="size-3" />
-              </button>
-            </span>
-          ))}
+                {skill}
+                {attachment && (
+                  <a
+                    href={attachment.objectUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => markAttachmentViewed(memberId, skill)}
+                    title={attachment.fileName}
+                    className="ml-1 flex items-center gap-0.5 px-1 py-0.5 rounded-full text-primary hover:bg-primary/15 transition-colors underline underline-offset-2"
+                  >
+                    <FileText className="size-3" /> View Certificate
+                  </a>
+                )}
+                <button
+                  onClick={() => handleEndorse(skill)}
+                  disabled={mustViewFirst}
+                  title={mustViewFirst ? "View the attached certificate first" : "Approve"}
+                  className="ml-1 p-0.5 rounded-full text-rag-green hover:bg-rag-green/25 hover:scale-110 transition-all disabled:opacity-30 disabled:hover:scale-100 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle2 className="size-3" />
+                </button>
+                <button
+                  onClick={() => handleReject(skill)}
+                  disabled={mustViewFirst}
+                  title={mustViewFirst ? "View the attached certificate first" : "Reject"}
+                  className="p-0.5 rounded-full text-destructive/60 hover:text-destructive hover:bg-destructive/15 hover:scale-110 transition-all disabled:opacity-30 disabled:hover:scale-100 disabled:cursor-not-allowed"
+                >
+                  <XCircle className="size-3" />
+                </button>
+              </span>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -193,6 +206,8 @@ export function SkillsSection() {
     skills, currentUser, addPendingSkill,
     tier, teamMembers, focusedSkillsMemberId, setFocusedSkillsMemberId,
     staffMemberId, adminMemberId, allTeamMemberSkills, staffList, opsMeta,
+    opsAllTeamMemberSkills, hcwmDepartmentGoals, opsDepartmentGoals, deptGoalSkills,
+    managerDevGoals, staffDevGoals, adminDevGoals,
   } = useApp();
   const [pending, setPending] = useState(skills.pending);
   const [optimisticPending, setOptimisticPending] = useState<string[]>([]);
@@ -201,6 +216,9 @@ export function SkillsSection() {
   const [selectedFunction, setSelectedFunction] = useState<string | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // Skill awaiting a supporting document before it can be submitted for manager approval — same
+  // certificate-or-result-slip requirement as completing a development goal (see DevGoalCard).
+  const [attachModalSkill, setAttachModalSkill] = useState<string | null>(null);
   const isOpsTier = tier === "ops_hod" || tier === "ops_mgr1" || tier === "ops_mgr2";
 
   const isManager = tier === "manager" || tier === "ops_hod";
@@ -233,6 +251,25 @@ export function SkillsSection() {
   const activeEndorsableSkills = allTeamMemberSkills.filter(
     m => viewerDirectReportIds.has(m.memberId) && m.pending.length > 0
   );
+
+  // ── Departmental Competency Gap — HOD sees their own department; a "Director" (an HOD with
+  // other HODs reporting to them, per real users.csv supervisor/hod data) sees an aggregate across
+  // every department those HOD reports themselves head. Same computation as the admin console's
+  // org-wide "Organisational Competency Gaps" (src/lib/insights.ts), just scoped to fewer people.
+  const isHodViewer = (tier === "manager" && currentUser.hod) || tier === "ops_hod";
+  const GOALS_BY_DEPT: Record<string, { id: string }[]> = { [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals };
+  const allMemberSkillsForGap = [...allTeamMemberSkills, ...opsAllTeamMemberSkills];
+  const canonicalOwnDept = staffList.find(s => s.name === effectiveViewerName)?.dept ?? (opsMeta ? opsMeta.user.department : currentUser.department);
+  const { depts: relevantDeptsForGap, isDirector: isDirectorGapView } = isHodViewer
+    ? getRelevantDeptsForViewer(effectiveViewerName, canonicalOwnDept, staffList)
+    : { depts: [] as string[], isDirector: false };
+  const departmentalCompetencyGap = isHodViewer
+    ? computeCompetencyGapRow(
+        isDirectorGapView ? `${relevantDeptsForGap.length} departments` : relevantDeptsForGap[0],
+        staffList.filter(s => relevantDeptsForGap.includes(s.dept)),
+        GOALS_BY_DEPT, deptGoalSkills, allMemberSkillsForGap,
+      )
+    : null;
 
   // Experience profile data — sourced from opsMeta for ops tiers, currentUser for manager, staffList for staff/admin
   const staffEntry = !isManager ? staffList.find(s => s.name === viewedMember?.name) : null;
@@ -302,14 +339,19 @@ export function SkillsSection() {
     ? regulatoryExams.filter(e => !displayVerified.includes(e) && !displayPending.includes(e) && !optimisticPending.includes(e))
     : [];
 
-  const add = (s: string) => {
+  const add = (s: string) => setAttachModalSkill(s);
+
+  const handleAttachmentSubmit = (attachment: SkillAttachment) => {
+    const s = attachModalSkill;
+    if (!s) return;
     if (isManager) {
       setPending(p => [...p, s]); // optimistic update via local state (manager only)
     } else {
       setOptimisticPending(p => [...p, s]); // optimistic until server refetch
     }
-    toast.success(`${s} added — pending approval`);
-    void addPendingSkill(s);
+    toast.success(`${s} added — pending approval · your certificate is attached`);
+    void addPendingSkill(s, attachment);
+    setAttachModalSkill(null);
   };
 
   // Show job matches for everyone; manager's condition still respects tenure
@@ -318,20 +360,45 @@ export function SkillsSection() {
 
   const userGrade = experienceProfile?.grade ?? 4;
 
+  // This viewed persona's own development goals — SkillsSection only ever shows "My Profile &
+  // Opportunities" for whichever persona is currently active (never someone else's, unlike the
+  // Team OKRs member drawer), so this is a straightforward per-tier lookup, not an id join.
+  const viewedMemberDevGoals = isOpsTier && opsMeta
+    ? opsMeta.devGoals
+    : tier === "admin"
+    ? adminDevGoals
+    : tier === "staff"
+    ? staffDevGoals
+    : managerDevGoals;
+  // Only active (not yet completed) goals describe where the person is still growing — a
+  // completed goal is a skill they've already gained, not a forward-looking signal.
+  const devGoalKeywords = viewedMemberDevGoals
+    .filter(g => !g.completed)
+    .map(g => `${g.title}. ${g.description}`);
+
   // Fetch live cross-functional rotation opportunities: keyword "" tells the scraper to sample
-  // all 58 live jobs via sitemap, score each against this user's profile, and return the top
-  // ≥70% matches. The userDesignation is included so the server can also filter out same-role
-  // listings and incorporate it into skill gap analysis.
+  // all 58 live jobs via sitemap, and score that same pool twice — once against this user's
+  // current verified skills/exams, once against their active development-goal keywords — each
+  // filtered to ≥70% match. The userDesignation is included so the server can also filter out
+  // same-role listings and incorporate it into skill gap analysis. Certifications/regulatory
+  // exams are included alongside verified skills since job postings frequently ask for them by
+  // name (e.g. "IHRP certification preferred", "CFA"). Both signals are in the query key, so a
+  // newly verified skill or a newly added/completed development goal produces a distinct key and
+  // triggers an immediate refetch rather than serving a stale cached match list.
+  const rotationUserSkills = [...displayVerified, ...regulatoryExams];
   const { data: rotationData, isLoading: rotationLoading } = useQuery({
-    queryKey: ["phillipJobRotation", userGrade, displayVerified, viewedDesignation],
+    queryKey: ["phillipJobRotation", userGrade, rotationUserSkills, viewedDesignation, devGoalKeywords],
     queryFn: () =>
-      fetchPhillipJobsFn({ data: { keyword: "", userGrade, userSkills: displayVerified, userDesignation: viewedDesignation } }),
+      fetchPhillipJobsFn({ data: { keyword: "", userGrade, userSkills: rotationUserSkills, userDesignation: viewedDesignation, devGoalKeywords } }),
     staleTime: 10 * 60 * 1000,
     retry: 1,
     enabled: showJobs,
   });
   // Exclude any live result that matches the user's own current designation
   const filteredRotationJobs = (rotationData?.jobs ?? []).filter(
+    j => !isSameRole(j.title, viewedDesignation)
+  );
+  const filteredDevGoalJobs = (rotationData?.devGoalJobs ?? []).filter(
     j => !isSameRole(j.title, viewedDesignation)
   );
 
@@ -367,8 +434,85 @@ export function SkillsSection() {
         </div>
       </div>
 
-      {/* ── Team skills pending endorsement (manager or staff-with-team) ── */}
-      {activeEndorsableSkills.length > 0 && (
+      {/* ── HOD/Director: Departmental Competency Gap, with Team Skills Pending Your Review merged
+          in as its own clearly-labelled subsection at the bottom — one section, two differentiated
+          parts, rather than two disconnected boxes. ── */}
+      {isHodViewer && departmentalCompetencyGap && (
+        <div className="rounded-2xl border border-primary/25 overflow-hidden shadow-sm">
+          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b border-primary/20 flex-wrap gap-1.5">
+            <div className="flex items-center gap-2">
+              <div className="size-6 rounded-full bg-primary/20 grid place-items-center shrink-0">
+                <AlertTriangle className="size-3 text-primary" />
+              </div>
+              <span className="text-base font-display">Departmental Competency Gap</span>
+            </div>
+            {isDirectorGapView && (
+              <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30">
+                Aggregated across {relevantDeptsForGap.length} departments
+              </span>
+            )}
+          </div>
+
+          {/* Subsection: the skills gap itself */}
+          <div className="bg-card p-4">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Skills tagged as needed vs. verified in your team</div>
+            {departmentalCompetencyGap.requiredSkills.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No skills have been tagged as needed on your department's OKRs yet — tag them from the Team OKRs page.</p>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="font-display text-3xl">{departmentalCompetencyGap.gapPct}%</div>
+                  <div className="text-xs text-muted-foreground">gap — {departmentalCompetencyGap.missing.length} of {departmentalCompetencyGap.requiredSkills.length} required skills not yet verified</div>
+                </div>
+                {departmentalCompetencyGap.missing.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {departmentalCompetencyGap.missing.map(skill => (
+                      <span key={skill} className="text-[11px] px-2 py-0.5 rounded-full bg-rag-red/10 text-rag-red border border-rag-red/25">{skill}</span>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          <div className="px-4"><div className="border-t border-dashed border-border/60" /></div>
+
+          {/* Subsection: team skills pending endorsement */}
+          <div className="bg-card">
+            <div className="flex items-center justify-between px-4 pt-4 pb-2">
+              <div className="flex items-center gap-2">
+                <Clock className="size-3.5 text-amber-foreground" />
+                <span className="text-sm font-semibold">Team Skills Pending Your Review</span>
+              </div>
+              {activeEndorsableSkills.length > 0 && (
+                <span className="text-[10px] font-bold bg-amber/20 text-amber-foreground border border-amber/35 px-2.5 py-0.5 rounded-full">
+                  {activeEndorsableSkills.reduce((acc, m) => acc + m.pending.length, 0)} pending
+                </span>
+              )}
+            </div>
+            {activeEndorsableSkills.length > 0 ? (
+              <div className="divide-y divide-border/40">
+                {activeEndorsableSkills.map(m => (
+                  <TeamMemberSkillCard
+                    key={m.memberId}
+                    memberId={m.memberId}
+                    memberName={m.memberName}
+                    pending={m.pending}
+                    verified={m.verified}
+                    highlighted={focusedSkillsMemberId === m.memberId}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">No team skills awaiting your review.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Team skills pending endorsement (manager or staff-with-team, non-HOD — HOD/Director's
+          version above already includes this, merged with their Competency Gap) ── */}
+      {!isHodViewer && activeEndorsableSkills.length > 0 && (
         <div className="rounded-2xl border border-amber/25 overflow-hidden shadow-sm">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-amber/12 via-amber/6 to-transparent border-b border-amber/20">
@@ -402,14 +546,14 @@ export function SkillsSection() {
       <div>
         <div className="flex items-center gap-3 mb-4">
           <div className="size-8 rounded-full bg-primary/15 grid place-items-center shrink-0">
-            <Sparkles className="size-4 text-primary" />
+            <Award className="size-4 text-primary" />
           </div>
           <h2 className="font-display text-2xl">My Skills Profile</h2>
         </div>
         <div className="rounded-2xl border border-border/60 overflow-hidden shadow-sm">
 
         {/* Verified + Pending grid */}
-        <div className="bg-card grid grid-cols-2 divide-x divide-border/50">
+        <div className="bg-card grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 divide-x-0 sm:divide-x divide-border/50">
           <div className="p-4">
             <div className="flex items-center gap-1.5 mb-3">
               <Check className="size-3.5 text-rag-green" />
@@ -518,7 +662,7 @@ export function SkillsSection() {
                 Showing up to 15 recommended skills &amp; certifications for your role.{" "}
                 <a href={ibfUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-primary transition-colors">
                   {isHCWM
-                    ? "View IHRP Skills Badges for HR Professionals"
+                    ? "View IHRP Skills Badges for Human Capital Professionals"
                     : `View the full IBF Skills Framework for ${ibfTrack}`
                   }
                 </a>
@@ -553,7 +697,7 @@ export function SkillsSection() {
               </div>
               <div className="shrink-0 text-right">
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-teal/10 text-teal border border-teal/30 whitespace-nowrap">
-                  {pcGradeLabel(experienceProfile.grade)}
+                  {formatJobGrade(experienceProfile.grade)}
                 </span>
               </div>
             </div>
@@ -570,64 +714,169 @@ export function SkillsSection() {
               <h2 className="font-display text-2xl">Job Rotation Opportunities</h2>
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              Opportunities to apply transferable skills, enhance your capabilities, and broaden your experience across PhillipCapital's business functions.
+              Opportunities to apply transferable skills, enhance your capabilities, and broaden your experience across PhillipCapital's business functions. Only roles matched at 70% or higher are shown below — a lower match isn't hidden noise, it just isn't a real fit yet.
             </p>
           </div>
 
-          {rotationLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground py-3">
-              <Loader2 className="size-4 animate-spin" />
-              Fetching live listings from PhillipCapital…
+          {/* ── Set 1: Based on Your Current Skills & Experience ── */}
+          <div>
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-teal/15 text-teal border border-teal/30 shrink-0">Set 1</span>
+              <span className="text-sm font-semibold">Based on Your Current Skills &amp; Experience</span>
             </div>
-          ) : rotationData && !rotationData.error && filteredRotationJobs.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3">
-              {filteredRotationJobs.map(j => (
-                <div key={j.url} className="bg-card rounded-lg p-4 border border-border flex flex-col gap-2">
-                  {/* Title + match badge */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="font-medium text-sm leading-snug flex-1 min-w-0">{j.title}</div>
-                    <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal/15 text-teal border border-teal/30 whitespace-nowrap">
-                      {j.matchScore}% match
-                    </span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">{j.dept}</div>
-                  {j.experienceYears !== null && (
-                    <div className="text-[10px] text-muted-foreground/70">{j.experienceYears}+ yrs experience required</div>
-                  )}
-                  {/* Transferable skills from user's existing profile */}
-                  {j.transferableSkills.length > 0 && (
-                    <div className="mt-1 pt-2 border-t border-border/50">
-                      <div className="flex items-center gap-1 mb-1.5">
-                        <Sparkles className="size-3 text-teal" />
-                        <span className="text-[10px] font-semibold text-teal uppercase tracking-widest">Your Transferable Skills</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {j.transferableSkills.map((s, i) => (
-                          <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-teal/10 text-teal border border-teal/25 font-medium">
-                            {s}
-                          </span>
-                        ))}
-                      </div>
+            {rotationLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-3">
+                <Loader2 className="size-4 animate-spin" />
+                Fetching live listings from PhillipCapital…
+              </div>
+            ) : rotationData && !rotationData.error && filteredRotationJobs.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {filteredRotationJobs.map(j => (
+                  <div key={j.url} className="bg-card rounded-lg p-4 border border-border flex flex-col gap-2">
+                    {/* Title + match badge */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-medium text-sm leading-snug flex-1 min-w-0">{j.title}</div>
+                      <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal/15 text-teal border border-teal/30 whitespace-nowrap">
+                        {j.matchScore}% match
+                      </span>
                     </div>
-                  )}
-                  <a
-                    href={j.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-auto text-sm flex items-center gap-1 text-primary hover:underline"
-                  >
-                    View listing <ExternalLink className="size-3" />
-                  </a>
-                </div>
-              ))}
+                    <div className="text-xs text-muted-foreground">{j.dept}</div>
+                    {j.experienceYears !== null && (
+                      <div className="text-[10px] text-muted-foreground/70">{j.experienceYears}+ yrs experience required</div>
+                    )}
+                    {/* Transferable skills from user's existing profile */}
+                    {j.transferableSkills.length > 0 && (
+                      <div className="mt-1 pt-2 border-t border-border/50">
+                        <div className="flex items-center gap-1 mb-1.5">
+                          <ArrowLeftRight className="size-3 text-teal" />
+                          <span className="text-[10px] font-semibold text-teal uppercase tracking-widest">Your Transferable Skills</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {j.transferableSkills.map((s, i) => (
+                            <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-teal/10 text-teal border border-teal/25 font-medium">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <a
+                      href={j.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-auto text-sm flex items-center gap-1 text-primary hover:underline"
+                    >
+                      View listing <ExternalLink className="size-3" />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg bg-card border border-border p-4 text-sm text-muted-foreground space-y-2">
+                <div>No roles currently match your skills &amp; experience profile at 70% or higher.</div>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  <li>Search for job listings by <span className="text-foreground font-medium">exploring an area of interest below</span></li>
+                  <li>Beef up your skills inventory above to unlock a wider plethora of relevant roles at PhillipCapital</li>
+                </ul>
+                <a href={CAREERS_PAGE} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                  Browse open roles on PhillipCapital <ExternalLink className="size-3" />
+                </a>
+              </div>
+            )}
+          </div>
+
+          {/* ── Set 2: Based on Your Development Goals ── */}
+          <div className="mt-5 pt-5 border-t border-border/60">
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30 shrink-0">Set 2</span>
+              <span className="text-sm font-semibold">Based on Your Development Goals</span>
             </div>
-          ) : (
-            <div className="rounded-lg bg-card border border-border p-4 text-sm text-muted-foreground">
-              <a href={CAREERS_PAGE} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
-                Browse open roles on PhillipCapital <ExternalLink className="size-3" />
-              </a>
-            </div>
-          )}
+            <p className="text-xs text-muted-foreground mb-3">
+              Roles aligned with what you're actively working toward — each card also flags the additional skills that role still expects, so it's clear what stands between you and it.
+            </p>
+            {devGoalKeywords.length === 0 ? (
+              <div className="rounded-lg bg-card border border-border p-4 text-sm text-muted-foreground">
+                Add an active development goal on My Goals to get growth-oriented role suggestions here.
+              </div>
+            ) : rotationLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-3">
+                <Loader2 className="size-4 animate-spin" />
+                Fetching live listings from PhillipCapital…
+              </div>
+            ) : rotationData && !rotationData.error && filteredDevGoalJobs.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {filteredDevGoalJobs.map(j => (
+                  <div key={j.url} className="bg-card rounded-lg p-4 border border-border flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-medium text-sm leading-snug flex-1 min-w-0">{j.title}</div>
+                      <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/30 whitespace-nowrap">
+                        {j.matchScore}% match
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">{j.dept}</div>
+                    {j.experienceYears !== null && (
+                      <div className="text-[10px] text-muted-foreground/70">{j.experienceYears}+ yrs experience required</div>
+                    )}
+                    {j.transferableSkills.length > 0 && (
+                      <div className="mt-1 pt-2 border-t border-border/50">
+                        <div className="flex items-center gap-1 mb-1.5">
+                          <ArrowLeftRight className="size-3 text-violet-600 dark:text-violet-400" />
+                          <span className="text-[10px] font-semibold text-violet-600 dark:text-violet-400 uppercase tracking-widest">Aligned To Your Development Goals</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {j.transferableSkills.map((s, i) => (
+                            <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/25 font-medium">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {j.skillGaps.length > 0 && (
+                      <div className="pt-1.5">
+                        <div className="flex items-center gap-1 mb-1.5">
+                          <AlertTriangle className="size-3 text-amber-foreground" />
+                          <span className="text-[10px] font-semibold text-amber-foreground uppercase tracking-widest">Additional Skills Needed</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {j.skillGaps.map((s, i) => (
+                            <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-amber/10 text-amber-foreground border border-amber/25 font-medium capitalize">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <a
+                      href={j.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-auto text-sm flex items-center gap-1 text-primary hover:underline"
+                    >
+                      View listing <ExternalLink className="size-3" />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg bg-card border border-border p-4 text-sm text-muted-foreground space-y-2">
+                <div>No roles currently match your development goals at 70% or higher.</div>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  <li>Search for job listings by <span className="text-foreground font-medium">exploring an area of interest below</span></li>
+                  <li>Beef up your skills inventory above to unlock a wider plethora of relevant roles at PhillipCapital</li>
+                </ul>
+                <a href={CAREERS_PAGE} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                  Browse open roles on PhillipCapital <ExternalLink className="size-3" />
+                </a>
+              </div>
+            )}
+            <p className="text-[10px] text-muted-foreground/70 mt-3">
+              For a broader view of Financial Services career pathways and the skills each one expects, see the{" "}
+              <a href="https://www.skillsfuture.gov.sg/skills-framework" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                SSG Skills Framework — Financial Services
+              </a>.
+            </p>
+          </div>
 
           {/* ── Area of Interest Picker ── */}
           <div className="mt-5 pt-5 border-t border-border/60">
@@ -723,6 +972,15 @@ export function SkillsSection() {
             )}
           </div>
         </Card>
+      )}
+
+      {attachModalSkill && (
+        <SkillAttachmentModal
+          skillName={attachModalSkill}
+          onSubmit={handleAttachmentSubmit}
+          onClose={() => setAttachModalSkill(null)}
+          submitLabel="Submit for Approval"
+        />
       )}
     </div>
   );

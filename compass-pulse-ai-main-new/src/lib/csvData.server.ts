@@ -2,6 +2,8 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 import type { Goal, TeamMember, RAG } from "./mockData";
+import { workingDaysSince, formatJobGrade } from "./utils";
+import { formatJoinDateAsPassword, isPasswordStrong } from "./passwordPolicy";
 
 const DATA_DIR = join(process.cwd(), "datasrc");
 
@@ -93,14 +95,6 @@ export function loadAllData() {
     const yrs = Math.floor(months / 12);
     const rem = months % 12;
     return rem > 0 ? `${yrs} yr${yrs !== 1 ? "s" : ""} ${rem} mo` : `${yrs} yr${yrs !== 1 ? "s" : ""}`;
-  };
-
-  // Helper: map grade number to PC job grade label including grade number
-  const pcGradeLabel = (grade: number): string => {
-    if (grade >= 6) return `Director / Managing Director ${grade}`;
-    if (grade >= 4) return `Assistant Vice President ${grade}`;
-    if (grade >= 2) return `Assistant Manager ${grade}`;
-    return `Senior Executive ${grade}`;
   };
 
   // Current user (u0)
@@ -285,6 +279,7 @@ export function loadAllData() {
       text: p.description,
       pts: Number(p.points),
       date: timeAgo(p.date),
+      rawDate: p.date,
     }));
 
   // Corporate values
@@ -311,9 +306,10 @@ export function loadAllData() {
       name: u.name,
       email: u.email,
       dept: u.department,
+      jobFamily: u.job_family || "—",
       role: u.designation,
       grade: Number(u.grade),
-      gradeLabel: pcGradeLabel(Number(u.grade)),
+      gradeLabel: formatJobGrade(Number(u.grade)),
       tenure: tenureLabel(u.join_date),
       join: Number(u.tenure_years) < 1 ? "< 1 year ago" : `${u.tenure_years} year${Number(u.tenure_years) !== 1 ? "s" : ""} ago`,
       supervisor: u.supervisor || "—",
@@ -321,6 +317,23 @@ export function loadAllData() {
       pointsYTD: Number(u.points_ytd) || 0,
       status: u.status || "active",
       lastDayOfService: u.last_day_of_service || "",
+    }));
+
+  // Disabled staff — the inverse of staffList. Populated by the sync script when a previously-
+  // active person's latest Staff Listing row shows a Last Day of Service: kept (not dropped) with
+  // status=disabled and a one-time disabled_detected_date stamp, which Admin's Disabled Accounts
+  // panel uses for the 30-working-day Enable/Export window.
+  const disabledStaffList = users
+    .filter(u => !isActive(u))
+    .map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      dept: u.department,
+      role: u.designation,
+      supervisor: u.supervisor || "—",
+      lastDayOfService: u.last_day_of_service || "",
+      disabledDetectedDate: u.disabled_detected_date || "",
     }));
 
   // Colleagues list
@@ -343,6 +356,7 @@ export function loadAllData() {
     onboardingMilestones,
     devMilestones,
     staffList,
+    disabledStaffList,
     colleagues,
   };
 }
@@ -368,15 +382,19 @@ function timeAgo(isoDate: string): string {
 
 const USER_HEADERS = [
   "id", "name", "email", "department", "designation", "grade",
-  "join_date", "tenure_years", "hod", "points_ytd", "avatar", "supervisor", "role_type",
+  "join_date", "tenure_years", "hod", "points_ytd", "avatar", "supervisor", "role_type", "job_family",
 ];
+// Every users.csv write must use this full header list, not the base USER_HEADERS above — writeCsv
+// only ever writes the columns it's given, so using the narrower list here would silently strip
+// status/last_day_of_service/disabled_detected_date off *every* row on the very next points update.
+const DISABLED_LIFECYCLE_HEADERS = USER_HEADERS.concat(["last_day_of_service", "status", "disabled_detected_date"]);
 
 function updateUserPoints(userId: string, delta: number) {
   const users = readCsv("users.csv");
   const updated = users.map(u =>
     u.id === userId ? { ...u, points_ytd: String(Number(u.points_ytd) + delta) } : u
   );
-  writeCsv("users.csv", USER_HEADERS, updated);
+  writeCsv("users.csv", DISABLED_LIFECYCLE_HEADERS, updated);
 }
 
 function appendPointsLog(userId: string, description: string, points: number) {
@@ -437,9 +455,21 @@ export function toggleActionPlanItem(id: string, done: boolean) {
   }
 }
 
-export function logCompliment(recipient: string) {
-  updateUserPoints("u0", 25);
-  appendPointsLog("u0", `Sent compliment to ${recipient}`, 25);
+// Credits the actual sender (previously hardcoded to "u0" — Sarah Chen — regardless of who was
+// really logged in) and, now, the named recipient too (previously never credited or notified at
+// all). The recipient is resolved by name against the full users.csv roster (not just the hand-
+// seeded team-member arrays), so this works for any of the ~300 real staff, and — since pointsLog
+// is polled by every client every 5s — the recipient sees it land in their own dashboard shortly
+// after, with no additional plumbing needed.
+export function logCompliment(senderId: string, recipient: string) {
+  updateUserPoints(senderId, 25);
+  appendPointsLog(senderId, `Sent compliment to ${recipient}`, 25);
+  const users = readCsv("users.csv");
+  const recipientUser = users.find(u => u.name === recipient);
+  if (recipientUser && recipientUser.id !== senderId) {
+    updateUserPoints(recipientUser.id, 25);
+    appendPointsLog(recipientUser.id, "Received a compliment", 25);
+  }
 }
 
 export function endorseTeamMemberSkill(memberId: string, skill: string) {
@@ -510,13 +540,16 @@ export function updateDepartmentGoals(
 export function disableStaffAccount(userId: string) {
   const users = readCsv("users.csv");
   const updated = users.map(u => u.id === userId ? { ...u, status: "disabled" } : u);
-  writeCsv("users.csv", USER_HEADERS.concat(["last_day_of_service", "status"]), updated);
+  writeCsv("users.csv", DISABLED_LIFECYCLE_HEADERS, updated);
 }
 
+// Admin override — clears the LDOS/detected-date lifecycle too, so the record is a clean active
+// row again (if the upstream Staff Listing still shows an LDOS for this person, the next sync run
+// will simply re-detect and re-disable them with a fresh detected date).
 export function enableStaffAccount(userId: string) {
   const users = readCsv("users.csv");
-  const updated = users.map(u => u.id === userId ? { ...u, status: "active" } : u);
-  writeCsv("users.csv", USER_HEADERS.concat(["last_day_of_service", "status"]), updated);
+  const updated = users.map(u => u.id === userId ? { ...u, status: "active", last_day_of_service: "", disabled_detected_date: "" } : u);
+  writeCsv("users.csv", DISABLED_LIFECYCLE_HEADERS, updated);
 }
 
 export function getStaffPointsLog(userId: string) {
@@ -543,4 +576,150 @@ export function getOrgNetPoints(yearMonth?: string) {
     if (dateStr.startsWith(targetYM)) byUser[r.user_id].month += pts;
   });
   return byUser;
+}
+
+// ── Work Buddy login portal ─────────────────────────────────────────────────
+// Every users.csv account gets a default username (their email) and password (their join_date
+// as dd-mm-yy). The first successful login starts a 7-working-day clock to set a real password
+// (see setNewPassword/applyPasswordResetPenalty below); auth_credentials.csv is the one CSV file
+// this app writes that isn't itself part of the dashboard's business data — it exists purely so
+// both preview links (8080 and the portal) see the same login/reset state, since they're separate
+// processes that only share state via the files on disk.
+const AUTH_HEADERS = ["user_id", "custom_password", "first_login_date", "password_reset_done", "penalty_applied"];
+
+// Only these 6 personas have a fully wired dashboard (goals, skills, team data); everyone else in
+// users.csv gets real credentials and the reset/penalty flow, but lands on a simple profile view.
+export const WIRED_PERSONA_TIERS: Record<string, string> = {
+  u0: "manager",
+  u1: "staff",
+  u4: "admin",
+  u21: "ops_hod",
+  u22: "ops_mgr1",
+  u23: "ops_mgr2",
+};
+
+function getAuthRow(userId: string): Record<string, string> | undefined {
+  return readCsv("auth_credentials.csv").find(r => r.user_id === userId);
+}
+
+function upsertAuthRow(userId: string, changes: Record<string, string>) {
+  const rows = readCsv("auth_credentials.csv");
+  const existing = rows.find(r => r.user_id === userId);
+  const base: Record<string, string> = existing ?? {
+    user_id: userId,
+    custom_password: "",
+    first_login_date: "",
+    password_reset_done: "false",
+    penalty_applied: "false",
+  };
+  const updated = { ...base, ...changes };
+  const next = existing ? rows.map(r => (r.user_id === userId ? updated : r)) : [...rows, updated];
+  writeCsv("auth_credentials.csv", AUTH_HEADERS, next);
+  return updated;
+}
+
+export interface LoginResult {
+  ok: boolean;
+  error?: string;
+  userId?: string;
+  name?: string;
+  email?: string;
+  department?: string;
+  designation?: string;
+  grade?: number;
+  avatar?: string;
+  pointsYTD?: number;
+  isWiredPersona?: boolean;
+  tier?: string;
+  requiresPasswordReset?: boolean;
+  firstLoginDate?: string;
+}
+
+function buildProfile(u: Record<string, string>, authRow: Record<string, string> | undefined): LoginResult {
+  return {
+    ok: true,
+    userId: u.id,
+    name: u.name,
+    email: u.email,
+    department: u.department,
+    designation: u.designation,
+    grade: Number(u.grade),
+    avatar: u.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase(),
+    pointsYTD: Number(u.points_ytd) || 0,
+    isWiredPersona: u.id in WIRED_PERSONA_TIERS,
+    tier: WIRED_PERSONA_TIERS[u.id],
+    requiresPasswordReset: authRow?.password_reset_done !== "true",
+    firstLoginDate: authRow?.first_login_date,
+  };
+}
+
+export function loginUser(email: string, password: string): LoginResult {
+  const users = readCsv("users.csv");
+  const u = users.find(
+    r => r.email.toLowerCase() === email.trim().toLowerCase() && r.status !== "disabled",
+  );
+  if (!u) return { ok: false, error: "Invalid email or password." };
+
+  const authRow = getAuthRow(u.id);
+  const expectedPassword = authRow?.custom_password || formatJoinDateAsPassword(u.join_date);
+  if (password !== expectedPassword) return { ok: false, error: "Invalid email or password." };
+
+  const stamped = authRow?.first_login_date
+    ? authRow
+    : upsertAuthRow(u.id, { first_login_date: new Date().toISOString().slice(0, 10) });
+
+  return buildProfile(u, stamped);
+}
+
+// Re-hydrates a profile for an already-established browser session (see portalSession.ts) — no
+// password involved, since the login itself was already verified by loginUser above.
+export function getUserProfile(userId: string): LoginResult {
+  const u = readCsv("users.csv").find(r => r.id === userId && r.status !== "disabled");
+  if (!u) return { ok: false, error: "Account not found." };
+  return buildProfile(u, getAuthRow(u.id));
+}
+
+export function setNewPassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+): { ok: boolean; error?: string } {
+  const u = readCsv("users.csv").find(r => r.id === userId);
+  if (!u) return { ok: false, error: "Account not found." };
+
+  const authRow = getAuthRow(userId);
+  const expectedPassword = authRow?.custom_password || formatJoinDateAsPassword(u.join_date);
+  if (currentPassword !== expectedPassword) return { ok: false, error: "Current password is incorrect." };
+
+  if (!isPasswordStrong(newPassword)) {
+    return { ok: false, error: "Password does not meet the required strength policy." };
+  }
+  upsertAuthRow(userId, { custom_password: newPassword, password_reset_done: "true" });
+  return { ok: true };
+}
+
+export function getAuthStatus(userId: string) {
+  const row = getAuthRow(userId);
+  const firstLoginDate = row?.first_login_date ?? "";
+  return {
+    firstLoginDate,
+    passwordResetDone: row?.password_reset_done === "true",
+    penaltyApplied: row?.penalty_applied === "true",
+    workingDaysElapsed: firstLoginDate ? workingDaysSince(firstLoginDate) : 0,
+  };
+}
+
+// Idempotent — deducts 5 points exactly once, the same 7-working-day-SLA pattern used everywhere
+// else in the app (see appContext.tsx's checkOverduePenalties), just persisted server-side here so
+// it applies once regardless of which preview link (or how many open tabs) triggers the check.
+export function applyPasswordResetPenalty(userId: string): { applied: boolean } {
+  const row = getAuthRow(userId);
+  if (!row || !row.first_login_date) return { applied: false };
+  if (row.password_reset_done === "true" || row.penalty_applied === "true") return { applied: false };
+  if (workingDaysSince(row.first_login_date) < 7) return { applied: false };
+
+  updateUserPoints(userId, -5);
+  appendPointsLog(userId, "Missed 7-working-day password reset deadline", -5);
+  upsertAuthRow(userId, { penalty_applied: "true" });
+  return { applied: true };
 }

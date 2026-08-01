@@ -2,8 +2,11 @@
 // Runs inside a TanStack Start server function — Node.js fetch bypasses CORS.
 //
 // Two modes:
-//   Job Rotation (keyword=""):  sitemap → sample 25 jobs → score vs user profile
-//     → filter ≥70% → top 6, with transferable skills highlighted per card.
+//   Job Rotation (keyword=""):  sitemap → sample 25 jobs → score twice against
+//     the same fetched pool — once vs. current verified skills, once vs. active
+//     development-goal keywords — → filter each ≥70% → top 6 each, with the
+//     signal that actually matched (transferable skills / aligned development
+//     areas) plus this role's uncovered skill requirements highlighted per card.
 //   Explore by Interest (keyword="dealing" etc.): category page → all listings,
 //     no scoring, no filtering — just return what PhillipCapital lists.
 //
@@ -23,7 +26,11 @@ export interface PhillipJob {
   url: string;
   experienceYears: number | null;
   matchScore: number;            // 0 when scoring is skipped (explore mode)
-  transferableSkills: string[];  // user skills directly relevant to this role
+  transferableSkills: string[];  // profile signal (verified skills, or dev-goal keywords) that
+                                  // directly aligns with this specific role's own requirements text
+  skillGaps: string[];           // this role's domain requirements NOT covered by the user's
+                                  // current verified skills — always computed against the real
+                                  // profile, regardless of which signal produced the match
 }
 
 // ── Category → page URL mapping ───────────────────────────────────────────────
@@ -166,13 +173,17 @@ function extractRequirementsText(text: string): string {
   return start >= 0 ? text.slice(start, start + 1500) : text.slice(0, 1200);
 }
 
-// Normalizes text for comparison: lowercase, replace & / with space, collapse spaces.
+// Normalizes text for comparison: lowercase, spell out "&" as "and", collapse spaces.
 // Applied to both the job requirements text and user skills so that e.g.
-// "Learning & Development" == "learning and development" == "learning development".
+// "Learning & Development" == "learning and development" (matches DOMAIN_KEYWORDS phrasing,
+// which spells out "and" — previously this stripped "&" to a bare space instead, so e.g.
+// "Learning & Development Design" normalized to "learning development design", which could
+// never match the keyword "learning and development" since neither is a substring of the other).
 function normalizeText(s: string): string {
   return s
     .toLowerCase()
-    .replace(/\s*[&\/]\s*/g, " ")
+    .replace(/\s*&\s*/g, " and ")
+    .replace(/\s*\/\s*/g, " ")
     .replace(/[,;:]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -241,7 +252,14 @@ const DOMAIN_KEYWORDS: string[] = [
   "compensation and benefits", "workforce planning", "succession planning",
 
   // Dealing / Capital Markets
-  "cmfas", "cacs", "capital markets", "securities",
+  // NOTE: bare "cmfas" is deliberately excluded — nearly every regulated Singapore FS role is
+  // assigned SOME CMFAS module by getRegulatorExamsForRole (even a baseline "Risk Management"
+  // officer gets CMFAS M5), so the bare word matches almost any profile and provides no
+  // discriminating signal, exactly like the generic words already excluded above. Module-specific
+  // codes below only credit a profile that holds the SAME module a job actually requires (e.g. a
+  // Dealer role needing M6/M8 won't be satisfied by an unrelated M5 advisory-rules exam).
+  "cmfas m5", "cmfas m6", "cmfas m6a", "cmfas m8", "cmfas m8a", "cmfas m9",
+  "cacs", "capital markets", "securities",
   "equities", "fixed income", "derivatives", "futures",
   "portfolio management", "asset management", "fund management", "unit trust",
   "financial advisory", "wealth management", "financial planning",
@@ -274,6 +292,27 @@ const DOMAIN_KEYWORDS: string[] = [
   "social media", "campaign management",
 ];
 
+// Splits a profile signal (skill names, regulatory exam names, designation) into individually
+// normalized entries, stripping any trailing "(...)" description — e.g. "CMFAS M5 (Rules &
+// Regulations for Financial Advisory)" becomes just "cmfas m5". Regulatory exams' parenthetical
+// text is the exam's legal citation/title, not a domain competency claim, so leaving it in would
+// let holding an unrelated baseline compliance exam get credited as real experience in whatever
+// domain its citation happens to name (e.g. a Risk officer's mandatory M5 exam mentioning
+// "Financial Advisory" in its title should not read as Financial Advisory domain experience).
+function buildSignalEntries(items: string[]): string[] {
+  return items.map(s => normalizeText(s.replace(/\s*\([^)]*\)\s*$/, "")));
+}
+
+// A domain keyword counts as covered only when every one of its significant words appears
+// together within a SINGLE profile entry — not merely scattered anywhere across the whole
+// profile. Checking the whole joined blob let unrelated entries combine into false coverage
+// (e.g. "risk" from a job title plus "management" from an unrelated certification's name
+// incorrectly reading as covering the "risk management" domain keyword).
+function isKeywordCovered(kw: string, signalEntries: string[]): boolean {
+  const words = kw.split(" ").filter(w => w.length > 2);
+  return signalEntries.some(entry => words.every(w => entry.includes(w)));
+}
+
 // ── Profile match scoring ─────────────────────────────────────────────────────
 //
 // Two-signal approach that prevents cross-functional false positives:
@@ -283,6 +322,12 @@ const DOMAIN_KEYWORDS: string[] = [
 //   cover?  Uses the DOMAIN_KEYWORDS list, matched against the requirements
 //   section only (not the full page).  A dealer job needing "cmfas" and
 //   "equities" gives an L&D candidate 0/2 = 0 pts, not a false positive.
+//   Coverage is curved (sqrt), not linear: a genuine partial match (e.g.
+//   covering 2 of 3 detected domain keywords) should already read as a strong
+//   match, not a middling one — linear scoring made even well-aligned profiles
+//   plateau in the 40-50 range because real external job text rarely yields
+//   100% keyword coverage even for a great match. sqrt(2/3)=0.82 → 49pts
+//   instead of 40pts; full coverage is unchanged at 60pts either way.
 //
 // Signal 2 — skill phrase match (secondary, 10 pts max):
 //   Does any of the user's skill names appear verbatim in the requirements
@@ -293,13 +338,20 @@ const DOMAIN_KEYWORDS: string[] = [
 // Seniority — 30 pts max:
 //   Grade overlap between user grade and the role's expected grade band.
 //   In-range = 30, 1-grade off = 15, 2+ off = 0.
+//
+// Worked example (verified match, 70-point threshold): in-range grade (30) +
+// covering 2/3 domain keywords (sqrt curve → 49) + 1 phrase match (4, capped
+// with domainPts at 70 combined) = 30 + 53 = 83, clears 70 comfortably. A
+// marginal profile — in-range grade but only 1/3 domain keywords covered
+// (sqrt(0.33)*60 ≈ 35) and no phrase match — lands at 30 + 35 = 65, correctly
+// stays below 70 rather than being padded up to clear it artificially.
 
 function computeMatchScore(
   jobTitle: string,
   expYears: number | null,
   bodyText: string,
   userGrade: number,
-  userSkills: string[],
+  signalSkills: string[],
   userDesignation: string,
 ): { score: number; transferableSkills: string[] } {
   const reqText = extractRequirementsText(bodyText);
@@ -315,20 +367,27 @@ function computeMatchScore(
     senPts = dist === 1 ? 15 : 0;
   }
 
-  // Build the user's normalized profile text (skills + designation)
-  const userNorm = normalizeText([...userSkills, userDesignation].join(" "));
+  // Build the profile's normalized signal entries (skills, or dev-goal keywords + designation),
+  // kept as separate entries rather than one joined blob — see isKeywordCovered.
+  const signalEntries = buildSignalEntries([...signalSkills, userDesignation]);
 
-  // Part B1 — domain keyword coverage of job requirements (60 pts)
+  // Part B1 — domain keyword coverage of job requirements (60 pts, sqrt-curved)
   const jobDomainKws = DOMAIN_KEYWORDS.filter(kw => reqNorm.includes(kw));
-  const coveredKws = jobDomainKws.filter(kw => userNorm.includes(kw));
+  // A keyword counts as "covered" when every significant word in it appears together within a
+  // single profile entry — not only when the exact multi-word phrase appears contiguously. A
+  // full-phrase-only check was too strict for our curated skill catalog, whose badge/skill names
+  // are often multi-word compounds (e.g. "Employee Relations & Engagement") that describe the same
+  // concept as a domain keyword ("employee engagement") without containing it verbatim. But it must
+  // still be a single entry, not words scattered across unrelated entries (see isKeywordCovered).
+  const coveredKws = jobDomainKws.filter(kw => isKeywordCovered(kw, signalEntries));
   const domainPts = jobDomainKws.length >= 2
-    ? Math.round((coveredKws.length / jobDomainKws.length) * 60)
+    ? Math.round(Math.sqrt(coveredKws.length / jobDomainKws.length) * 60)
     : jobDomainKws.length === 1
-      ? coveredKws.length > 0 ? 30 : 0
+      ? coveredKws.length > 0 ? 45 : 0
       : 0; // no domain keywords → cannot score via this signal
 
   // Part B2 — skill phrase verbatim match in requirements (10 pts)
-  const phraseMatchSkills = userSkills.filter(skill => {
+  const phraseMatchSkills = signalSkills.filter(skill => {
     const n = normalizeText(skill);
     return n.length >= 5 && reqNorm.includes(n);
   });
@@ -340,18 +399,32 @@ function computeMatchScore(
     ? Math.min(70, phraseMatchSkills.length * 14)
     : Math.min(70, domainPts + phrasePts);
 
-  // Transferable skills = user skills that directly align with this job's needs
-  // Priority 1: skills covering a job domain keyword
-  const domainAligned = userSkills.filter(skill => {
+  // Transferable skills = signal entries that directly align with this job's needs
+  // Priority 1: entries covering a job domain keyword
+  const domainAligned = signalSkills.filter(skill => {
     const n = normalizeText(skill);
     return coveredKws.some(kw => n.includes(kw) || kw.includes(n));
   });
-  // Priority 2: skills matched as a phrase in requirements (not already in domainAligned)
+  // Priority 2: entries matched as a phrase in requirements (not already in domainAligned)
   const domainAlignedSet = new Set(domainAligned);
   const phraseOnly = phraseMatchSkills.filter(s => !domainAlignedSet.has(s));
   const transferableSkills = [...domainAligned, ...phraseOnly].slice(0, 5);
 
   return { score: senPts + skillPts, transferableSkills };
+}
+
+// Skill gaps = this job's domain requirements that the user's CURRENT verified skills do not
+// cover — always computed against the real profile (never dev-goal keywords), so "additional
+// skills needed" stays honest regardless of which signal (skills vs. development goals) produced
+// the match itself. Reuses the same per-word coverage check as computeMatchScore's coveredKws so
+// a gap here is never something the skills-based pass would have counted as covered.
+function computeSkillGaps(bodyText: string, currentSkills: string[]): string[] {
+  const reqNorm = normalizeText(extractRequirementsText(bodyText));
+  const signalEntries = buildSignalEntries(currentSkills);
+  const jobDomainKws = DOMAIN_KEYWORDS.filter(kw => reqNorm.includes(kw));
+  return jobDomainKws
+    .filter(kw => !isKeywordCovered(kw, signalEntries))
+    .slice(0, 5);
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -365,7 +438,12 @@ export async function scrapePhillipJobs(
   userSkills: string[],
   userDesignation = "",
   scoreEnabled = true,
-): Promise<{ jobs: PhillipJob[]; error?: string }> {
+  // Optional second signal — titles/descriptions of the user's own active (incomplete)
+  // development goals. When present, the same fetched job pool is scored a second time against
+  // this signal instead of userSkills, producing a second, separately-labelled recommendation set
+  // ("based on your development goals") from a single network fetch rather than a second scrape.
+  devGoalKeywords: string[] = [],
+): Promise<{ jobs: PhillipJob[]; devGoalJobs: PhillipJob[]; error?: string }> {
   const kw = keyword.trim().toLowerCase();
   const categoryUrl = PC_CATEGORY_URL[kw];
   const isRotation = kw === ""; // empty keyword = cross-functional rotation via sitemap
@@ -376,16 +454,16 @@ export async function scrapePhillipJobs(
 
   if (categoryUrl) {
     const catHtml = await getHtml(categoryUrl);
-    if (!catHtml) return { jobs: [], error: "Could not reach PhillipCapital careers page." };
+    if (!catHtml) return { jobs: [], devGoalJobs: [], error: "Could not reach PhillipCapital careers page." };
     allJobUrls = extractJobUrlsFromPage(catHtml);
   } else {
     const sitemapXml = await getHtml(CAREERS_SITEMAP);
-    if (!sitemapXml) return { jobs: [], error: "Could not reach PhillipCapital careers page." };
+    if (!sitemapXml) return { jobs: [], devGoalJobs: [], error: "Could not reach PhillipCapital careers page." };
     allJobUrls = extractJobUrlsFromSitemap(sitemapXml);
   }
 
   if (allJobUrls.length === 0) {
-    return { jobs: [], error: "No job listings were detected on the PhillipCapital careers page." };
+    return { jobs: [], devGoalJobs: [], error: "No job listings were detected on the PhillipCapital careers page." };
   }
 
   // For rotation, sample 25 from the full sitemap for performance.
@@ -426,30 +504,43 @@ export async function scrapePhillipJobs(
         experienceYears: j.experienceYears,
         matchScore: 0,
         transferableSkills: [],
+        skillGaps: [],
       })),
+      devGoalJobs: [],
     };
   }
 
-  // ── 3b. Rotation mode: score, filter ≥70%, top 6 ─────────────────────────
+  // ── 3b. Rotation mode: score against both signals, filter ≥ threshold, top 6 each ────────────
+  // Restored to a genuine 70% bar (see computeMatchScore's worked examples above for why this is
+  // now actually reachable for a real match, not just lowered until something clears it). Below
+  // 70, a job simply doesn't appear — the caller's empty state is expected to point the user at
+  // Explore by Area of Interest and at growing their verified skills, not at a padded score.
 
   const MATCH_THRESHOLD = 70;
   const scored: PhillipJob[] = [];
+  const devScored: PhillipJob[] = [];
 
   for (const j of fetchedJobs) {
+    const skillGaps = computeSkillGaps(j.bodyText, userSkills);
+
     const { score, transferableSkills } = computeMatchScore(
       j.title, j.experienceYears, j.bodyText, userGrade, userSkills, userDesignation
     );
-    if (score < MATCH_THRESHOLD) continue;
-    scored.push({
-      title: j.title,
-      dept: j.dept,
-      url: j.url,
-      experienceYears: j.experienceYears,
-      matchScore: score,
-      transferableSkills,
-    });
+    if (score >= MATCH_THRESHOLD) {
+      scored.push({ title: j.title, dept: j.dept, url: j.url, experienceYears: j.experienceYears, matchScore: score, transferableSkills, skillGaps });
+    }
+
+    if (devGoalKeywords.length > 0) {
+      const { score: devScore, transferableSkills: devAligned } = computeMatchScore(
+        j.title, j.experienceYears, j.bodyText, userGrade, devGoalKeywords, userDesignation
+      );
+      if (devScore >= MATCH_THRESHOLD) {
+        devScored.push({ title: j.title, dept: j.dept, url: j.url, experienceYears: j.experienceYears, matchScore: devScore, transferableSkills: devAligned, skillGaps });
+      }
+    }
   }
 
   scored.sort((a, b) => b.matchScore - a.matchScore);
-  return { jobs: scored.slice(0, 6) };
+  devScored.sort((a, b) => b.matchScore - a.matchScore);
+  return { jobs: scored.slice(0, 6), devGoalJobs: devScored.slice(0, 6) };
 }

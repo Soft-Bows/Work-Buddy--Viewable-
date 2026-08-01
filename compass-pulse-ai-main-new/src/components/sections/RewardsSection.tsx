@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { Card, SectionTitle } from "@/components/ui-bits";
+import { Card, SectionTitle, MascotFlourish } from "@/components/ui-bits";
 import { useApp } from "@/lib/appContext";
-import { Trophy, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import { Trophy, BookOpen, ChevronDown, ChevronUp, Target, Heart, GraduationCap, Users, AlertTriangle, ShieldCheck, Sparkles, Pencil, Save, X, Clock3 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, stripLeadingZero, getCurrentQuarterStart } from "@/lib/utils";
 import type { Activity } from "@/lib/mockData";
 
 /* ── Header SVGs ─────────────────────────────────────────────────────────── */
@@ -238,13 +238,41 @@ export function RewardsSection() {
     tier, points, staffPoints, adminPoints,
     staffMemberId, adminMemberId,
     rewardsCatalog, pointsLog, redeemReward: redeemRewardCtx,
+    updateRewardCatalogItem,
     liveActivities,
   } = useApp();
   const [display, setDisplay] = useState(0);
+  const [editingRewardId, setEditingRewardId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<{ name: string; points: number }>({ name: "", points: 0 });
 
   const viewedUserId = tier === "admin" ? adminMemberId : tier === "staff" ? staffMemberId : "u0";
   const displayPoints = tier === "staff" ? staffPoints : tier === "admin" ? adminPoints : points;
   const viewedLog = pointsLog.filter(p => p.userId === viewedUserId);
+  // "Recent Activity" — up to 10 most recent, newest first (pointsLog is already sorted newest-first
+  // server-side; no reversal needed here).
+  const recentLog = viewedLog.slice(0, 10);
+
+  // Rewards already redeemed this quarter, by name — resets automatically once
+  // getCurrentQuarterStart() rolls forward, since this is recomputed on every render rather than
+  // stored as its own flag.
+  const quarterStartIso = getCurrentQuarterStart().toISOString();
+  const redeemedThisQuarter = new Set(
+    viewedLog
+      .filter(p => p.text.startsWith("Redeemed: ") && p.rawDate >= quarterStartIso)
+      .map(p => p.text.replace(/^Redeemed:\s*/, ""))
+  );
+
+  const startEditReward = (r: { id: string; name: string; points: number }) => {
+    setEditingRewardId(r.id);
+    setEditDraft({ name: r.name, points: r.points });
+  };
+  const cancelEditReward = () => setEditingRewardId(null);
+  const saveEditReward = (id: string) => {
+    if (!editDraft.name.trim()) { toast.error("Reward name is required"); return; }
+    updateRewardCatalogItem(id, editDraft);
+    toast.success("Reward updated");
+    setEditingRewardId(null);
+  };
 
   useEffect(() => {
     let raf = 0;
@@ -268,32 +296,39 @@ export function RewardsSection() {
 
   return (
     <div className="space-y-6">
-      <Card className="bg-gradient-to-br from-primary via-primary to-primary/80 text-primary-foreground border-0">
+      <Card className="relative overflow-hidden bg-gradient-to-br from-primary via-primary to-primary/80 text-primary-foreground border-0">
         <div className="text-xs uppercase tracking-widest opacity-70">Your Points This Month</div>
         <div className="font-display text-7xl mt-2 flex items-baseline gap-3">
           {display.toLocaleString()}
           <Trophy className="size-7 text-amber" />
         </div>
         <div className="text-sm opacity-80 mt-1">Points YTD</div>
+        <MascotFlourish
+          src="/mascot/in-pocket.png"
+          className="absolute -bottom-4 -right-2 h-36 w-auto opacity-95"
+        />
       </Card>
 
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
           <div className="mb-5">
             <div className="flex items-center gap-3">
               <GiftBowSVG />
               <h2 className="font-display text-2xl">Rewards Catalog</h2>
               <ConfettiSVG />
+              <MascotFlourish src="/mascot/floating-coin.png" className="h-12 w-auto ml-auto" />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {rewardsCatalog.map((r) => {
               const eligible = displayPoints >= r.points;
+              const alreadyRedeemedThisQuarter = redeemedThisQuarter.has(r.name);
               const brands = (r as any).brands as string[] | undefined;
               const Illustration = REWARD_ILLUSTRATIONS[r.id];
               const gradient = REWARD_GRADIENTS[r.id] ?? "linear-gradient(135deg,#6366f1,#8b5cf6)";
+              const isEditing = editingRewardId === r.id;
               return (
-                <Card key={r.id} className={cn("flex flex-col p-0 overflow-hidden", eligible && "glow-amber")}>
+                <Card key={r.id} className={cn("flex flex-col p-0 overflow-hidden relative", eligible && !alreadyRedeemedThisQuarter && "glow-amber")}>
                   {/* Kawaii illustration banner */}
                   <div
                     className="w-full h-24 flex items-center justify-center shrink-0"
@@ -302,32 +337,80 @@ export function RewardsSection() {
                     {Illustration && <Illustration />}
                   </div>
 
+                  {tier === "admin" && !isEditing && (
+                    <button
+                      onClick={() => startEditReward(r)}
+                      title="Edit reward"
+                      className="absolute top-2 right-2 size-7 rounded-full bg-white/90 hover:bg-white grid place-items-center shadow-sm"
+                    >
+                      <Pencil className="size-3.5 text-foreground" />
+                    </button>
+                  )}
+
                   {/* Content */}
                   <div className="flex flex-col flex-1 p-4 pt-3">
-                    <div className="font-medium text-sm leading-snug">{r.name}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">Giftano e-voucher</div>
-
-                    {brands && brands.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {brands.map((b) => <BrandLogo key={b} name={b} />)}
+                    {isEditing ? (
+                      <div className="space-y-2">
+                        <div>
+                          <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Reward Type</label>
+                          <input
+                            type="text"
+                            value={editDraft.name}
+                            onChange={e => setEditDraft(d => ({ ...d, name: e.target.value }))}
+                            className="w-full mt-1 text-sm rounded-lg border border-input bg-background px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-ring"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Points Required</label>
+                          <input
+                            type="number"
+                            value={editDraft.points}
+                            onChange={e => setEditDraft(d => ({ ...d, points: Number(stripLeadingZero(e.target.value)) }))}
+                            className="w-full mt-1 text-sm rounded-lg border border-input bg-background px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-ring"
+                          />
+                        </div>
+                        <div className="flex gap-1.5 pt-1">
+                          <button onClick={() => saveEditReward(r.id)} className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90">
+                            <Save className="size-3" /> Save
+                          </button>
+                          <button onClick={cancelEditReward} className="size-8 rounded-md border border-border hover:bg-muted grid place-items-center">
+                            <X className="size-3.5" />
+                          </button>
+                        </div>
                       </div>
+                    ) : (
+                      <>
+                        <div className="font-medium text-sm leading-snug">{r.name}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">Giftano e-voucher</div>
+
+                        {brands && brands.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {brands.map((b) => <BrandLogo key={b} name={b} />)}
+                          </div>
+                        )}
+
+                        <div className="flex-1" />
+
+                        <div className="text-xs text-muted-foreground mt-3">{r.points} pts</div>
+                        <button
+                          onClick={() => redeem(r.points, r.name)}
+                          disabled={!eligible || alreadyRedeemedThisQuarter}
+                          className={cn(
+                            "mt-2 w-full text-sm py-2 rounded-md transition-all flex items-center justify-center gap-1.5",
+                            eligible && !alreadyRedeemedThisQuarter
+                              ? "bg-amber text-amber-foreground hover:opacity-90 font-medium"
+                              : "bg-muted text-muted-foreground cursor-not-allowed"
+                          )}
+                        >
+                          {alreadyRedeemedThisQuarter
+                            ? (<><Clock3 className="size-3.5" /> Redeemed this quarter</>)
+                            : eligible ? "Redeem" : `Need ${r.points - displayPoints} more pts`}
+                        </button>
+                        {alreadyRedeemedThisQuarter && (
+                          <div className="text-[10px] text-muted-foreground mt-1 text-center">Resets on the next quarter's first working day</div>
+                        )}
+                      </>
                     )}
-
-                    <div className="flex-1" />
-
-                    <div className="text-xs text-muted-foreground mt-3">{r.points} pts</div>
-                    <button
-                      onClick={() => redeem(r.points, r.name)}
-                      disabled={!eligible}
-                      className={cn(
-                        "mt-2 w-full text-sm py-2 rounded-md transition-all",
-                        eligible
-                          ? "bg-amber text-amber-foreground hover:opacity-90 font-medium"
-                          : "bg-muted text-muted-foreground cursor-not-allowed"
-                      )}
-                    >
-                      {eligible ? "Redeem" : `Need ${r.points - displayPoints} more pts`}
-                    </button>
                   </div>
                 </Card>
               );
@@ -336,11 +419,11 @@ export function RewardsSection() {
         </div>
 
         <Card>
-          <SectionTitle sub="Updates unique to your account">Recent Activity</SectionTitle>
+          <SectionTitle sub="Your 10 most recent updates">Recent Activity</SectionTitle>
           <div className="space-y-3">
-            {viewedLog.length === 0 ? (
+            {recentLog.length === 0 ? (
               <div className="text-sm text-muted-foreground py-2">No activity recorded yet.</div>
-            ) : [...viewedLog].reverse().map((p) => (
+            ) : recentLog.map((p) => (
               <div key={p.id} className="flex items-center justify-between text-sm py-2 border-b border-border/60 last:border-0">
                 <div>
                   <div>{p.text}</div>
@@ -369,30 +452,86 @@ const CATALOG_CATEGORY_LABELS: Record<Activity["category"], string> = {
   penalty: "Penalty",
 };
 
-// Each audience tier gets a distinct visual section in the catalog
-const CATALOG_AUDIENCE_SECTIONS: { key: Activity["audience"]; label: string; roleNote: string; borderClass: string; headerClass: string }[] = [
-  {
-    key: "all",
-    label: "All Staff",
-    roleNote: "Applies to everyone",
-    borderClass: "border-primary/20",
-    headerClass: "bg-primary/5 border-b border-primary/15",
-  },
-  {
-    key: "manager",
-    label: "Managers & HODs",
-    roleNote: "You have additional responsibilities as a manager",
-    borderClass: "border-violet-300/50 dark:border-violet-500/30",
-    headerClass: "bg-violet-50/60 border-b border-violet-200/60 dark:bg-violet-900/10 dark:border-violet-700/30",
-  },
-  {
-    key: "hod",
-    label: "HODs Only",
-    roleNote: "As Head of Department, these activities apply exclusively to you",
-    borderClass: "border-amber-300/60 dark:border-amber-500/30",
-    headerClass: "bg-amber-50/60 border-b border-amber-200/60 dark:bg-amber-900/10 dark:border-amber-700/30",
-  },
-];
+// Category icon + colour — purely visual, so each activity reads at a glance in the redesigned catalog
+const CATALOG_CATEGORY_STYLE: Record<Activity["category"], { icon: typeof Target; className: string }> = {
+  goal: { icon: Target, className: "bg-blue-100 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700/30" },
+  recognition: { icon: Heart, className: "bg-pink-100 text-pink-600 border-pink-200 dark:bg-pink-900/20 dark:text-pink-300 dark:border-pink-700/30" },
+  skill: { icon: GraduationCap, className: "bg-teal/15 text-teal border-teal/30" },
+  engagement: { icon: Users, className: "bg-violet-100 text-violet-600 border-violet-200 dark:bg-violet-900/20 dark:text-violet-300 dark:border-violet-700/30" },
+  penalty: { icon: AlertTriangle, className: "bg-rag-red/10 text-rag-red border-rag-red/25" },
+};
+
+// Small audience pill per activity — shown since the catalog now groups by required/optional rather
+// than by audience section, so which audience an activity applies to still needs a quick visual cue.
+const CATALOG_AUDIENCE_PILL: Record<Activity["audience"], { label: string; className: string }> = {
+  all: { label: "All Staff", className: "bg-primary/10 text-primary border-primary/25" },
+  manager: { label: "Managers & HODs", className: "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/20 dark:text-violet-300 dark:border-violet-700/30" },
+  hod: { label: "HODs Only", className: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700/30" },
+};
+
+const CATALOG_DISPLAY_CAP = 10;
+
+function ActivityCatalogItem({ activity: a }: { activity: Activity }) {
+  const style = CATALOG_CATEGORY_STYLE[a.category];
+  const Icon = style.icon;
+  const audiencePill = CATALOG_AUDIENCE_PILL[a.audience];
+  return (
+    <div
+      className={cn(
+        "rounded-xl border px-4 py-3.5 shadow-sm transition-shadow hover:shadow-md",
+        a.isCompulsory
+          ? "border-amber-300/70 bg-gradient-to-br from-amber-50 to-white dark:border-amber-600/40 dark:from-amber-900/10 dark:to-transparent"
+          : a.points < 0
+            ? "border-rag-red/25 bg-rag-red/5"
+            : "border-teal/25 bg-gradient-to-br from-teal/5 to-white dark:to-transparent"
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className={cn("size-9 rounded-lg border grid place-items-center shrink-0", style.className)} title={CATALOG_CATEGORY_LABELS[a.category]}>
+          <Icon className="size-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-sm font-semibold">{a.name}</span>
+            {a.isCompulsory && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500 text-white shrink-0 font-bold tracking-wide">REQUIRED</span>
+            )}
+            <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full border shrink-0 font-medium", audiencePill.className)}>
+              {audiencePill.label}
+            </span>
+          </div>
+
+          {/* Timeline deadline */}
+          {a.isCompulsory && a.timelineDays && a.timelineTrigger && (
+            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+              <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400">Deadline:</span>
+              <span className="text-[10px] text-muted-foreground">
+                Complete within <strong className="text-foreground">{a.timelineDays} day{a.timelineDays !== 1 ? "s" : ""}</strong> of {a.timelineTrigger}
+              </span>
+            </div>
+          )}
+
+          {/* Penalty warning */}
+          {a.isCompulsory && a.penaltyPoints != null && (
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="text-[10px] font-bold text-rag-red/90">If overdue:</span>
+              <span className="text-[10px] text-rag-red/80">
+                <strong>−{a.penaltyPoints} pts</strong> automatically deducted
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className={cn(
+          "text-base font-extrabold shrink-0 mt-0.5 px-2 py-0.5 rounded-lg",
+          a.points > 0 ? "text-teal bg-teal/10" : a.points < 0 ? "text-rag-red bg-rag-red/10" : "text-muted-foreground bg-muted"
+        )}>
+          {a.points > 0 ? `+${a.points}` : a.points} pts
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ActivityCatalog({ activities, tier }: { activities: Activity[]; tier: string }) {
   const [open, setOpen] = useState(false);
@@ -401,12 +540,9 @@ function ActivityCatalog({ activities, tier }: { activities: Activity[]; tier: s
 
   const liveActivities = activities.filter(a => a.live);
 
-  const relevantAudienceSections = CATALOG_AUDIENCE_SECTIONS.filter(s =>
-    s.key === "all" ||
-    (s.key === "manager" && isManager) ||
-    (s.key === "hod" && isHod)
-  );
-
+  // Scoped to this user's own visibility: everyone sees "all", managers/HODs additionally see
+  // "manager", and only HODs additionally see "hod" — real-time, since this reads straight from
+  // the same liveActivities the admin's Activity Management panel edits.
   const relevantActivities = liveActivities.filter(a =>
     a.audience === "all" ||
     (a.audience === "manager" && isManager) ||
@@ -416,29 +552,27 @@ function ActivityCatalog({ activities, tier }: { activities: Activity[]; tier: s
   const compulsoryCount = relevantActivities.filter(a => a.isCompulsory).length;
   const optionalCount = relevantActivities.filter(a => !a.isCompulsory && a.points > 0).length;
 
-  // Group activities within an audience section by category
-  const byCategory = (aud: Activity["audience"]) => {
-    const items = liveActivities.filter(a => a.audience === aud);
-    const map = new Map<Activity["category"], Activity[]>();
-    items.forEach(a => {
-      if (!map.has(a.category)) map.set(a.category, []);
-      map.get(a.category)!.push(a);
-    });
-    return map;
-  };
+  // "Recent" = most recently added/updated first — array order reflects this since addActivity
+  // appends new entries. Required activities are shown in full first (up to the cap); any
+  // remaining budget is filled with the most recent optional activities.
+  const compulsoryRecent = [...relevantActivities.filter(a => a.isCompulsory)].reverse().slice(0, CATALOG_DISPLAY_CAP);
+  const optionalRecent = [...relevantActivities.filter(a => !a.isCompulsory)].reverse()
+    .slice(0, Math.max(0, CATALOG_DISPLAY_CAP - compulsoryRecent.length));
 
   return (
-    <div className="rounded-2xl overflow-hidden border border-border">
+    <div className="rounded-2xl overflow-hidden border border-border shadow-sm">
       <button
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between px-6 py-4 bg-card hover:bg-muted/30 transition-colors"
+        className="w-full flex items-center justify-between px-6 py-4 bg-gradient-to-r from-primary/10 via-teal/5 to-transparent hover:from-primary/15 transition-colors"
       >
         <div className="flex items-center gap-3">
-          <BookOpen className="size-5 text-primary" />
+          <div className="size-9 rounded-xl bg-gradient-to-br from-primary to-teal grid place-items-center shrink-0 shadow-sm">
+            <BookOpen className="size-4.5 text-white" />
+          </div>
           <div className="text-left">
-            <div className="font-semibold text-sm">Activity Catalog</div>
+            <div className="font-bold text-sm">Activity Catalog</div>
             <div className="text-xs text-muted-foreground mt-0.5">
-              {compulsoryCount} compulsory · {optionalCount} optional — all the ways you can earn &amp; lose points
+              <strong className="text-amber-700 dark:text-amber-400">{compulsoryCount} required</strong> · <strong className="text-teal">{optionalCount} optional</strong> — all the ways you can earn &amp; lose points
             </div>
           </div>
         </div>
@@ -446,92 +580,39 @@ function ActivityCatalog({ activities, tier }: { activities: Activity[]; tier: s
       </button>
 
       {open && (
-        <div className="bg-card border-t border-border p-6 space-y-5">
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Activities marked <strong>Required</strong> are compulsory for your role. Failing to complete them within the stated deadline will result in an automatic points penalty. Optional activities are bonus opportunities to earn extra points. This catalog is maintained by HR and updates in real time.
-          </p>
+        <div className="bg-card border-t border-border p-6 space-y-6">
+          <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex items-start gap-2.5">
+            <Sparkles className="size-4 text-primary shrink-0 mt-0.5" />
+            <p className="text-xs text-foreground/80 leading-relaxed">
+              Activities marked <strong className="text-amber-700 dark:text-amber-400">REQUIRED</strong> are <strong>compulsory</strong> for your role — failing to complete them within the stated deadline results in an <strong>automatic points penalty</strong>. Optional activities are <strong>bonus opportunities</strong> to earn extra points. Showing your <strong>{Math.min(CATALOG_DISPLAY_CAP, relevantActivities.length)} most recent</strong> activities. This catalog is maintained by <strong>Human Capital</strong> and updates in real time.
+            </p>
+          </div>
 
-          {relevantAudienceSections.map(section => {
-            const catMap = byCategory(section.key);
-            if (catMap.size === 0) return null;
-            return (
-              <div key={section.key} className={cn("rounded-xl border overflow-hidden", section.borderClass)}>
-                <div className={cn("px-4 py-3", section.headerClass)}>
-                  <div className="text-sm font-semibold">{section.label}</div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">{section.roleNote}</div>
-                </div>
-
-                <div className="p-4 space-y-4">
-                  {(["goal", "recognition", "skill", "engagement", "penalty"] as Activity["category"][])
-                    .filter(cat => catMap.has(cat))
-                    .map(cat => {
-                      const items = catMap.get(cat)!;
-                      return (
-                        <div key={cat}>
-                          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                            {CATALOG_CATEGORY_LABELS[cat]}
-                          </div>
-                          <div className="space-y-2">
-                            {items.map(a => (
-                              <div
-                                key={a.id}
-                                className={cn(
-                                  "rounded-xl border px-4 py-3",
-                                  a.isCompulsory
-                                    ? "border-amber-200/60 bg-amber-50/30 dark:border-amber-700/30 dark:bg-amber-900/5"
-                                    : a.points < 0
-                                      ? "border-rag-red/20 bg-rag-red/5"
-                                      : "border-border bg-muted/20"
-                                )}
-                              >
-                                <div className="flex items-start gap-3">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-sm font-medium">{a.name}</span>
-                                      {a.isCompulsory && (
-                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700/30 shrink-0 font-medium">Required</span>
-                                      )}
-                                    </div>
-
-                                    {/* Timeline deadline */}
-                                    {a.isCompulsory && a.timelineDays && a.timelineTrigger && (
-                                      <div className="flex items-center gap-1.5 mt-1.5">
-                                        <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400">
-                                          Deadline:
-                                        </span>
-                                        <span className="text-[10px] text-muted-foreground">
-                                          Complete within <strong>{a.timelineDays} day{a.timelineDays !== 1 ? "s" : ""}</strong> of {a.timelineTrigger}
-                                        </span>
-                                      </div>
-                                    )}
-
-                                    {/* Penalty warning */}
-                                    {a.isCompulsory && a.penaltyPoints != null && (
-                                      <div className="flex items-center gap-1.5 mt-1">
-                                        <span className="text-[10px] font-medium text-rag-red/80">If overdue:</span>
-                                        <span className="text-[10px] text-rag-red/70">
-                                          <strong>−{a.penaltyPoints} pts</strong> automatically deducted from your balance
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  <div className={cn("text-sm font-bold shrink-0 mt-0.5", a.points > 0 ? "text-teal" : "text-rag-red")}>
-                                    {a.points > 0 ? `+${a.points}` : a.points} pts
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
+          {compulsoryRecent.length > 0 && (
+            <div className="rounded-xl border-2 border-amber-300/70 dark:border-amber-600/40 overflow-hidden">
+              <div className="px-4 py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 flex items-center gap-2">
+                <ShieldCheck className="size-4 text-white shrink-0" />
+                <div className="text-sm font-bold text-white">Required Activities</div>
               </div>
-            );
-          })}
+              <div className="p-4 space-y-2.5 bg-amber-50/30 dark:bg-amber-900/5">
+                {compulsoryRecent.map(a => <ActivityCatalogItem key={a.id} activity={a} />)}
+              </div>
+            </div>
+          )}
 
-          {relevantAudienceSections.every(s => byCategory(s.key).size === 0) && (
+          {optionalRecent.length > 0 && (
+            <div className="rounded-xl border-2 border-teal/30 overflow-hidden">
+              <div className="px-4 py-2.5 bg-gradient-to-r from-teal to-teal/70 flex items-center gap-2">
+                <Sparkles className="size-4 text-white shrink-0" />
+                <div className="text-sm font-bold text-white">Optional Activities</div>
+              </div>
+              <div className="p-4 space-y-2.5 bg-teal/5">
+                {optionalRecent.map(a => <ActivityCatalogItem key={a.id} activity={a} />)}
+              </div>
+            </div>
+          )}
+
+          {relevantActivities.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">No activities published yet.</p>
           )}
         </div>

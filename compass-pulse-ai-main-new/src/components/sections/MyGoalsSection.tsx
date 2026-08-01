@@ -1,21 +1,37 @@
 import { useState, useEffect } from "react";
-import { Card, SectionTitle } from "@/components/ui-bits";
+import { Card, SectionTitle, MonthPicker, formatDueDate, SkillAttachmentModal, RAGInfoPanel, RagPill, RagDot, ActionNeededIcon, MascotFlourish } from "@/components/ui-bits";
 import { useApp } from "@/lib/appContext";
-import type { RAG, PersonalDevGoal } from "@/lib/mockData";
+import type { DevGoalRecommendation, PerfGoalRecommendation } from "@/lib/appContext";
+import type { RAG, PersonalDevGoal, SkillAttachment, KeyResult, DeptGoal } from "@/lib/mockData";
 import {
   Check, Lock, MessageSquare, Bell, Info, AlertCircle, Clock,
-  Pencil, Trash2, Plus, Sparkles, X, Loader2, CalendarDays, CheckCircle2, Target,
+  Pencil, Trash2, Plus, Sparkles, X, Loader2, Circle, CheckCircle2, Target, GraduationCap,
+  ThumbsUp, ThumbsDown, FileCheck2, Upload, ChevronRight, ChevronDown, ChevronUp, ListChecks, UserCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { pointsToast } from "@/lib/pointsToast";
+import { cn, workingDaysSince, formatGoalStatusDueDate, daysSinceJoin, flattenOkrOptions, keyResultsOwnedBy, objectivesOwnedBy, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, formatMonthlyConfidenceDueDate, objectiveScore, objectiveConfidence, scoreToRag, isPendingAckFor, ownerNames, isKrOverdue, formatEffectiveKrScoreDueDate } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type DevGoal = PersonalDevGoal;
+type DeptGoalsList = ReturnType<typeof useApp>["departmentGoals"];
+
+// A performance goal's linkedDept can point at either a top-level Objective or one of its nested
+// Key Results — this resolves either into a display title.
+function resolveLinkedTitle(linkedDept: string | undefined, departmentGoals: DeptGoalsList): string | undefined {
+  if (!linkedDept) return undefined;
+  const obj = departmentGoals.find(d => d.id === linkedDept);
+  if (obj) return obj.title;
+  for (const d of departmentGoals) {
+    const kr = (d.keyResults ?? []).find(k => k.id === linkedDept);
+    if (kr) return kr.title;
+  }
+  return undefined;
+}
 
 // ── Month helpers ──────────────────────────────────────────────────────────────
-
-const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const QUARTER_MONTHS: Record<string, readonly [number, number]> = {
   Q1: [0, 2], Q2: [3, 5], Q3: [6, 8], Q4: [9, 11],
@@ -26,69 +42,6 @@ function isCurrentQuarter(q: string): boolean {
   return !!range && m >= range[0] && m <= range[1];
 }
 
-function formatDueDate(dueDate: string): string {
-  if (!dueDate) return "No due date";
-  const [y, m] = dueDate.split("-");
-  return `${MONTHS_SHORT[parseInt(m) - 1]} ${y}`;
-}
-
-// ── Month picker ───────────────────────────────────────────────────────────────
-
-function MonthPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [year, setYear] = useState(() => {
-    if (value) return parseInt(value.split("-")[0]);
-    return new Date().getFullYear();
-  });
-
-  return (
-    <div className="relative inline-block">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        className="flex items-center gap-1.5 text-xs border border-border px-2.5 py-1.5 rounded-md bg-background hover:bg-muted transition-colors"
-      >
-        <CalendarDays className="size-3 text-muted-foreground" />
-        {value ? formatDueDate(value) : "Set due date"}
-      </button>
-      {open && (
-        <div className="absolute z-30 top-full mt-1 left-0 bg-popover border border-border rounded-xl shadow-lg p-3 w-52">
-          <div className="flex items-center justify-between mb-2">
-            <button
-              onMouseDown={() => setYear((y) => y - 1)}
-              className="size-6 rounded hover:bg-muted grid place-items-center text-sm font-medium"
-            >‹</button>
-            <span className="text-sm font-medium">{year}</span>
-            <button
-              onMouseDown={() => setYear((y) => y + 1)}
-              className="size-6 rounded hover:bg-muted grid place-items-center text-sm font-medium"
-            >›</button>
-          </div>
-          <div className="grid grid-cols-3 gap-1">
-            {MONTHS_SHORT.map((m, i) => {
-              const val = `${year}-${String(i + 1).padStart(2, "0")}`;
-              const selected = val === value;
-              return (
-                <button
-                  key={m}
-                  onMouseDown={() => { onChange(val); setOpen(false); }}
-                  className={cn(
-                    "text-xs py-1.5 rounded-md transition-colors font-medium",
-                    selected ? "bg-primary text-primary-foreground" : "hover:bg-muted text-foreground/80",
-                  )}
-                >
-                  {m}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── AI L&D recommendation database ──────────────────────────────────────────────
 // Simulated "fetch" (no live external API in this app — every AI feature here is curated +
 // a loading delay, consistent with the rest of the dashboard). Curated against real, accredited
@@ -97,7 +50,7 @@ function MonthPicker({ value, onChange }: { value: string; onChange: (v: string)
 const AI_RECS: Record<string, { internal: string[]; external: string[] }> = {
   hr_certification: {
     internal: [
-      "P&C Learning Portal · IHRP Certification Study Group — join the Q3 2026 cohort (register via HR portal)",
+      "P&C Learning Portal · IHRP Certification Study Group — join the Q3 2026 cohort (register via the Human Capital portal)",
       "Learning & Development Benefit — up to S$2,000 reimbursement per year (Intranet > P&C > Policies)",
       "HRBP Mentorship Programme — pair with a senior partner for exam preparation coaching",
     ],
@@ -194,7 +147,7 @@ const AI_RECS: Record<string, { internal: string[]; external: string[] }> = {
   default: {
     internal: [
       "P&C Development Hub — browse all internal L&D offerings by function and level",
-      "Mentorship Programme — available to all team members (register via HR portal)",
+      "Mentorship Programme — available to all team members (register via the Human Capital portal)",
       "Monthly Lunch & Learn Series — cross-functional knowledge shares, see calendar on intranet",
     ],
     external: [
@@ -228,6 +181,63 @@ async function fetchAIRecommendations(title: string, description: string) {
   await new Promise((r) => setTimeout(r, 1600));
   const text = (title + " " + description).toLowerCase();
   return AI_RECS[matchAIRecCategory(text)];
+}
+
+// ── Grow — a DBS iGrow-inspired section ─────────────────────────────────────────
+// DBS's iGrow lets staff maintain a skill profile so the platform can recommend courses and
+// internal roles from it — this is the same idea, scoped to skills already on this person's own
+// profile as "pending" (started but not yet verified), reusing the existing AI_RECS course catalog
+// rather than inventing a parallel one. Collapsed by default — a cute, low-pressure nudge toward
+// growth, not another permanent block on an already-dense page. Internal role matching lives on the
+// Skills Profile page already (the live PhillipCapital job-rotation matcher) — linked to rather than
+// duplicated here.
+function GrowSection({ pendingSkills, onViewOpportunities }: { pendingSkills: string[]; onViewOpportunities: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  if (pendingSkills.length === 0) return null;
+  return (
+    <div className="rounded-2xl border-2 border-teal-300/60 dark:border-teal-700/40 bg-gradient-to-br from-teal-50/70 via-emerald-50/40 to-transparent dark:from-teal-950/20 overflow-hidden">
+      <button onClick={() => setExpanded(v => !v)} className="w-full flex items-center justify-between gap-2 px-4 py-3.5 text-left">
+        <div className="flex items-center gap-2">
+          <span className="text-lg leading-none" aria-hidden="true">🌱</span>
+          <span className="font-display text-base text-teal-800 dark:text-teal-300">Grow</span>
+          <span className="text-[10px] text-muted-foreground">{pendingSkills.length} skill{pendingSkills.length === 1 ? "" : "s"} in progress</span>
+        </div>
+        {expanded ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+      </button>
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Suggested learning for the skills you're already working toward, inspired by DBS's iGrow model — course suggestions from your own skill profile, no extra setup.
+          </p>
+          {pendingSkills.map(skill => {
+            const recs = AI_RECS[matchAIRecCategory(skill)];
+            return (
+              <div key={skill} className="rounded-lg border border-teal-200/60 dark:border-teal-800/40 bg-background/70 p-3">
+                <div className="text-sm font-semibold text-teal-800 dark:text-teal-300">{skill}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
+                  <div>
+                    <div className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold mb-0.5">Internal</div>
+                    <ul className="space-y-0.5">
+                      {recs.internal.slice(0, 2).map(c => <li key={c} className="text-[11px] text-foreground/80 leading-snug">• {c}</li>)}
+                    </ul>
+                  </div>
+                  <div>
+                    <div className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold mb-0.5">External</div>
+                    <ul className="space-y-0.5">
+                      {recs.external.slice(0, 2).map(c => <li key={c} className="text-[11px] text-foreground/80 leading-snug">• {c}</li>)}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <button onClick={onViewOpportunities} className="text-xs text-teal-700 dark:text-teal-400 font-medium hover:underline">
+            View matching internal roles on your Skills Profile →
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── SVGs ──────────────────────────────────────────────────────────────────────
@@ -268,71 +278,47 @@ function AIBotSVG() {
   );
 }
 
-// ── RAG Info Panel ─────────────────────────────────────────────────────────────
-
-function RAGInfoPanel({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 relative animate-in slide-in-from-top-2 duration-200">
-      <button
-        onClick={onClose}
-        className="absolute top-3 right-3 size-7 rounded-full hover:bg-muted grid place-items-center transition-colors"
-      >
-        <X className="size-3.5" />
-      </button>
-      <div className="flex items-center gap-2 mb-4">
-        <Info className="size-4 text-primary" />
-        <div className="font-semibold text-sm">RAG Status Definitions</div>
-        <div className="text-xs text-muted-foreground">Use these to accurately reflect your goal progress each quarter</div>
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-lg bg-rag-red/10 border border-rag-red/20 p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="size-3 rounded-full bg-rag-red shrink-0" />
-            <div className="text-xs font-semibold text-rag-red">RED — At Risk</div>
-          </div>
-          <div className="text-xs text-foreground/70 leading-relaxed">
-            Goal is significantly off track. Blockers or issues are impacting delivery. Immediate action or escalation required.
-          </div>
-          <div className="mt-2.5 text-[10px] font-medium text-rag-red">⚠ Mandatory feedback required</div>
-        </div>
-        <div className="rounded-lg bg-rag-amber/10 border border-rag-amber/20 p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="size-3 rounded-full bg-rag-amber shrink-0" />
-            <div className="text-xs font-semibold text-amber-foreground">AMBER — Monitor</div>
-          </div>
-          <div className="text-xs text-foreground/70 leading-relaxed">
-            Goal has minor delays or concerns. Proactive attention needed. Risk of slippage if not addressed soon.
-          </div>
-          <div className="mt-2.5 text-[10px] font-medium text-amber-foreground">⚠ Mandatory feedback required</div>
-        </div>
-        <div className="rounded-lg bg-rag-green/10 border border-rag-green/20 p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="size-3 rounded-full bg-rag-green shrink-0" />
-            <div className="text-xs font-semibold text-rag-green">GREEN — On Track</div>
-          </div>
-          <div className="text-xs text-foreground/70 leading-relaxed">
-            Goal is progressing as planned and is on track for delivery. No major concerns to flag.
-          </div>
-          <div className="mt-2.5 text-[10px] font-medium text-rag-green">✓ Optional feedback</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Approved goal card ─────────────────────────────────────────────────────────
 
 type GoalType = ReturnType<typeof useApp>["teamMembers"][number]["goals"][number];
 
 function ActiveGoalCard({ goal, memberId, memberName, directManager }: { goal: GoalType; memberId: string; memberName: string; directManager: string }) {
-  const { departmentGoals, updateGoalRag, addGoalRemark, acknowledgeGoal, resolveRemark, currentUser } = useApp();
+  const { departmentGoals, updateGoalRag, addGoalRemark, acknowledgeGoal, resolveRemark, currentUser, staffList, pendingGoalEditProposals, proposeGoalEdit } = useApp();
   const [editingQ, setEditingQ] = useState<string | null>(null);
   // pendingRag: selected but not yet committed (amber/red require feedback first; green commits immediately but shows optional note)
   const [pendingRag, setPendingRag] = useState<{ quarter: "Q1" | "Q2" | "Q3" | "Q4"; rag: RAG; greenCommitted: boolean } | null>(null);
   const [feedbackText, setFeedbackText] = useState("");
   const [showHistory, setShowHistory] = useState(false);
 
-  const linkedDeptName = departmentGoals.find((d) => d.id === goal.linkedDept)?.title;
+  // Self-service edit proposal — title/description/metric/linkedDept, sent to the HOD for approval
+  // after an attestation that the goal owner has consulted their direct supervisor.
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [proposeDraft, setProposeDraft] = useState({ title: goal.title, description: goal.description, metric: goal.metric, linkedDept: goal.linkedDept ?? "" });
+  const [showAttestation, setShowAttestation] = useState(false);
+  const [attested, setAttested] = useState(false);
+  const ownDept = staffList.find(s => s.id === memberId)?.dept;
+  const hodEntry = staffList.find(s => s.hod && s.dept === ownDept);
+  const hodName = hodEntry?.name ?? "your HOD";
+  const hodId = hodEntry?.id ?? "u0";
+  const hasPendingProposal = pendingGoalEditProposals.some(p => p.goalId === goal.id && p.source === "self");
+
+  const openEditForm = () => {
+    setProposeDraft({ title: goal.title, description: goal.description, metric: goal.metric, linkedDept: goal.linkedDept ?? "" });
+    setEditingGoal(true);
+  };
+  const confirmProposal = () => {
+    proposeGoalEdit({
+      memberId, memberName, goalId: goal.id, goalTitle: goal.title,
+      changes: { title: proposeDraft.title, description: proposeDraft.description, metric: proposeDraft.metric, linkedDept: proposeDraft.linkedDept },
+      source: "self", proposedBy: memberName, hodId, hodName,
+    });
+    toast.success(`Proposed change sent to ${hodName} for approval`);
+    setShowAttestation(false);
+    setAttested(false);
+    setEditingGoal(false);
+  };
+
+  const linkedDeptName = resolveLinkedTitle(goal.linkedDept, departmentGoals);
   const isMandatory = pendingRag && (pendingRag.rag === "amber" || pendingRag.rag === "red");
 
   // Computed display RAG per quarter — shows preview for pending quarter
@@ -395,10 +381,122 @@ function ActiveGoalCard({ goal, memberId, memberName, directManager }: { goal: G
       {/* Title + badge */}
       <div className="flex items-start justify-between gap-3">
         <div className="font-medium text-base leading-snug flex-1">{goal.title}</div>
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-rag-green/10 text-rag-green border border-rag-green/30 shrink-0">
-          <Check className="size-3" /> Approved
-        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {hasPendingProposal ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-amber/10 text-amber-foreground border border-amber/30">
+              <Clock className="size-3" /> Pending {hodName}'s approval
+            </span>
+          ) : (
+            <button
+              onClick={openEditForm}
+              title="Propose a change to this goal"
+              className="size-6 rounded-md border border-primary/20 bg-primary/5 text-primary/80 hover:bg-primary/15 hover:text-primary grid place-items-center transition-colors"
+            >
+              <Pencil className="size-3" />
+            </button>
+          )}
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-rag-green/10 text-rag-green border border-rag-green/30">
+            <Check className="size-3" /> Approved
+          </span>
+        </div>
       </div>
+
+      {/* Propose-a-change form */}
+      {editingGoal && (
+        <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 space-y-3 animate-in slide-in-from-top-1 duration-150">
+          <div className="text-xs font-semibold text-primary">Propose a Change</div>
+          <div>
+            <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Goal Title</label>
+            <input
+              value={proposeDraft.title}
+              onChange={e => setProposeDraft(d => ({ ...d, title: e.target.value }))}
+              className="w-full mt-1.5 text-sm rounded-lg border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Description</label>
+            <textarea
+              value={proposeDraft.description}
+              onChange={e => setProposeDraft(d => ({ ...d, description: e.target.value }))}
+              rows={3}
+              className="w-full mt-1.5 text-sm rounded-lg border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Key Result</label>
+            <textarea
+              value={proposeDraft.metric}
+              onChange={e => setProposeDraft(d => ({ ...d, metric: e.target.value }))}
+              rows={2}
+              className="w-full mt-1.5 text-sm rounded-lg border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Objective / Key Result Linkage <span className="text-rag-red">*</span></label>
+            <select
+              value={proposeDraft.linkedDept}
+              onChange={e => setProposeDraft(d => ({ ...d, linkedDept: e.target.value }))}
+              className="w-full mt-1.5 text-sm rounded-lg border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="" disabled>Select an objective or key result…</option>
+              {flattenOkrOptions(departmentGoals).map(o => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { if (!proposeDraft.linkedDept) { toast.error("Select an objective or key result to link this goal to"); return; } setShowAttestation(true); }}
+              className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 font-medium transition-opacity"
+            >
+              Save Proposed Changes
+            </button>
+            <button onClick={() => setEditingGoal(false)} className="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Attestation — must confirm consultation with direct supervisor before submitting to the HOD */}
+      {showAttestation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setShowAttestation(false)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative bg-background rounded-2xl shadow-2xl border border-border w-full max-w-md mx-4 p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="font-display text-lg leading-snug">Confirm Before Submitting</div>
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={attested}
+                onChange={e => setAttested(e.target.checked)}
+                className="mt-0.5 rounded shrink-0"
+              />
+              <span className="text-sm text-foreground/85 leading-relaxed">
+                I confirm I have discussed and consulted my direct supervisor, <strong>{directManager}</strong>,
+                before submitting this change to my performance goal to <strong>{hodName}</strong> for approval.
+              </span>
+            </label>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={confirmProposal}
+                disabled={!attested}
+                className="flex-1 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+              >
+                Submit for Approval
+              </button>
+              <button
+                onClick={() => { setShowAttestation(false); setAttested(false); }}
+                className="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Acknowledgement banner */}
       {goal.pendingAcknowledgement && (
@@ -427,7 +525,7 @@ function ActiveGoalCard({ goal, memberId, memberName, directManager }: { goal: G
               <Target className="size-3 shrink-0" />
               {linkedDeptName}
               {goal.weightage != null && goal.linkedDept && (
-                <span className="ml-0.5 text-primary/60">· {goal.weightage}% contrib.</span>
+                <span className="ml-0.5 text-primary/60">· {goal.weightage}% contribution</span>
               )}
             </span>
           </div>
@@ -648,7 +746,7 @@ const DEMO_TODAY = new Date("2026-07-02");
 
 function PendingGoalCard({ goal }: { goal: GoalType }) {
   const { departmentGoals, nudgeGoal } = useApp();
-  const linkedDeptName = departmentGoals.find((d) => d.id === goal.linkedDept)?.title;
+  const linkedDeptName = resolveLinkedTitle(goal.linkedDept, departmentGoals);
   const [hasNudged, setHasNudged] = useState(false);
 
   const submittedDate = goal.submittedDate ? new Date(goal.submittedDate) : null;
@@ -677,7 +775,7 @@ function PendingGoalCard({ goal }: { goal: GoalType }) {
               <Target className="size-3 shrink-0" />
               {linkedDeptName}
               {goal.weightage != null && goal.linkedDept && (
-                <span className="ml-0.5 text-foreground/40">· {goal.weightage}% contrib.</span>
+                <span className="ml-0.5 text-foreground/40">· {goal.weightage}% contribution</span>
               )}
             </span>
           </div>
@@ -756,12 +854,16 @@ function DevGoalCard({
   managerInput?: string;
   memberId?: string;
 }) {
-  const { acknowledgedManagerInputs, acknowledgeManagerFeedback } = useApp();
+  const {
+    acknowledgedManagerInputs, acknowledgeManagerFeedback, pendingDueDateGoals, clearPendingDueDate,
+    skills, allTeamMemberSkills, devGoalAttachments, attachDevGoalCertificate, addPendingSkill,
+  } = useApp();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ title: goal.title, description: goal.description, dueDate: goal.dueDate });
   const [showRecs, setShowRecs] = useState(false);
   const [recs, setRecs] = useState<{ internal: string[]; external: string[] } | null>(null);
   const [loadingRecs, setLoadingRecs] = useState(false);
+  const [showAttachModal, setShowAttachModal] = useState(false);
 
   // Fetch on demand when user opens the panel — only once per goal (resets when goal title/desc changes)
   useEffect(() => {
@@ -783,11 +885,50 @@ function DevGoalCard({
     toast.success("Development goal updated");
   };
 
+  // Marking complete requires a supporting certificate — reopening a completed goal stays instant.
+  // A certification is required for every development goal, no exceptions, per policy.
   const toggleComplete = () => {
-    const next = !goal.completed;
-    onUpdate(goal.id, { completed: next });
-    toast.success(next ? "Goal marked complete 🎉" : "Goal reopened");
+    if (!goal.completed) { setShowAttachModal(true); return; }
+    onUpdate(goal.id, { completed: false });
+    toast.success("Goal reopened");
   };
+
+  const handleCertificateUpload = (attachment: SkillAttachment) => {
+    attachDevGoalCertificate(goal.id, attachment);
+    onUpdate(goal.id, { completed: true, completedDate: new Date().toISOString().slice(0, 10) });
+    setShowAttachModal(false);
+    toast.success("Goal marked complete 🎉 — certificate saved, ready to submit for manager approval.");
+  };
+
+  // Goals added from a Development Roadmap recommendation start without a due date — flagged until
+  // one is set, with a 7-working-day SLA behind it (enforced in appContext.tsx).
+  const pendingDueDate = pendingDueDateGoals.find(p => p.goalId === goal.id);
+  const needsDueDate = !goal.dueDate && !!pendingDueDate;
+  const dueDateDaysLeft = pendingDueDate ? 7 - workingDaysSince(pendingDueDate.createdDate) : 0;
+
+  // Once completed with a certificate on file, the staff member can submit it to become a pending
+  // verified skill — unless it's already been submitted (pending) or verified.
+  const effectiveMemberId = memberId ?? "u0";
+  const memberSkillsEntry = allTeamMemberSkills.find(m => m.memberId === effectiveMemberId);
+  const pendingSkillTitles = memberSkillsEntry ? memberSkillsEntry.pending : skills.pending;
+  const verifiedSkillTitles = memberSkillsEntry ? memberSkillsEntry.verified : skills.verified;
+  const alreadySubmitted = pendingSkillTitles.includes(goal.title) || verifiedSkillTitles.includes(goal.title);
+  const certificate = devGoalAttachments[goal.id];
+  const canSubmitForApproval = goal.completed && !!certificate && !alreadySubmitted;
+
+  const handleSubmitForApproval = () => {
+    void addPendingSkill(goal.title, certificate);
+    toast.success(`"${goal.title}" submitted for manager approval · your certificate is attached`);
+  };
+
+  const setDueDate = (v: string) => {
+    onUpdate(goal.id, { dueDate: v });
+    clearPendingDueDate(goal.id);
+  };
+
+  // Once approved into the verified skills profile, this goal has graduated — it no longer needs
+  // to occupy space in the Development Goals list.
+  if (verifiedSkillTitles.includes(goal.title)) return null;
 
   if (editing) {
     return (
@@ -832,53 +973,131 @@ function DevGoalCard({
   }
 
   return (
-    <Card className={cn("space-y-4", goal.completed && "opacity-70")}>
+    <Card className={cn("space-y-4", goal.completed && "border-rag-green/30 bg-gradient-to-b from-rag-green/5 to-transparent")}>
       {/* Header row */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className={cn("font-medium", goal.completed && "line-through text-muted-foreground")}>{goal.title}</div>
+          <div className={cn("font-medium", goal.completed && "font-bold text-rag-green")}>
+            {goal.title}{goal.completed && " 🎉"}
+          </div>
           <div className="text-sm text-muted-foreground mt-0.5 leading-relaxed">{goal.description}</div>
+          {needsDueDate && (
+            <div className="text-xs text-amber-foreground mt-1 flex items-center gap-1">
+              <Clock className="size-3 shrink-0" />
+              Set a due date — {Math.max(dueDateDaysLeft, 0)} working day{dueDateDaysLeft !== 1 ? "s" : ""} left, or a 5-point penalty will apply.
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {/* Due date badge with month picker */}
-          <MonthPicker value={goal.dueDate} onChange={(v) => onUpdate(goal.id, { dueDate: v })} />
-          {/* Complete toggle */}
-          <button
-            onClick={toggleComplete}
-            title={goal.completed ? "Mark as incomplete" : "Mark as complete"}
-            className={cn(
-              "size-7 rounded-md grid place-items-center transition-colors",
-              goal.completed ? "text-rag-green hover:bg-rag-green/10" : "text-muted-foreground hover:bg-rag-green/10 hover:text-rag-green",
-            )}
-          >
-            <CheckCircle2 className="size-4" />
-          </button>
-          {/* AI recommendations toggle */}
-          <button
-            onClick={() => setShowRecs((v) => !v)}
-            title="AI L&D Recommendations"
-            className={cn(
-              "size-7 rounded-md grid place-items-center transition-colors",
-              showRecs ? "text-amber bg-amber/10" : "text-muted-foreground hover:bg-amber/10 hover:text-amber",
-            )}
-          >
-            <Sparkles className="size-3.5" />
-          </button>
-          <button onClick={() => setEditing(true)} className="size-7 rounded-md hover:bg-muted grid place-items-center transition-colors" title="Edit goal">
-            <Pencil className="size-3.5 text-muted-foreground" />
-          </button>
-          <button onClick={() => onDelete(goal.id)} className="size-7 rounded-md hover:bg-rag-red/10 grid place-items-center transition-colors" title="Remove goal">
-            <Trash2 className="size-3.5 text-muted-foreground" />
-          </button>
-        </div>
+        <TooltipProvider delayDuration={150}>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Due date badge with month picker */}
+            <MonthPicker value={goal.dueDate} onChange={setDueDate} highlight={needsDueDate} />
+            {/* Complete toggle — empty circle = not done, filled checkmark = done (todo-checkbox metaphor),
+                plus a text label since an icon alone doesn't read as unambiguously as the pencil/trash do */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={toggleComplete}
+                  aria-label={goal.completed ? "Mark as incomplete" : "Mark as complete"}
+                  className={cn(
+                    "h-7 px-2 rounded-md border flex items-center gap-1 text-[11px] font-medium transition-colors",
+                    goal.completed
+                      ? "text-rag-green bg-rag-green/15 border-rag-green/30 hover:bg-rag-green/25"
+                      : "text-muted-foreground/70 bg-transparent border-border hover:bg-rag-green/10 hover:text-rag-green hover:border-rag-green/30",
+                  )}
+                >
+                  {goal.completed ? <CheckCircle2 className="size-3.5" /> : <Circle className="size-3.5" />}
+                  {goal.completed ? "Completed" : "Complete"}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{goal.completed ? "Mark as incomplete" : "Mark this goal as complete"}</TooltipContent>
+            </Tooltip>
+            {/* Learning recommendations toggle — graduation cap + label reads as "learning resources" at a glance */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setShowRecs((v) => !v)}
+                  aria-label="Learning Recommendations"
+                  className={cn(
+                    "h-7 px-2 rounded-md border flex items-center gap-1 text-[11px] font-medium transition-colors",
+                    showRecs
+                      ? "text-amber-foreground bg-amber/20 border-amber/40"
+                      : "text-amber-foreground/80 bg-amber/8 border-amber/25 hover:bg-amber/20",
+                  )}
+                >
+                  <GraduationCap className="size-3.5" />
+                  Resources
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Recommended learning resources for this goal</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setEditing(true)}
+                  className="size-7 rounded-md border border-primary/20 bg-primary/5 text-primary/80 hover:bg-primary/15 hover:text-primary grid place-items-center transition-colors"
+                  aria-label="Edit goal"
+                >
+                  <Pencil className="size-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Edit goal</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => onDelete(goal.id)}
+                  className="size-7 rounded-md border border-rag-red/20 bg-rag-red/5 text-rag-red/70 hover:bg-rag-red/15 hover:text-rag-red grid place-items-center transition-colors"
+                  aria-label="Remove goal"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Remove goal</TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
       </div>
 
-      {/* Completed badge */}
+      {/* Completed badge + certificate submission */}
       {goal.completed && (
-        <div className="flex items-center gap-1.5 text-xs text-rag-green">
-          <CheckCircle2 className="size-3.5" />
-          <span>Completed</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 text-xs text-rag-green">
+            <CheckCircle2 className="size-3.5" />
+            <span>Completed</span>
+          </div>
+          {certificate && (
+            <a
+              href={certificate.objectUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary underline underline-offset-2 transition-colors"
+            >
+              <FileCheck2 className="size-3" /> {certificate.fileName}
+            </a>
+          )}
+          {canSubmitForApproval && (
+            <button
+              onClick={handleSubmitForApproval}
+              className="flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/25 hover:bg-primary/20 transition-colors"
+            >
+              <Upload className="size-3" /> Submit for Manager Approval
+            </button>
+          )}
+          {alreadySubmitted && (
+            <span className="text-[11px] text-amber-foreground/80">
+              {verifiedSkillTitles.includes(goal.title) ? "Verified on your skills profile" : "Pending manager approval"}
+            </span>
+          )}
         </div>
+      )}
+      {showAttachModal && (
+        <SkillAttachmentModal
+          skillName={goal.title}
+          onSubmit={handleCertificateUpload}
+          onClose={() => setShowAttachModal(false)}
+          submitLabel="Mark Complete"
+        />
       )}
 
       {/* Manager's Feedback & Recommendations */}
@@ -886,7 +1105,7 @@ function DevGoalCard({
         <div className="rounded-xl border border-primary/20 bg-gradient-to-b from-primary/5 to-transparent p-4 space-y-2 animate-in slide-in-from-top-1 duration-150">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Sparkles className="size-3.5 text-primary shrink-0" />
+              <MessageSquare className="size-3.5 text-primary shrink-0" />
               <div className="text-xs font-semibold text-primary">Manager's Feedback & Recommendations</div>
             </div>
             {memberId && !acknowledgedManagerInputs[`${memberId}:${goal.id}`] && (
@@ -912,7 +1131,7 @@ function DevGoalCard({
         <div className="rounded-xl border border-amber/20 bg-gradient-to-b from-amber/5 to-transparent p-4 space-y-3 animate-in slide-in-from-top-1 duration-150">
           <div className="flex items-center gap-2">
             <Sparkles className="size-3.5 text-amber shrink-0" />
-            <div className="text-xs font-semibold">Pulse AI · Personalised L&D Recommendations</div>
+            <div className="text-xs font-semibold">Personalised Learning Recommendations</div>
             {loadingRecs && <Loader2 className="size-3 text-muted-foreground animate-spin ml-auto" />}
             <button onClick={() => setShowRecs(false)} className="ml-auto size-5 rounded grid place-items-center hover:bg-muted">
               <X className="size-3 text-muted-foreground" />
@@ -929,7 +1148,7 @@ function DevGoalCard({
               </div>
             </div>
           ) : recs ? (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
                   <div className="size-1.5 rounded-full bg-primary" /> Internal Resources
@@ -970,20 +1189,24 @@ function DevGoalCard({
 
 // ── Shared "Propose Performance Goal" form ──────────────────────────────────────
 // Performance goals: min 3, max 5. Submitted as pending — awaiting manager approval.
+const PERF_GOAL_MIN = 3;
 const PERF_GOAL_MAX = 5;
 
 function AddPerfGoalForm({
   onAdd,
   onCancel,
+  departmentGoals,
 }: {
-  onAdd: (g: { title: string; description: string; metric: string }) => void;
+  onAdd: (g: { title: string; description: string; metric: string; linkedDept: string }) => void;
   onCancel: () => void;
+  departmentGoals: DeptGoalsList;
 }) {
-  const [newGoal, setNewGoal] = useState({ title: "", description: "", metric: "" });
+  const [newGoal, setNewGoal] = useState({ title: "", description: "", metric: "", linkedDept: "" });
+  const okrOptions = flattenOkrOptions(departmentGoals);
 
   const handleAdd = () => {
-    if (!newGoal.title.trim() || !newGoal.metric.trim()) return;
-    onAdd({ title: newGoal.title.trim(), description: newGoal.description.trim(), metric: newGoal.metric.trim() });
+    if (!newGoal.title.trim() || !newGoal.metric.trim() || !newGoal.linkedDept) return;
+    onAdd({ title: newGoal.title.trim(), description: newGoal.description.trim(), metric: newGoal.metric.trim(), linkedDept: newGoal.linkedDept });
   };
 
   return (
@@ -1018,12 +1241,23 @@ function AddPerfGoalForm({
           className="w-full mt-1 text-sm rounded-lg border border-input bg-background px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
+      <div>
+        <label className="text-[10px] uppercase tracking-widest text-muted-foreground">Objective / Key Result Linkage <span className="text-rag-red">*</span></label>
+        <select
+          value={newGoal.linkedDept}
+          onChange={(e) => setNewGoal((d) => ({ ...d, linkedDept: e.target.value }))}
+          className="w-full mt-1 text-sm rounded-lg border border-input bg-background px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="" disabled>Select an objective or key result…</option>
+          {okrOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+        </select>
+      </div>
       <div className="rounded-lg bg-muted/40 border border-border px-3 py-2 text-xs text-muted-foreground">
-        Submitted goals await your manager's approval. The department goal and weightage are set during review.
+        Submitted goals await your manager's approval. Weightage is set during review.
         Progress remarks can be added once the goal is approved.
       </div>
       <div className="flex gap-2">
-        <button onClick={handleAdd} disabled={!newGoal.title.trim() || !newGoal.metric.trim()} className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50">
+        <button onClick={handleAdd} disabled={!newGoal.title.trim() || !newGoal.metric.trim() || !newGoal.linkedDept} className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50">
           Submit for Approval
         </button>
         <button onClick={onCancel} className="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted">
@@ -1052,8 +1286,8 @@ function AddDevGoalForm({
   };
 
   return (
-    <Card className="space-y-3 border-dashed border-primary/40 bg-primary/5">
-      <div className="text-sm font-semibold text-primary">New Development Goal</div>
+    <Card className="space-y-3 border-dashed border-amber/40 bg-amber/5">
+      <div className="text-sm font-semibold text-amber-foreground">New Development Goal</div>
       <div>
         <label className="text-[10px] uppercase tracking-widest text-muted-foreground">Title</label>
         <input
@@ -1081,11 +1315,835 @@ function AddDevGoalForm({
         </div>
       </div>
       <div className="flex gap-2">
-        <button onClick={handleAdd} disabled={!newGoal.title.trim()} className="text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50">
+        <button onClick={handleAdd} disabled={!newGoal.title.trim()} className="text-xs px-3 py-1.5 rounded-md bg-amber text-amber-foreground font-medium hover:opacity-90 disabled:opacity-50">
           Add Goal
         </button>
         <button onClick={onCancel} className="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted">
           Cancel
+        </button>
+      </div>
+    </Card>
+  );
+}
+
+// ── Recommended development goal — awaiting the team member's acknowledge/decline ──────────────
+
+function RecommendedDevGoalCard({ rec, memberId }: { rec: DevGoalRecommendation; memberId: string }) {
+  const { acknowledgeDevGoalRec, declineDevGoalRec } = useApp();
+  const [declining, setDeclining] = useState(false);
+  const [reason, setReason] = useState("");
+
+  const daysElapsed = workingDaysSince(rec.recommendedDate);
+  const daysLeft = 7 - daysElapsed;
+  const isOverdue = daysElapsed >= 7;
+
+  const handleAcknowledge = () => {
+    acknowledgeDevGoalRec(memberId, rec.id);
+    toast.success(`"${rec.title}" added to your development goals`);
+  };
+
+  const handleDecline = () => {
+    if (!reason.trim()) return;
+    declineDevGoalRec(memberId, rec.id, reason.trim());
+    toast.success("Recommendation declined — your response has been shared");
+  };
+
+  return (
+    <Card className="space-y-3 border-dashed border-amber/50 bg-amber/5">
+      <div className="flex items-center gap-2">
+        <GraduationCap className="size-4 text-amber-foreground shrink-0" />
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-amber-foreground">Recommended for you</span>
+      </div>
+      <div>
+        <div className="font-medium">{rec.title}</div>
+        {rec.description && <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">{rec.description}</p>}
+        <div className="text-xs text-muted-foreground mt-1.5">
+          Recommended by <span className="font-medium text-foreground/80">{rec.recommendedBy}</span>
+          {rec.dueDate && <> · Target: {formatDueDate(rec.dueDate)}</>}
+        </div>
+      </div>
+
+      <div className={cn(
+        "flex items-center gap-2 px-3 py-2 rounded-lg text-xs",
+        isOverdue ? "bg-rag-red/10 text-rag-red border border-rag-red/25" : "bg-muted/50 text-muted-foreground"
+      )}>
+        <Clock className="size-3.5 shrink-0" />
+        {rec.penaltyApplied
+          ? <>Response overdue — a 5-point penalty has been applied for not responding within 7 working days.</>
+          : isOverdue
+          ? <>Response overdue — a 5-point penalty will be applied shortly.</>
+          : <>Respond within {daysLeft} more working day{daysLeft !== 1 ? "s" : ""}, or a 5-point penalty will apply.</>}
+      </div>
+
+      {!declining ? (
+        <div className="flex gap-2">
+          <button onClick={handleAcknowledge} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-rag-green text-white hover:opacity-90 font-medium transition-opacity">
+            <ThumbsUp className="size-3.5" /> Acknowledge
+          </button>
+          <button onClick={() => setDeclining(true)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-rag-red/30 text-rag-red hover:bg-rag-red/10 transition-colors">
+            <ThumbsDown className="size-3.5" /> Decline
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2 rounded-lg border border-rag-red/25 bg-rag-red/5 p-3 animate-in slide-in-from-top-1 duration-150">
+          <label className="text-[10px] font-semibold uppercase tracking-widest text-rag-red">Reason or counter-suggestion (required)</label>
+          <textarea
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            rows={3}
+            autoFocus
+            placeholder="Why doesn't this fit, or what would you suggest instead?"
+            className="w-full text-sm rounded-lg border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+          />
+          <div className="flex gap-2">
+            <button onClick={handleDecline} disabled={!reason.trim()} className="text-xs px-3 py-1.5 rounded-md bg-rag-red text-white hover:opacity-90 disabled:opacity-40 font-medium transition-opacity">
+              Submit Decline
+            </button>
+            <button onClick={() => { setDeclining(false); setReason(""); }} className="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// A HOD/direct leave supervisor's recommended *performance* goal — distinct from an Objective/KR
+// appointment. Accepting only publishes it to this read-only list; it never appoints the member as
+// an owner of whatever `linkedTo` references (linkage is shown for context only).
+function RecommendedPerfGoalCard({ rec, memberId, departmentGoals }: { rec: PerfGoalRecommendation; memberId: string; departmentGoals: DeptGoal[] }) {
+  const { acknowledgePerfGoalRec, declinePerfGoalRec } = useApp();
+  const [declining, setDeclining] = useState(false);
+  const [reason, setReason] = useState("");
+
+  const daysElapsed = workingDaysSince(rec.recommendedDate);
+  const daysLeft = 7 - daysElapsed;
+  const isOverdue = daysElapsed >= 7;
+  const linkedLabel = rec.linkedTo ? flattenOkrOptions(departmentGoals).find(o => o.id === rec.linkedTo)?.label : undefined;
+
+  const handleAcknowledge = () => {
+    acknowledgePerfGoalRec(memberId, rec.id);
+    toast.success(`"${rec.title}" added to your performance goals`);
+  };
+
+  const handleDecline = () => {
+    if (!reason.trim()) return;
+    declinePerfGoalRec(memberId, rec.id, reason.trim());
+    toast.success("Recommendation declined — your response has been shared");
+  };
+
+  return (
+    <Card className="space-y-3 border-dashed border-primary/40 bg-primary/5">
+      <div className="flex items-center gap-2">
+        <Target className="size-4 text-primary shrink-0" />
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-primary">Recommended for you</span>
+      </div>
+      <div>
+        <div className="font-medium">{rec.title}</div>
+        {rec.description && <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">{rec.description}</p>}
+        <div className="text-xs text-muted-foreground mt-1.5">
+          Recommended by <span className="font-medium text-foreground/80">{rec.recommendedBy}</span>
+          {rec.dueDate && <> · Due {formatDueDate(rec.dueDate)}</>}
+        </div>
+        {linkedLabel && (
+          <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+            <ChevronRight className="size-3" /> Linked to: <span className="font-medium text-foreground/80">{linkedLabel}</span>
+          </div>
+        )}
+      </div>
+
+      <div className={cn(
+        "flex items-center gap-2 px-3 py-2 rounded-lg text-xs",
+        isOverdue ? "bg-rag-red/10 text-rag-red border border-rag-red/25" : "bg-muted/50 text-muted-foreground"
+      )}>
+        <Clock className="size-3.5 shrink-0" />
+        {rec.penaltyApplied
+          ? <>Response overdue — a 5-point penalty has been applied for not responding within 7 working days.</>
+          : isOverdue
+          ? <>Response overdue — a 5-point penalty will be applied shortly.</>
+          : <>Respond within {daysLeft} more working day{daysLeft !== 1 ? "s" : ""}, or a 5-point penalty will apply.</>}
+      </div>
+
+      {!declining ? (
+        <div className="flex gap-2">
+          <button onClick={handleAcknowledge} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-rag-green text-white hover:opacity-90 font-medium transition-opacity">
+            <ThumbsUp className="size-3.5" /> Acknowledge
+          </button>
+          <button onClick={() => setDeclining(true)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-rag-red/30 text-rag-red hover:bg-rag-red/10 transition-colors">
+            <ThumbsDown className="size-3.5" /> Decline
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2 rounded-lg border border-rag-red/25 bg-rag-red/5 p-3 animate-in slide-in-from-top-1 duration-150">
+          <label className="text-[10px] font-semibold uppercase tracking-widest text-rag-red">Reason or counter-suggestion (required)</label>
+          <textarea
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            rows={3}
+            autoFocus
+            placeholder="Why doesn't this fit, or what would you suggest instead?"
+            className="w-full text-sm rounded-lg border border-input bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+          />
+          <div className="flex gap-2">
+            <button onClick={handleDecline} disabled={!reason.trim()} className="text-xs px-3 py-1.5 rounded-md bg-rag-red text-white hover:opacity-90 disabled:opacity-40 font-medium transition-opacity">
+              Submit Decline
+            </button>
+            <button onClick={() => { setDeclining(false); setReason(""); }} className="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-muted">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// A performance goal recommendation the member has already acknowledged — a lightweight, read-only
+// reference card (not an Objective/KR the member owns, just a suggestion they accepted).
+function AcknowledgedPerfGoalCard({ rec, departmentGoals }: { rec: PerfGoalRecommendation; departmentGoals: DeptGoal[] }) {
+  const linkedLabel = rec.linkedTo ? flattenOkrOptions(departmentGoals).find(o => o.id === rec.linkedTo)?.label : undefined;
+  return (
+    <Card className="space-y-1.5 border-border/60">
+      <div className="flex items-center gap-2">
+        <Target className="size-3.5 text-muted-foreground shrink-0" />
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Recommended Goal</span>
+      </div>
+      <div className="font-medium text-sm">{rec.title}</div>
+      {rec.description && <p className="text-xs text-muted-foreground leading-relaxed">{rec.description}</p>}
+      <div className="text-xs text-muted-foreground">
+        Recommended by <span className="font-medium text-foreground/80">{rec.recommendedBy}</span>
+        {rec.dueDate && <> · Due {formatDueDate(rec.dueDate)}</>}
+      </div>
+      {linkedLabel && (
+        <div className="text-xs text-muted-foreground flex items-center gap-1">
+          <ChevronRight className="size-3" /> Linked to: <span className="font-medium text-foreground/80">{linkedLabel}</span>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ── Performance goal card — a Key Result owned by this member, linked to a department/team
+// Objective. Replaces the old individually-created Goal cards; every performance goal is now a
+// Key Result assigned by the HOD, not self-proposed. ────────────────────────────────────────────
+
+function MyKeyResultCard({ kr, objective, isOps, viewerName }: { kr: KeyResult; objective: DeptGoal; isOps: boolean; viewerName: string }) {
+  const {
+    updateKeyResultConfidence, submitKeyResultScore, acknowledgeOkrItem, proposeOkrCounter, agreeCoOwnerConfidence, agreeCoOwnerScore, focusObjective,
+    respondToChallengeRemark, acknowledgeChallengeResponse, respondToScoreRemark, acknowledgeScoreResponse,
+  } = useApp();
+  const [ackChecked, setAckChecked] = useState(false);
+  const [countering, setCountering] = useState(false);
+  const [counterTitle, setCounterTitle] = useState("");
+  const [counterDueDate, setCounterDueDate] = useState("");
+  const [scoreDraft, setScoreDraft] = useState(kr.score !== undefined ? String(kr.score) : "");
+  const [requestingMod, setRequestingMod] = useState(false);
+  const [modTitle, setModTitle] = useState("");
+  const [modDueDate, setModDueDate] = useState("");
+  // Same mandatory-challenge-on-red/amber pattern as TeamSection's KeyResultRow — this is the other
+  // place a KR owner can submit their own monthly confidence, so it needs the same gate or the
+  // requirement would be trivially bypassable by using My Goals instead of Team OKRs.
+  const [pendingConfidenceChoice, setPendingConfidenceChoice] = useState<RAG | null>(null);
+  const [challengeDraft, setChallengeDraft] = useState("");
+  const [respondingToChallenge, setRespondingToChallenge] = useState(false);
+  const [challengeResponseDraft, setChallengeResponseDraft] = useState("");
+  const [draftingAiResponse, setDraftingAiResponse] = useState(false);
+  const [aiDraftUsed, setAiDraftUsed] = useState(false);
+  // Same pattern again, for a below-green (<0.7) Quarterly Score submission instead of confidence.
+  const [pendingScoreValue, setPendingScoreValue] = useState<number | null>(null);
+  const [scoreRemarkDraft, setScoreRemarkDraft] = useState("");
+  const [respondingToScoreRemark, setRespondingToScoreRemark] = useState(false);
+  const [scoreResponseDraft, setScoreResponseDraft] = useState("");
+  const [draftingAiScoreResponse, setDraftingAiScoreResponse] = useState(false);
+  const [aiScoreDraftUsed, setAiScoreDraftUsed] = useState(false);
+  const objKeyResults = objective.keyResults ?? [];
+  const isPendingForViewer = isPendingAckFor(kr, viewerName);
+  const coOwnerConfPending = kr.pendingCoOwnerConfidence;
+  const coOwnerScorePending = kr.pendingCoOwnerScore;
+  const iAmConfProposer = coOwnerConfPending?.proposedBy === viewerName;
+  const iAmScoreProposer = coOwnerScorePending?.proposedBy === viewerName;
+  const otherOwners = ownerNames(kr.owner).filter(n => n !== viewerName).join(", ");
+  const overdue = isKrOverdue(kr);
+  const owesChallengeResponse = (kr.pendingChallengeResponseFor ?? []).includes(viewerName);
+  const owesChallengeAck = !!kr.pendingChallengeAckByOwner;
+  const owesScoreResponse = (kr.pendingScoreResponseFor ?? []).includes(viewerName);
+  const owesScoreAck = !!kr.pendingScoreAckByOwner;
+  const hasActionNeeded = owesChallengeResponse || owesChallengeAck || owesScoreResponse || owesScoreAck;
+
+  const handleConfidenceChange = (value: RAG) => {
+    if (value === "green") {
+      updateKeyResultConfidence(objective.id, kr.id, value, viewerName, isOps);
+      toast.success(ownerNames(kr.owner).length > 1 ? "Confidence proposed — your co-owner will be asked to agree or counter" : "Confidence updated — you can request a modification below if needed");
+      return;
+    }
+    setPendingConfidenceChoice(value);
+    setChallengeDraft("");
+  };
+  const submitPendingConfidence = () => {
+    if (!pendingConfidenceChoice) return;
+    if (!challengeDraft.trim()) { toast.error("Share a quick note on the challenge or bottleneck before submitting"); return; }
+    updateKeyResultConfidence(objective.id, kr.id, pendingConfidenceChoice, viewerName, isOps, challengeDraft.trim());
+    toast.success(ownerNames(kr.owner).length > 1 ? "Confidence proposed and challenge shared — your co-owner will be asked to agree or counter" : "Confidence updated — your HOD and objective owner have been notified");
+    setPendingConfidenceChoice(null);
+    setChallengeDraft("");
+  };
+  const draftAiChallengeResponse = () => {
+    if (!kr.challengeRemark) return;
+    setDraftingAiResponse(true);
+    setTimeout(() => {
+      const urgent = kr.challengeRemark!.rag === "red";
+      const snippet = kr.challengeRemark!.text.length > 70 ? `${kr.challengeRemark!.text.slice(0, 70)}…` : kr.challengeRemark!.text;
+      setChallengeResponseDraft(
+        `Thanks for flagging this${urgent ? " — since this is Red, let's prioritise unblocking it this week" : ", let's get ahead of it before it slips further"}. On "${snippet}": suggest (1) a short sync to unpack the specific blocker, (2) naming the one thing that would unstick it fastest, and (3) revisiting confidence once that's resolved. Let me know if you need me to loop in anyone else.`
+      );
+      setAiDraftUsed(true);
+      setDraftingAiResponse(false);
+    }, 900);
+  };
+  const handleScoreSubmit = (n: number) => {
+    if (n >= 0.7) {
+      submitKeyResultScore(objective.id, kr.id, n, viewerName, isOps);
+      toast.success(ownerNames(kr.owner).length > 1 ? "Score proposed — your co-owner will be asked to agree or counter" : "Key result scored");
+      setPendingScoreValue(null);
+      setScoreRemarkDraft("");
+      return;
+    }
+    setPendingScoreValue(n);
+    setScoreRemarkDraft("");
+  };
+  const submitPendingScore = () => {
+    if (pendingScoreValue === null) return;
+    if (!scoreRemarkDraft.trim()) { toast.error("Add a rationale — challenges, bottlenecks, or support needed — before submitting"); return; }
+    submitKeyResultScore(objective.id, kr.id, pendingScoreValue, viewerName, isOps, scoreRemarkDraft.trim());
+    toast.success(ownerNames(kr.owner).length > 1 ? "Score proposed and rationale shared — your co-owner will be asked to agree or counter" : "Score submitted — your HOD and objective owner have been notified");
+    setPendingScoreValue(null);
+    setScoreRemarkDraft("");
+  };
+  const draftAiScoreResponse = () => {
+    if (!kr.scoreRemark) return;
+    setDraftingAiScoreResponse(true);
+    setTimeout(() => {
+      const snippet = kr.scoreRemark!.text.length > 70 ? `${kr.scoreRemark!.text.slice(0, 70)}…` : kr.scoreRemark!.text;
+      setScoreResponseDraft(
+        `Thanks for the context on the ${kr.scoreRemark!.score.toFixed(1)} score. On "${snippet}": suggest (1) a short retro on what specifically fell short this quarter, (2) agreeing 1-2 concrete support actions before next quarter's cycle, and (3) a check-in mid-quarter so this doesn't repeat. Let me know if you need me to loop in anyone else.`
+      );
+      setAiScoreDraftUsed(true);
+      setDraftingAiScoreResponse(false);
+    }, 900);
+  };
+
+  return (
+    <Card className={cn(
+      "space-y-4",
+      isPendingForViewer ? "border-amber-300/60 bg-amber-50/30 dark:bg-amber-900/10"
+        : hasActionNeeded ? "border-amber-400/70 bg-amber-50/60 dark:bg-amber-900/15 ring-1 ring-amber-300/60 dark:ring-amber-700/40"
+        : overdue ? "border-rag-red/50 bg-rag-red/5 dark:bg-rag-red/10" : undefined
+    )}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-base leading-snug">{kr.title}</div>
+          {/* Small clarifying line — this performance goal is a Key Result, not a directly-assigned
+              Objective, so it's explicit what it means and where it fits. */}
+          <div className="text-[11px] text-muted-foreground mt-0.5">
+            Key Result — contributes to a {objective.level === "team" ? "team" : "department"} objective
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap mt-2">
+            <button
+              onClick={() => focusObjective(objective.id, false)}
+              title="Go to this objective on the Team OKRs page"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/8 border border-primary/15 text-xs font-medium text-primary hover:bg-primary/15 transition-colors"
+            >
+              <Target className="size-3 shrink-0" />
+              Contributes to: {objective.title}
+            </button>
+            <button
+              onClick={() => focusObjective(objective.id, true)}
+              title="View this objective's full list of key results on the Team OKRs page"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/8 border border-violet-500/20 text-xs font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-500/15 transition-colors"
+            >
+              <ListChecks className="size-3 shrink-0" />
+              View all Key Results ({objKeyResults.length})
+            </button>
+          </div>
+          {kr.dueDate && <div className={cn("text-xs mt-1.5", overdue ? "text-rag-red font-semibold" : "text-muted-foreground")}>Due {formatDueDate(kr.dueDate)}{overdue && " — overdue"}</div>}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="text-[9px] uppercase tracking-wide text-muted-foreground">Confidence</span>
+            <RagPill rag={kr.ragConfidence} />
+          </div>
+          {kr.score !== undefined && (
+            <div className="flex flex-col items-end gap-0.5">
+              <span className="text-[9px] uppercase tracking-wide text-muted-foreground">Score</span>
+              <span className={cn("text-xs font-semibold text-primary rounded px-1", isPendingForViewer && kr.pendingChangeType === "hodScore" && "ring-2 ring-amber-400 bg-amber-50 dark:bg-amber-900/20")}>
+                {kr.score.toFixed(1)}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Ack-or-counterpropose */}
+      {isPendingForViewer && !kr.counterProposal && (
+        <div className="rounded-lg border border-amber-300/50 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-700/30 p-3 space-y-2">
+          <div className="text-xs text-amber-800 dark:text-amber-300">
+            {kr.pendingChangeType === "hodScore"
+              ? <>Your HOD set the quarterly score to <strong>{kr.score?.toFixed(1)}</strong>. Please review and acknowledge.</>
+              : kr.pendingChangeType === "hodEdit"
+              ? <>Your HOD updated this key result. Please review and acknowledge.</>
+              : <>You've been appointed owner of this key result. Guidelines: update your RAG confidence by {formatMonthlyConfidenceDueDate()} every month, and score it by {formatEffectiveKrScoreDueDate(kr)}.</>}
+          </div>
+          {kr.lastCounterRejection && (
+            <div className="text-xs text-rag-red/90 bg-rag-red/5 border border-rag-red/20 rounded-md px-2 py-1.5">
+              Your counterproposal was declined{kr.lastCounterRejection.reason ? <>: "{kr.lastCounterRejection.reason}"</> : "."} You can re-acknowledge the original appointment above, or counterpropose again.
+            </div>
+          )}
+          {!countering ? (
+            <>
+              <label className="flex items-center gap-1.5 text-xs">
+                <input type="checkbox" checked={ackChecked} onChange={e => setAckChecked(e.target.checked)} className="rounded" />
+                I acknowledge these guidelines
+              </label>
+              <div className="flex gap-2">
+                <button
+                  disabled={!ackChecked}
+                  onClick={() => { acknowledgeOkrItem(objective.id, kr.id, viewerName, isOps); toast.success("Appointment acknowledged"); }}
+                  className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Accept Appointment
+                </button>
+                <button onClick={() => setCountering(true)} className="px-3 py-1.5 rounded-md border border-border text-xs">Counterpropose</button>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <div>
+                <label className="text-[10px] text-muted-foreground">Suggest alternative wording (optional)</label>
+                <input
+                  value={counterTitle}
+                  onChange={e => setCounterTitle(e.target.value)}
+                  className="w-full text-sm rounded-lg border border-input bg-background px-3 py-1.5"
+                  placeholder="Suggest an alternative key result…"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">Suggest alternative due date (optional)</label>
+                <input type="date" value={counterDueDate} onChange={e => setCounterDueDate(e.target.value)} className="text-sm rounded-lg border border-input bg-background px-3 py-1.5" />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    if (!counterTitle.trim() && !counterDueDate) { toast.error("Suggest a different title, a different due date, or both"); return; }
+                    proposeOkrCounter(objective.id, kr.id, { title: counterTitle.trim() || undefined, dueDate: counterDueDate || undefined }, isOps, viewerName);
+                    setCountering(false);
+                    toast.success("Counterproposal sent to your HOD for review");
+                  }}
+                  className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium"
+                >
+                  Submit Counterproposal
+                </button>
+                <button onClick={() => setCountering(false)} className="px-3 py-1.5 rounded-md border border-border text-xs">Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {kr.counterProposal && (
+        <div className="rounded-lg border border-violet-300/50 bg-violet-50/50 dark:bg-violet-900/10 p-3 text-xs text-violet-800 dark:text-violet-300">
+          Your proposal{kr.counterProposal.title && <> — title "{kr.counterProposal.title}"</>}{kr.counterProposal.dueDate && <> — due date {new Date(kr.counterProposal.dueDate).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" })}</>} is awaiting your HOD's review.
+        </div>
+      )}
+
+      {/* Challenge thread — the mandatory red/amber remark you shared, and your HOD's/objective
+          owner's response (manual or Pulse-AI-drafted), which you need to acknowledge. */}
+      {kr.challengeRemark && (
+        <div className="rounded-lg border border-amber-300/50 bg-amber-50/40 dark:bg-amber-900/10 dark:border-amber-700/30 p-3 space-y-2">
+          <div className="flex items-center gap-1.5">
+            <RagDot rag={kr.challengeRemark.rag} />
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-amber-800 dark:text-amber-300">Your Challenge · {kr.challengeRemark.date}</span>
+          </div>
+          <p className="text-xs text-foreground/85 leading-relaxed">&ldquo;{kr.challengeRemark.text}&rdquo;</p>
+          {kr.challengeResponse && (
+            <div className="rounded-md border border-primary/25 bg-primary/5 p-2 space-y-1">
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-primary">
+                {kr.challengeResponse.respondedBy}'s response{kr.challengeResponse.isAI && <span className="normal-case font-medium text-muted-foreground">(Pulse AI-assisted)</span>}
+              </div>
+              <p className="text-xs text-foreground/85 leading-relaxed">{kr.challengeResponse.text}</p>
+            </div>
+          )}
+          {owesChallengeAck && (
+            <button
+              onClick={() => { acknowledgeChallengeResponse(objective.id, kr.id, isOps); toast.success("Acknowledged"); }}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500 text-white text-[11px] font-semibold"
+            >
+              <ActionNeededIcon size={13} title="Acknowledge" /> Acknowledge This Response
+            </button>
+          )}
+          {owesChallengeResponse && (
+            respondingToChallenge ? (
+              <div className="space-y-1.5">
+                <textarea
+                  value={challengeResponseDraft}
+                  onChange={e => setChallengeResponseDraft(e.target.value)}
+                  rows={3}
+                  placeholder="Share an action plan or resources to help unblock this…"
+                  className="w-full text-xs rounded-md border border-input bg-background px-2 py-1.5"
+                />
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={draftAiChallengeResponse}
+                    disabled={draftingAiResponse}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-primary/30 bg-primary/5 text-primary text-[11px] font-medium disabled:opacity-50"
+                  >
+                    {draftingAiResponse ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+                    Ask Pulse AI to help draft this
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!challengeResponseDraft.trim()) { toast.error("Add a response before sending"); return; }
+                      respondToChallengeRemark(objective.id, kr.id, challengeResponseDraft.trim(), viewerName, isOps, aiDraftUsed);
+                      toast.success(`${kr.owner.split(",")[0].trim()} will be notified to acknowledge`);
+                      setRespondingToChallenge(false);
+                      setChallengeResponseDraft("");
+                      setAiDraftUsed(false);
+                    }}
+                    className="px-2.5 py-1 rounded-md bg-primary text-primary-foreground text-[11px] font-medium"
+                  >
+                    Send Response
+                  </button>
+                  <button onClick={() => { setRespondingToChallenge(false); setChallengeResponseDraft(""); setAiDraftUsed(false); }} className="px-2.5 py-1 rounded-md border border-border text-[11px]">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setRespondingToChallenge(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500 text-white text-[11px] font-semibold"
+              >
+                <ActionNeededIcon size={13} title="Respond" /> Respond to This Challenge
+              </button>
+            )
+          )}
+        </div>
+      )}
+
+      {/* Score-remark thread — same shape as the challenge thread above, for a below-green (<0.7)
+          Quarterly Score's mandatory rationale instead of a red/amber Monthly Confidence. */}
+      {kr.scoreRemark && (
+        <div className="rounded-lg border border-amber-300/50 bg-amber-50/40 dark:bg-amber-900/10 dark:border-amber-700/30 p-3 space-y-2">
+          <div className="flex items-center gap-1.5">
+            <RagDot rag={scoreToRag(kr.scoreRemark.score)} />
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-amber-800 dark:text-amber-300">Your Score Rationale ({kr.scoreRemark.score.toFixed(1)}) · {kr.scoreRemark.date}</span>
+          </div>
+          <p className="text-xs text-foreground/85 leading-relaxed">&ldquo;{kr.scoreRemark.text}&rdquo;</p>
+          {kr.scoreResponse && (
+            <div className="rounded-md border border-primary/25 bg-primary/5 p-2 space-y-1">
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-primary">
+                {kr.scoreResponse.respondedBy}'s response{kr.scoreResponse.isAI && <span className="normal-case font-medium text-muted-foreground">(Pulse AI-assisted)</span>}
+              </div>
+              <p className="text-xs text-foreground/85 leading-relaxed">{kr.scoreResponse.text}</p>
+            </div>
+          )}
+          {owesScoreAck && (
+            <button
+              onClick={() => { acknowledgeScoreResponse(objective.id, kr.id, isOps); toast.success("Acknowledged"); }}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500 text-white text-[11px] font-semibold"
+            >
+              <ActionNeededIcon size={13} title="Acknowledge" /> Acknowledge This Response
+            </button>
+          )}
+          {owesScoreResponse && (
+            respondingToScoreRemark ? (
+              <div className="space-y-1.5">
+                <textarea
+                  value={scoreResponseDraft}
+                  onChange={e => setScoreResponseDraft(e.target.value)}
+                  rows={3}
+                  placeholder="Share an action plan or resources to help close the gap next quarter…"
+                  className="w-full text-xs rounded-md border border-input bg-background px-2 py-1.5"
+                />
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={draftAiScoreResponse}
+                    disabled={draftingAiScoreResponse}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-primary/30 bg-primary/5 text-primary text-[11px] font-medium disabled:opacity-50"
+                  >
+                    {draftingAiScoreResponse ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+                    Ask Pulse AI to help draft this
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!scoreResponseDraft.trim()) { toast.error("Add a response before sending"); return; }
+                      respondToScoreRemark(objective.id, kr.id, scoreResponseDraft.trim(), viewerName, isOps, aiScoreDraftUsed);
+                      toast.success(`${kr.owner.split(",")[0].trim()} will be notified to acknowledge`);
+                      setRespondingToScoreRemark(false);
+                      setScoreResponseDraft("");
+                      setAiScoreDraftUsed(false);
+                    }}
+                    className="px-2.5 py-1 rounded-md bg-primary text-primary-foreground text-[11px] font-medium"
+                  >
+                    Send Response
+                  </button>
+                  <button onClick={() => { setRespondingToScoreRemark(false); setScoreResponseDraft(""); setAiScoreDraftUsed(false); }} className="px-2.5 py-1 rounded-md border border-border text-[11px]">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setRespondingToScoreRemark(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500 text-white text-[11px] font-semibold"
+              >
+                <ActionNeededIcon size={13} title="Respond" /> Respond to This Rationale
+              </button>
+            )
+          )}
+        </div>
+      )}
+
+      {/* Monthly confidence + quarterly score */}
+      {!isPendingForViewer && (
+        <div className="space-y-2 pt-3 border-t border-border/60">
+          <div className="flex items-center gap-2 flex-wrap">
+            <label className="text-xs font-medium text-foreground/70 shrink-0">Monthly Confidence</label>
+            {coOwnerConfPending ? (
+              iAmConfProposer ? (
+                <span className="text-xs text-muted-foreground italic">You proposed {coOwnerConfPending.rag} — awaiting {otherOwners || "your co-owner"} to respond</span>
+              ) : (
+                <div className="w-full rounded-md border border-violet-300/50 bg-violet-50/50 dark:bg-violet-900/10 p-2 space-y-1.5">
+                  <div className="text-xs text-violet-800 dark:text-violet-300">{coOwnerConfPending.proposedBy} proposed confidence: <strong>{coOwnerConfPending.rag}</strong> — agree or suggest a different value.</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button onClick={() => { agreeCoOwnerConfidence(objective.id, kr.id, isOps); toast.success("Confidence finalized"); }} className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium">Agree</button>
+                    <select
+                      defaultValue=""
+                      onChange={e => { if (!e.target.value) return; handleConfidenceChange(e.target.value as RAG); }}
+                      className="text-xs rounded-md border border-input bg-background px-2 py-1"
+                    >
+                      <option value="" disabled>Suggest a different value…</option>
+                      <option value="green">Green — 0.7–1.0, on track</option>
+                      <option value="amber">Amber — 0.4–0.6, at risk</option>
+                      <option value="red">Red — below 0.4, off track</option>
+                    </select>
+                  </div>
+                </div>
+              )
+            ) : (
+              <>
+                <RagDot rag={kr.ragConfidence} pulse />
+                <select
+                  value={kr.ragConfidence}
+                  onChange={e => handleConfidenceChange(e.target.value as RAG)}
+                  className="text-xs rounded-md border border-input bg-background px-2 py-1"
+                >
+                  <option value="green">Green — 0.7–1.0, on track</option>
+                  <option value="amber">Amber — 0.4–0.6, at risk</option>
+                  <option value="red">Red — below 0.4, off track</option>
+                </select>
+                <span className="text-[10px] text-muted-foreground">Due by {formatMonthlyConfidenceDueDate()} — no penalty for missing this, it's a soft cadence</span>
+              </>
+            )}
+          </div>
+          {pendingConfidenceChoice && (
+            <div className="rounded-md border border-amber-300/60 bg-amber-50/60 dark:bg-amber-900/15 dark:border-amber-700/40 p-2.5 space-y-1.5">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                <ActionNeededIcon size={14} title="Feedback required" />
+                {pendingConfidenceChoice === "red" ? "Red" : "Amber"} confidence needs a quick note
+              </div>
+              <p className="text-[11px] text-amber-800/90 dark:text-amber-300/90">
+                What's the key challenge or bottleneck here? This goes straight to your HOD and the objective owner so they can help.
+              </p>
+              <textarea
+                autoFocus
+                value={challengeDraft}
+                onChange={e => setChallengeDraft(e.target.value)}
+                rows={2}
+                placeholder="e.g. Waiting on legal sign-off before we can proceed…"
+                className="w-full text-xs rounded-md border border-input bg-background px-2 py-1.5"
+              />
+              <div className="flex gap-1.5">
+                <button onClick={submitPendingConfidence} className="px-2.5 py-1 rounded-md bg-primary text-primary-foreground text-[11px] font-medium">Submit</button>
+                <button onClick={() => { setPendingConfidenceChoice(null); setChallengeDraft(""); }} className="px-2.5 py-1 rounded-md border border-border text-[11px]">Cancel</button>
+              </div>
+            </div>
+          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <label className="text-xs font-medium text-foreground/70 shrink-0">Quarterly OKR Score</label>
+            {coOwnerScorePending ? (
+              iAmScoreProposer ? (
+                <span className="text-xs text-muted-foreground italic">You proposed {coOwnerScorePending.score.toFixed(1)} — awaiting {otherOwners || "your co-owner"} to respond</span>
+              ) : (
+                <div className="w-full rounded-md border border-violet-300/50 bg-violet-50/50 dark:bg-violet-900/10 p-2 space-y-1.5">
+                  <div className="text-xs text-violet-800 dark:text-violet-300">{coOwnerScorePending.proposedBy} proposed a score of <strong>{coOwnerScorePending.score.toFixed(1)}</strong> — agree or suggest a different value.</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button onClick={() => { agreeCoOwnerScore(objective.id, kr.id, isOps); toast.success("Score finalized"); }} className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium">Agree</button>
+                    <input type="number" min={0} max={1} step={0.1} value={scoreDraft} onChange={e => setScoreDraft(stripLeadingZero(clampScoreDecimal(e.target.value)))} placeholder="Different score 0.0–1.0" className="w-28 text-xs rounded-md border border-input bg-background px-2 py-1" />
+                    <button
+                      onClick={() => {
+                        const n = roundToOneDecimal(Number(scoreDraft));
+                        if (Number.isNaN(n) || n < 0 || n > 1) { toast.error("Score must be between 0.0 and 1.0, to 1 decimal place"); return; }
+                        handleScoreSubmit(n);
+                      }}
+                      className="px-2 py-1 rounded-md border border-border text-xs"
+                    >
+                      Suggest
+                    </button>
+                  </div>
+                </div>
+              )
+            ) : kr.score === undefined ? (
+              <>
+                <input
+                  type="number" min={0} max={1} step={0.1}
+                  value={scoreDraft}
+                  onChange={e => setScoreDraft(stripLeadingZero(clampScoreDecimal(e.target.value)))}
+                  placeholder="0.0–1.0"
+                  className="w-24 text-xs rounded-md border border-input bg-background px-2 py-1"
+                />
+                <button
+                  onClick={() => {
+                    const n = roundToOneDecimal(Number(scoreDraft));
+                    if (Number.isNaN(n) || n < 0 || n > 1) { toast.error("Score must be between 0.0 and 1.0, to 1 decimal place"); return; }
+                    handleScoreSubmit(n);
+                  }}
+                  className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium"
+                >
+                  Submit Score
+                </button>
+                <span className={cn("text-[10px]", overdue ? "text-rag-red font-semibold" : "text-muted-foreground")}>Due by {formatEffectiveKrScoreDueDate(kr)}, or a 15-point penalty applies</span>
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground">Scored {kr.score.toFixed(1)} {kr.scoreSubmittedDate ? `on ${kr.scoreSubmittedDate}` : ""}</span>
+            )}
+          </div>
+          {/* Mandatory rationale — a below-green (<0.7) score doesn't write until this is filled in. */}
+          {pendingScoreValue !== null && (
+            <div className="rounded-md border border-amber-300/60 bg-amber-50/60 dark:bg-amber-900/15 dark:border-amber-700/40 p-2.5 space-y-1.5">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                <ActionNeededIcon size={14} title="Rationale required" />
+                A score of {pendingScoreValue.toFixed(1)} needs a quick rationale
+              </div>
+              <p className="text-[11px] text-amber-800/90 dark:text-amber-300/90">
+                What's behind this score — challenges, bottlenecks, or support that would help close the gap? This goes straight to your HOD and the objective owner.
+              </p>
+              <textarea
+                autoFocus
+                value={scoreRemarkDraft}
+                onChange={e => setScoreRemarkDraft(e.target.value)}
+                rows={2}
+                placeholder="e.g. Vendor onboarding took 6 weeks longer than planned…"
+                className="w-full text-xs rounded-md border border-input bg-background px-2 py-1.5"
+              />
+              <div className="flex gap-1.5">
+                <button onClick={submitPendingScore} className="px-2.5 py-1 rounded-md bg-primary text-primary-foreground text-[11px] font-medium">Submit</button>
+                <button onClick={() => { setPendingScoreValue(null); setScoreRemarkDraft(""); }} className="px-2.5 py-1 rounded-md border border-border text-[11px]">Cancel</button>
+              </div>
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground/70 leading-relaxed">
+            Confidence is a forward-looking pulse-check updated monthly (no penalty for missing it); scoring is the retrospective grade on the same 0.0–1.0 scale, submitted once per quarter (penalized if missed) — the two complement each other rather than duplicate. See the Confidence &amp; Scoring Guide above for the full scale.
+          </p>
+          {!kr.counterProposal && (
+            !requestingMod ? (
+              <button onClick={() => setRequestingMod(true)} className="text-xs text-primary font-medium">Request Modification</button>
+            ) : (
+              <div className="space-y-2">
+                <input
+                  value={modTitle}
+                  onChange={e => setModTitle(e.target.value)}
+                  className="w-full text-xs rounded-md border border-input bg-background px-2 py-1.5"
+                  placeholder="Suggested description, timeline, or expected result…"
+                />
+                <input type="date" value={modDueDate} onChange={e => setModDueDate(e.target.value)} className="text-xs rounded-md border border-input bg-background px-2 py-1.5" />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (!modTitle.trim() && !modDueDate) { toast.error("Suggest a different description, a different due date, or both"); return; }
+                      proposeOkrCounter(objective.id, kr.id, { title: modTitle.trim() || undefined, dueDate: modDueDate || undefined }, isOps, viewerName);
+                      setRequestingMod(false);
+                      toast.success("Modification request sent to your HOD for approval");
+                    }}
+                    className="px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium"
+                  >
+                    Send
+                  </button>
+                  <button onClick={() => setRequestingMod(false)} className="px-2.5 py-1.5 rounded-md border border-border text-xs">Cancel</button>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// Owners of an entire Objective (not just one of its Key Results) see it as its own goal card here
+// — a read-only summary (confidence/score are derived roll-ups of the Objective's Key Results, the
+// same values shown on the Team OKRs page; there's no separately-editable Objective-level RAG/score
+// field anywhere else in the app, so this doesn't invent one). "View all Key Results" navigates to
+// the Team OKRs page and expands them there, rather than duplicating that list inline here.
+function MyObjectiveCard({ objective, allDeptGoals }: { objective: DeptGoal; allDeptGoals: DeptGoal[] }) {
+  const { focusObjective } = useApp();
+  const keyResults = objective.keyResults ?? [];
+  const score = objectiveScore(objective);
+  const confidence = keyResults.length > 0 ? objectiveConfidence(objective) : null;
+  // A team-level Objective can itself contribute to a department-level one — surface that linkage
+  // the same way MyKeyResultCard surfaces a Key Result's parent Objective.
+  const linkedToLabel = objective.level === "team" && objective.linkedTo
+    ? flattenOkrOptions(allDeptGoals.filter(g => g.level !== "team")).find(o => o.id === objective.linkedTo)?.label
+    : undefined;
+
+  return (
+    <Card className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <div className={cn("text-[10px] font-bold uppercase tracking-wide", objective.level === "team" ? "text-violet-600 dark:text-violet-400" : "text-primary")}>
+              {objective.level === "team" && objective.teamName ? `${objective.teamName}'s OKRs` : "Department OKRs"}
+            </div>
+            <span className="flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30">
+              <UserCircle2 className="size-2.5" /> You're an owner
+            </span>
+          </div>
+          {/* Small clarifying line — this performance goal is an assigned Objective itself, not a
+              Key Result under one, so it's explicit what it means and where it fits. */}
+          <div className="text-[11px] text-muted-foreground mt-0.5">
+            Assigned {objective.level === "team" ? "team" : "department"} objective — you're the owner, not just a contributor
+          </div>
+          <div className="font-medium text-base leading-snug mt-1">{objective.title}</div>
+          {objective.description && <p className="text-xs text-muted-foreground mt-1">{objective.description}</p>}
+          {objective.dueDate && <div className="text-xs text-muted-foreground mt-1.5">Due {formatDueDate(objective.dueDate)}</div>}
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="flex flex-col items-end gap-0.5">
+            <span className="text-[9px] uppercase tracking-wide text-muted-foreground">Confidence</span>
+            {confidence ? <RagPill rag={confidence} /> : <span className="text-[10px] text-muted-foreground">No key results</span>}
+          </div>
+          {score !== undefined && (
+            <div className="flex flex-col items-end gap-0.5">
+              <span className="text-[9px] uppercase tracking-wide text-muted-foreground">Score</span>
+              <span className="text-xs font-semibold text-primary">{score.toFixed(1)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-border/60">
+        {linkedToLabel && (
+          <button
+            onClick={() => focusObjective(objective.linkedTo!, false)}
+            title="Go to the objective this contributes to, on the Team OKRs page"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/8 border border-primary/15 text-xs font-medium text-primary hover:bg-primary/15 transition-colors"
+          >
+            <Target className="size-3 shrink-0" />
+            Contributes to: {linkedToLabel}
+          </button>
+        )}
+        <button
+          onClick={() => focusObjective(objective.id, true)}
+          title="View this objective's full list of key results on the Team OKRs page"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-500/8 border border-violet-500/20 text-xs font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-500/15 transition-colors"
+        >
+          <ListChecks className="size-3 shrink-0" />
+          View all Key Results ({keyResults.length})
         </button>
       </div>
     </Card>
@@ -1104,12 +2162,13 @@ function StaffGoalsView() {
     staffDevGoals, adminDevGoals,
     upsertStaffDevGoal, deleteStaffDevGoal,
     upsertAdminDevGoal, deleteAdminDevGoal,
-    managerInputs, opsMeta, addPoints, proposeGoal,
+    managerInputs, opsMeta, awardMemberPoints,
     focusedGoalId, setFocusedGoalId,
+    pendingDevGoalRecs, departmentGoals, opsDepartmentGoals,
+    pendingPerfGoalRecs, acknowledgedPerfGoalRecs, skills, setSection,
   } = useApp();
   const [showRagInfo, setShowRagInfo] = useState(false);
   const [addingGoal, setAddingGoal] = useState(false);
-  const [proposingGoal, setProposingGoal] = useState(false);
 
   const isAdmin = tier === "admin";
   const currentMemberId = opsMeta ? opsMeta.personaId : (isAdmin ? adminMemberId : staffMemberId);
@@ -1139,10 +2198,20 @@ function StaffGoalsView() {
     <div className="py-10 text-center text-muted-foreground text-sm">Staff member not found.</div>
   );
 
-  const pendingGoals = staffMember.goals.filter((g) => !g.approved);
-  const approvedGoals = staffMember.goals
-    .filter((g) => g.approved)
-    .sort((a, b) => (b.weightage ?? 0) - (a.weightage ?? 0));
+  // Searches both HCWM's and Credit Risk Management's goal sets, not just this persona's own
+  // department — ownership can legitimately be cross-department (e.g. a HOD appointing someone from
+  // another department as a co-owner), and this member must see every goal they actually own
+  // regardless of which department it structurally lives in.
+  const memberOwnedObjectives = objectivesOwnedBy(staffMember.name, departmentGoals, opsDepartmentGoals);
+  const ownedObjectiveIds = new Set(memberOwnedObjectives.map(o => o.id));
+  // Exclude KRs that belong to an Objective the member already owns wholesale — that Objective's
+  // own card already lists every one of its Key Results, so showing the KR again as a separate
+  // top-level card would just duplicate it.
+  const memberKeyResults = keyResultsOwnedBy(staffMember.name, departmentGoals, opsDepartmentGoals)
+    .filter(({ objective }) => !ownedObjectiveIds.has(objective.id));
+  const totalPerformanceGoals = memberOwnedObjectives.length + memberKeyResults.length;
+  const memberPendingPerfRecs = pendingPerfGoalRecs[currentMemberId] ?? [];
+  const memberAcknowledgedPerfRecs = acknowledgedPerfGoalRecs[currentMemberId] ?? [];
 
   const updateDevGoal = (id: string, changes: Partial<DevGoal>) =>
     upsertDevGoal({ ...currentDevGoals.find((g) => g.id === id)!, ...changes });
@@ -1174,15 +2243,15 @@ function StaffGoalsView() {
             )}
           >
             <Info className="size-3.5" />
-            RAG Guide
+            Confidence &amp; Scoring Guide
           </button>
         </div>
 
         {/* Stats strip */}
         <div className="bg-muted/40 border-b border-border px-6 py-3 flex items-center gap-6 text-xs text-muted-foreground">
-          <div><span className="font-semibold text-foreground">{approvedGoals.length}</span> approved goals</div>
+          <div><span className="font-semibold text-foreground">{totalPerformanceGoals}</span> performance goals</div>
           <div className="w-px h-3 bg-border" />
-          <div><span className="font-semibold text-foreground">{pendingGoals.length}</span> pending approval</div>
+          <div><span className="font-semibold text-foreground">{memberKeyResults.filter(({ kr }) => isPendingAckFor(kr, staffMember.name)).length}</span> awaiting acknowledgement</div>
           <div className="w-px h-3 bg-border" />
           <div><span className="font-semibold text-foreground">{currentDevGoals.length}</span> development goals</div>
         </div>
@@ -1190,71 +2259,56 @@ function StaffGoalsView() {
 
       {showRagInfo && <RAGInfoPanel onClose={() => setShowRagInfo(false)} />}
 
+      <GrowSection
+        pendingSkills={(opsMeta ? opsMeta.skills.pending : skills.pending)}
+        onViewOpportunities={() => setSection("skills")}
+      />
+
       {/* Performance Goals */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <svg width="36" height="36" viewBox="0 0 40 40" fill="none">
-              <circle cx="20" cy="20" r="16" fill="#DBEAFE"/>
-              <circle cx="20" cy="20" r="11" fill="#93C5FD"/>
-              <circle cx="20" cy="20" r="6" fill="#3B82F6"/>
-              <circle cx="20" cy="20" r="2.5" fill="white"/>
-              <line x1="20" y1="4" x2="20" y2="8" stroke="#1D4ED8" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="20" y1="32" x2="20" y2="36" stroke="#1D4ED8" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="4" y1="20" x2="8" y2="20" stroke="#1D4ED8" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="32" y1="20" x2="36" y2="20" stroke="#1D4ED8" strokeWidth="2" strokeLinecap="round"/>
-              <circle cx="32" cy="8" r="1.5" fill="#FCD34D"/>
-            </svg>
+            <MascotFlourish src="/mascot/exercising.png" className="h-11 w-auto shrink-0" />
             <div>
               <h3 className="font-display text-xl">Performance Goals
-                <span className="ml-2 text-sm font-normal text-muted-foreground">({staffMember.goals.length})</span>
+                <span className="ml-2 text-sm font-normal text-muted-foreground">({totalPerformanceGoals})</span>
               </h3>
-              <p className="text-xs text-muted-foreground">Set 3–5 within 30 days of joining · pending goals await manager approval</p>
+              <p className="text-xs text-muted-foreground">Every performance goal is an Objective or Key Result assigned by your HOD, linked to a department or team OKR</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                Monthly RAG confidence is due by {formatMonthlyConfidenceDueDate()} · scoring is due by {formatGoalStatusDueDate()}.
+              </p>
             </div>
           </div>
-          <button
-            onClick={() => setProposingGoal(true)}
-            disabled={staffMember.goals.length >= PERF_GOAL_MAX}
-            title={staffMember.goals.length >= PERF_GOAL_MAX ? `Maximum ${PERF_GOAL_MAX} performance goals reached` : undefined}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed shrink-0 transition-opacity"
-          >
-            <Plus className="size-3.5" /> Propose Goal
-          </button>
         </div>
         <div className="space-y-4">
-          {approvedGoals.length === 0 && pendingGoals.length === 0 && !proposingGoal && (
+          {memberPendingPerfRecs.map(rec => (
+            <RecommendedPerfGoalCard key={rec.id} rec={rec} memberId={currentMemberId} departmentGoals={departmentGoals} />
+          ))}
+          {totalPerformanceGoals === 0 && memberPendingPerfRecs.length === 0 && memberAcknowledgedPerfRecs.length === 0 && (
             <div className="rounded-xl border-2 border-dashed border-rag-red/30 bg-rag-red/5 px-6 py-10 text-center text-sm text-muted-foreground">
-              No performance goals set yet. Propose at least 3 within 30 days of joining to earn +10 pts per goal.
+              No goals assigned yet. Your HOD appoints owners on department and team OKRs — new joiners should have at least 3 within 30 days.
             </div>
           )}
-          {pendingGoals.map((g) => (
-            <div key={g.id} data-goal-id={g.id}>
-              <PendingGoalCard goal={g} />
+          {memberOwnedObjectives.map(objective => (
+            <div key={objective.id} data-goal-id={objective.id}>
+              <MyObjectiveCard objective={objective} allDeptGoals={departmentGoals} />
             </div>
           ))}
-          {approvedGoals.map((g) => (
+          {memberKeyResults.map(({ kr, objective }) => (
             <div
-              key={g.id}
-              data-goal-id={g.id}
+              key={kr.id}
+              data-goal-id={kr.id}
               className={cn(
                 "rounded-xl transition-all duration-500",
-                localHighlightId === g.id && "ring-2 ring-primary/50 ring-offset-2 shadow-lg"
+                localHighlightId === kr.id && "ring-2 ring-primary/50 ring-offset-2 shadow-lg"
               )}
             >
-              <ActiveGoalCard goal={g} memberId={staffMember.id} memberName={staffMember.name} directManager={staffMember.directManager} />
+              <MyKeyResultCard kr={kr} objective={objective} isOps={!!opsMeta} viewerName={staffMember.name} />
             </div>
           ))}
-          {proposingGoal && (
-            <AddPerfGoalForm
-              onAdd={(g) => {
-                proposeGoal(staffMember.id, g);
-                setProposingGoal(false);
-                addPoints(10);
-                toast.success("Performance goal submitted for approval · +10 pts");
-              }}
-              onCancel={() => setProposingGoal(false)}
-            />
-          )}
+          {memberAcknowledgedPerfRecs.map(rec => (
+            <AcknowledgedPerfGoalCard key={rec.id} rec={rec} departmentGoals={departmentGoals} />
+          ))}
         </div>
       </div>
 
@@ -1262,13 +2316,7 @@ function StaffGoalsView() {
       <div>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <svg width="36" height="36" viewBox="0 0 40 40" fill="none">
-              <rect x="6" y="10" width="28" height="22" rx="4" fill="#FEF3C7"/>
-              <rect x="6" y="10" width="28" height="22" rx="4" fill="#FCD34D" opacity="0.4"/>
-              <path d="M20 7 L21.5 12 L26 12 L22.5 15 L24 20 L20 17 L16 20 L17.5 15 L14 12 L18.5 12Z" fill="#F59E0B"/>
-              <circle cx="32" cy="8" r="2" fill="#FDE68A"/>
-              <circle cx="8" cy="30" r="1.2" fill="#A78BFA"/>
-            </svg>
+            <MascotFlourish src="/mascot/confident-smile.png" className="h-11 w-auto shrink-0" />
             <div>
               <h3 className="font-display text-xl">Development Goals
                 <span className="ml-2 text-sm font-normal text-muted-foreground">({currentDevGoals.length})</span>
@@ -1280,12 +2328,15 @@ function StaffGoalsView() {
             onClick={() => setAddingGoal(true)}
             disabled={currentDevGoals.length >= DEV_GOAL_MAX}
             title={currentDevGoals.length >= DEV_GOAL_MAX ? `Maximum ${DEV_GOAL_MAX} development goals reached` : undefined}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed shrink-0 transition-opacity"
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-amber text-amber-foreground hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed shrink-0 transition-opacity font-medium"
           >
             <Plus className="size-3.5" /> Add Goal
           </button>
         </div>
         <div className="space-y-4">
+          {(pendingDevGoalRecs[currentMemberId] ?? []).map((rec) => (
+            <RecommendedDevGoalCard key={rec.id} rec={rec} memberId={currentMemberId} />
+          ))}
           {currentDevGoals.map((g) => (
             <DevGoalCard
               key={g.id}
@@ -1298,7 +2349,14 @@ function StaffGoalsView() {
           ))}
           {addingGoal && (
             <AddDevGoalForm
-              onAdd={(g) => { upsertDevGoal(g); setAddingGoal(false); addPoints(10); toast.success("Development goal set · +10 pts"); }}
+              onAdd={(g) => {
+                const isFirstDevGoal = currentDevGoals.length === 0;
+                upsertDevGoal(g);
+                setAddingGoal(false);
+                if (isFirstDevGoal) awardMemberPoints(currentMemberId, 10);
+                const msg = `Development goal set${isFirstDevGoal ? " · +10 pts" : ""}`;
+                if (isFirstDevGoal) pointsToast(msg); else toast.success(msg);
+              }}
               onCancel={() => setAddingGoal(false)}
             />
           )}
@@ -1324,7 +2382,7 @@ function ManagerPerfGoalCard({ goal }: { goal: PerfGoal }) {
   const [pendingRag, setPendingRag] = useState<{ rag: RAG; greenCommitted: boolean } | null>(null);
   const [feedbackText, setFeedbackText] = useState("");
 
-  const linkedDeptName = departmentGoals.find((d) => d.id === goal.linkedDept)?.title;
+  const linkedDeptName = resolveLinkedTitle(goal.linkedDept, departmentGoals);
   const isMandatory = pendingRag && (pendingRag.rag === "amber" || pendingRag.rag === "red");
 
   const handlePick = (r: RAG) => {
@@ -1487,14 +2545,27 @@ function ManagerPerfGoalCard({ goal }: { goal: PerfGoal }) {
 // ── Manager's own goals view ───────────────────────────────────────────────────
 
 function ManagerGoalsView() {
-  const { myGoals, currentUser, managerDevGoals, upsertManagerDevGoal, deleteManagerDevGoal, opsMeta, addPoints } = useApp();
+  const {
+    currentUser, managerDevGoals, upsertManagerDevGoal, deleteManagerDevGoal, opsMeta, awardMemberPoints, departmentGoals, opsDepartmentGoals,
+    pendingPerfGoalRecs, acknowledgedPerfGoalRecs,
+  } = useApp();
   const [showRagInfo, setShowRagInfo] = useState(false);
   const [addingGoal, setAddingGoal] = useState(false);
 
-  const perfGoals = opsMeta ? opsMeta.performanceGoals : myGoals.performance;
+  const viewerName = opsMeta ? opsMeta.user.name : currentUser.name;
+  // Both goal sets, not just this persona's own department — see the equivalent comment on
+  // StaffGoalsView above for why cross-department ownership needs to search both.
+  const memberOwnedObjectives = objectivesOwnedBy(viewerName, departmentGoals, opsDepartmentGoals);
+  const ownedObjectiveIds = new Set(memberOwnedObjectives.map(o => o.id));
+  const memberKeyResults = keyResultsOwnedBy(viewerName, departmentGoals, opsDepartmentGoals)
+    .filter(({ objective }) => !ownedObjectiveIds.has(objective.id));
+  const totalPerformanceGoals = memberOwnedObjectives.length + memberKeyResults.length;
   const activeDevGoals = opsMeta ? opsMeta.devGoals : managerDevGoals;
   const activeUpsertDevGoal = opsMeta ? opsMeta.upsertDevGoal : upsertManagerDevGoal;
   const activeDeleteDevGoal = opsMeta ? opsMeta.deleteDevGoal : deleteManagerDevGoal;
+  const activeMemberId = opsMeta ? opsMeta.personaId : "u0";
+  const memberPendingPerfRecs = pendingPerfGoalRecs[activeMemberId] ?? [];
+  const memberAcknowledgedPerfRecs = acknowledgedPerfGoalRecs[activeMemberId] ?? [];
 
   const updateDevGoal = (id: string, changes: Partial<DevGoal>) =>
     activeUpsertDevGoal({ ...activeDevGoals.find((g) => g.id === id)!, ...changes });
@@ -1526,11 +2597,11 @@ function ManagerGoalsView() {
             )}
           >
             <Info className="size-3.5" />
-            RAG Guide
+            Confidence &amp; Scoring Guide
           </button>
         </div>
         <div className="bg-muted/40 border-b border-border px-6 py-3 flex items-center gap-6 text-xs text-muted-foreground">
-          <div><span className="font-semibold text-foreground">{perfGoals.length}</span> performance goals</div>
+          <div><span className="font-semibold text-foreground">{totalPerformanceGoals}</span> performance goals</div>
           <div className="w-px h-3 bg-border" />
           <div><span className="font-semibold text-foreground">{activeDevGoals.length}</span> development goals</div>
         </div>
@@ -1540,28 +2611,37 @@ function ManagerGoalsView() {
 
       {/* Performance goals */}
       <div>
-        <div className="flex items-center gap-3 mb-4">
-          <svg width="36" height="36" viewBox="0 0 40 40" fill="none">
-            <circle cx="20" cy="20" r="16" fill="#DBEAFE"/>
-            <circle cx="20" cy="20" r="11" fill="#93C5FD"/>
-            <circle cx="20" cy="20" r="6" fill="#3B82F6"/>
-            <circle cx="20" cy="20" r="2.5" fill="white"/>
-            <line x1="20" y1="4" x2="20" y2="8" stroke="#1D4ED8" strokeWidth="2" strokeLinecap="round"/>
-            <line x1="20" y1="32" x2="20" y2="36" stroke="#1D4ED8" strokeWidth="2" strokeLinecap="round"/>
-            <line x1="4" y1="20" x2="8" y2="20" stroke="#1D4ED8" strokeWidth="2" strokeLinecap="round"/>
-            <line x1="32" y1="20" x2="36" y2="20" stroke="#1D4ED8" strokeWidth="2" strokeLinecap="round"/>
-            <circle cx="32" cy="8" r="1.5" fill="#FCD34D"/>
-          </svg>
-          <div>
-            <h3 className="font-display text-xl">Performance Goals
-              <span className="ml-2 text-sm font-normal text-muted-foreground">({perfGoals.length})</span>
-            </h3>
-            <p className="text-xs text-muted-foreground">Your goals linked to department objectives — AMBER and RED status updates require a mandatory note</p>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <MascotFlourish src="/mascot/exercising.png" className="h-11 w-auto shrink-0" />
+            <div>
+              <h3 className="font-display text-xl">Performance Goals
+                <span className="ml-2 text-sm font-normal text-muted-foreground">({totalPerformanceGoals})</span>
+              </h3>
+              <p className="text-xs text-muted-foreground">Every performance goal is an Objective or Key Result you own on a department or team OKR</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                Monthly RAG confidence is due by {formatMonthlyConfidenceDueDate()} · scoring is due by {formatGoalStatusDueDate()}.
+              </p>
+            </div>
           </div>
         </div>
         <div className="space-y-4">
-          {perfGoals.map((g) => (
-            <ManagerPerfGoalCard key={g.id} goal={g} />
+          {memberPendingPerfRecs.map(rec => (
+            <RecommendedPerfGoalCard key={rec.id} rec={rec} memberId={activeMemberId} departmentGoals={departmentGoals} />
+          ))}
+          {totalPerformanceGoals === 0 && memberPendingPerfRecs.length === 0 && memberAcknowledgedPerfRecs.length === 0 && (
+            <div className="rounded-xl border-2 border-dashed border-border px-6 py-8 text-center text-sm text-muted-foreground">
+              No goals owned yet.
+            </div>
+          )}
+          {memberOwnedObjectives.map(objective => (
+            <MyObjectiveCard key={objective.id} objective={objective} allDeptGoals={departmentGoals} />
+          ))}
+          {memberKeyResults.map(({ kr, objective }) => (
+            <MyKeyResultCard key={kr.id} kr={kr} objective={objective} isOps={!!opsMeta} viewerName={viewerName} />
+          ))}
+          {memberAcknowledgedPerfRecs.map(rec => (
+            <AcknowledgedPerfGoalCard key={rec.id} rec={rec} departmentGoals={departmentGoals} />
           ))}
         </div>
       </div>
@@ -1570,13 +2650,7 @@ function ManagerGoalsView() {
       <div>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <svg width="36" height="36" viewBox="0 0 40 40" fill="none">
-              <rect x="6" y="10" width="28" height="22" rx="4" fill="#FEF3C7"/>
-              <rect x="6" y="10" width="28" height="22" rx="4" fill="#FCD34D" opacity="0.4"/>
-              <path d="M20 7 L21.5 12 L26 12 L22.5 15 L24 20 L20 17 L16 20 L17.5 15 L14 12 L18.5 12Z" fill="#F59E0B"/>
-              <circle cx="32" cy="8" r="2" fill="#FDE68A"/>
-              <circle cx="8" cy="30" r="1.2" fill="#A78BFA"/>
-            </svg>
+            <MascotFlourish src="/mascot/confident-smile.png" className="h-11 w-auto shrink-0" />
             <div>
               <h3 className="font-display text-xl">Development Goals
                 <span className="ml-2 text-sm font-normal text-muted-foreground">({activeDevGoals.length})</span>
@@ -1599,7 +2673,13 @@ function ManagerGoalsView() {
           ))}
           {addingGoal && (
             <AddDevGoalForm
-              onAdd={(g) => { activeUpsertDevGoal(g); setAddingGoal(false); addPoints(10); toast.success("Development goal set · +10 pts"); }}
+              onAdd={(g) => {
+                const isFirstDevGoal = activeDevGoals.length === 0;
+                activeUpsertDevGoal(g);
+                setAddingGoal(false);
+                if (isFirstDevGoal) awardMemberPoints(activeMemberId, 10);
+                toast.success(`Development goal set${isFirstDevGoal ? " · +10 pts" : ""}`);
+              }}
               onCancel={() => setAddingGoal(false)}
             />
           )}

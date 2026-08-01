@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 interface Msg { role: "user" | "ai"; text: string }
 
 const SEED: Msg[] = [
-  { role: "ai", text: "Hi Sarah — I'm Pulse AI. I can draft responses, summarise team patterns, recommend learning, and answer questions about our HR policies. What's on your mind?" },
+  { role: "ai", text: "Hi Sarah — I'm Pulse AI. I can draft responses, summarise team patterns, recommend learning, and answer questions about our Human Capital policies. What's on your mind?" },
 ];
 
 const SUGGESTIONS = [
@@ -47,7 +47,7 @@ export function AIAssistant() {
       </button>
 
       {open && (
-        <div className="fixed bottom-6 right-6 z-30 w-[420px] h-[600px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+        <div className="fixed inset-x-4 bottom-4 sm:inset-x-auto sm:bottom-6 sm:right-6 z-30 sm:w-[420px] h-[min(70vh,600px)] sm:h-[600px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
           <div className="px-4 py-3 bg-primary text-primary-foreground flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="size-8 rounded-full bg-amber text-amber-foreground grid place-items-center"><Sparkles className="size-4" /></div>
@@ -116,7 +116,7 @@ function mockReply(q: string): string {
   const t = q.toLowerCase();
   if (t.includes("marcus")) return "Marcus is currently RED on senior engineering hires (2 of 8) and time-to-hire (38 days vs 30 target). His diversity slate work is healthy. Suggested next step: a 30-min coaching session focused on pipeline triage and re-prioritising the 3 most critical roles. I can draft talking points.";
   if (t.includes("james") || t.includes("coaching plan")) return "Here's a 4-week coaching plan for James:\n\n• Week 1 — Shadow your Q3 manager training, identify 2 facilitation patterns to adopt.\n• Week 2 — Co-lead one module; structured debrief with you.\n• Week 3 — Solo cohort delivery; you observe.\n• Week 4 — Reflective journal + 360 feedback from 3 participants.\n\nWant me to schedule the touchpoints?";
-  if (t.includes("parental")) return "Our 2026 parental leave policy: 20 weeks fully paid for primary caregivers, 8 weeks for secondary caregivers (regardless of gender or family structure). Can be taken in up to 3 blocks within the first 18 months. Full policy PDF lives in the HR knowledge base — want me to share the link?";
+  if (t.includes("parental")) return "Our 2026 parental leave policy: 20 weeks fully paid for primary caregivers, 8 weeks for secondary caregivers (regardless of gender or family structure). Can be taken in up to 3 blocks within the first 18 months. Full policy PDF lives in the Human Capital knowledge base — want me to share the link?";
   if (t.includes("survey") || t.includes("benchmark")) return "You're tracking above benchmark on 5 of 6 competencies. Mentoring & Coaching is the one gap (68 vs 81). I've curated a 4-item action plan on your Survey Insights page — completing it before Dec 31 unlocks +100 bonus pts.";
-  return "Great question. Based on your team's current data and our HR policies, here are three things I'd suggest: (1) prioritise a 1:1 with Marcus this week on hiring pipeline, (2) wrap up your Mentoring action plan before Q3 close, and (3) consider linking James's coaching cert to your team's L&D budget request. Want me to expand on any of these?";
+  return "Great question. Based on your team's current data and our Human Capital policies, here are three things I'd suggest: (1) prioritise a 1:1 with Marcus this week on hiring pipeline, (2) wrap up your Mentoring action plan before Q3 close, and (3) consider linking James's coaching cert to your team's L&D budget request. Want me to expand on any of these?";
 }

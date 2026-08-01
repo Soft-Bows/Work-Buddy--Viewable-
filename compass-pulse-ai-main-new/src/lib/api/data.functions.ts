@@ -15,6 +15,11 @@ import {
   enableStaffAccount,
   getStaffPointsLog,
   getOrgNetPoints,
+  loginUser,
+  setNewPassword,
+  getAuthStatus,
+  applyPasswordResetPenalty,
+  getUserProfile,
 } from "../csvData.server";
 import { scrapePhillipJobs } from "../phillipCareers.server";
 
@@ -47,9 +52,9 @@ export const toggleActionPlanFn = createServerFn({ method: "POST" })
   });
 
 export const logComplimentFn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ recipient: z.string() }))
+  .inputValidator(z.object({ senderId: z.string(), recipient: z.string() }))
   .handler(async ({ data }) => {
-    logCompliment(data.recipient);
+    logCompliment(data.senderId, data.recipient);
   });
 
 export const endorseTeamMemberSkillFn = createServerFn({ method: "POST" })
@@ -71,6 +76,7 @@ export const fetchPhillipJobsFn = createServerFn({ method: "POST" })
     userSkills: z.array(z.string()),
     userDesignation: z.string().optional(),
     scoreEnabled: z.boolean().optional(),
+    devGoalKeywords: z.array(z.string()).optional(),
   }))
   .handler(async ({ data }) => {
     return scrapePhillipJobs(
@@ -79,6 +85,7 @@ export const fetchPhillipJobsFn = createServerFn({ method: "POST" })
       data.userSkills,
       data.userDesignation ?? "",
       data.scoreEnabled !== false, // default true; explore mode passes false
+      data.devGoalKeywords ?? [],
     );
   });
 
@@ -101,6 +108,26 @@ export const getStaffPointsLogFn = createServerFn({ method: "POST" })
 export const getOrgNetPointsFn = createServerFn({ method: "POST" })
   .inputValidator(z.object({ yearMonth: z.string().optional() }))
   .handler(async ({ data }) => getOrgNetPoints(data.yearMonth));
+
+export const loginFn = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ email: z.string(), password: z.string() }))
+  .handler(async ({ data }) => loginUser(data.email, data.password));
+
+export const setNewPasswordFn = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ userId: z.string(), currentPassword: z.string(), newPassword: z.string() }))
+  .handler(async ({ data }) => setNewPassword(data.userId, data.currentPassword, data.newPassword));
+
+export const getAuthStatusFn = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ userId: z.string() }))
+  .handler(async ({ data }) => getAuthStatus(data.userId));
+
+export const applyPasswordResetPenaltyFn = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ userId: z.string() }))
+  .handler(async ({ data }) => applyPasswordResetPenalty(data.userId));
+
+export const getUserProfileFn = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ userId: z.string() }))
+  .handler(async ({ data }) => getUserProfile(data.userId));
 
 export const updateDepartmentGoalsFn = createServerFn({ method: "POST" })
   .inputValidator(z.object({
