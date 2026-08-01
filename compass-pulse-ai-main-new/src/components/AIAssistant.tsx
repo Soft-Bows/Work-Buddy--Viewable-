@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { mockWorkBuddyAiReply } from "@/lib/workBuddyAiReply";
+import { getAiProvider } from "@/lib/aiService";
 
 interface Msg { role: "user" | "ai"; text: string }
 
@@ -29,8 +29,7 @@ export function AIAssistant() {
     setMsgs((m) => [...m, { role: "user", text }]);
     setInput("");
     setThinking(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    const reply = mockWorkBuddyAiReply(text);
+    const reply = await getAiProvider().answerQuery(text);
     setThinking(false);
     setMsgs((m) => [...m, { role: "ai", text: reply }]);
   };
@@ -53,8 +52,24 @@ export function AIAssistant() {
       </button>
 
       {open && (
-        <div className="fixed inset-x-4 bottom-4 sm:inset-x-auto sm:bottom-6 sm:right-6 z-30 sm:w-[420px] h-[min(70vh,600px)] sm:h-[600px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
-          <div className="px-4 py-3 bg-primary text-primary-foreground flex items-center justify-between">
+        // A transparent full-screen backdrop, click-to-close — same pattern the Home page's own
+        // popups already use. Clicking anywhere outside the panel (including the rest of the
+        // dashboard behind it) closes the assistant instead of requiring the X button specifically.
+        <div className="fixed inset-0 z-30" onClick={() => setOpen(false)}>
+          <div
+            onClick={e => e.stopPropagation()}
+            className={cn(
+              "fixed inset-x-4 bottom-4 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[420px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300",
+              // Height is viewport-relative at every breakpoint, not just below sm — a fixed 600px
+              // panel anchored 24px off the bottom needs ~624px of vertical space, which a shorter
+              // laptop screen (browser chrome + taskbar eating into it) often doesn't have, pushing
+              // the header/close button off the top of the visible area entirely. Capping to 80% of
+              // whatever viewport height is actually available (up to 600px) keeps the whole panel,
+              // header included, on-screen on any device.
+              "h-[min(80vh,600px)] max-h-[calc(100vh-2rem)]",
+            )}
+          >
+          <div className="px-4 py-3 bg-primary text-primary-foreground flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <div className="size-8 rounded-full bg-amber grid place-items-center overflow-hidden shrink-0">
                 <img src="/mascot/headphones.png" alt="" draggable={false} className="size-full object-contain p-0.5 select-none" />
@@ -106,7 +121,7 @@ export function AIAssistant() {
 
           <form
             onSubmit={(e) => { e.preventDefault(); send(input); }}
-            className="border-t border-border p-3 flex items-center gap-2"
+            className="border-t border-border p-3 flex items-center gap-2 shrink-0"
           >
             <input
               value={input}
@@ -118,6 +133,7 @@ export function AIAssistant() {
               <Send className="size-4" />
             </button>
           </form>
+          </div>
         </div>
       )}
     </>

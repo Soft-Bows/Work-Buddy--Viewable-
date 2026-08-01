@@ -3,6 +3,7 @@ import { Card, RagPill, RagDot, ActionNeededIcon, MonthPicker, RAGInfoPanel, Ski
 import { isHCWMDept, ALL_SKILLS, IHRP_SKILLS_CATALOG } from "@/lib/skillsCatalog";
 import { useApp } from "@/lib/appContext";
 import type { DevGoalRecommendation, PerfGoalRecommendation } from "@/lib/appContext";
+import { getAiProvider } from "@/lib/aiService";
 import type { TeamMember, PersonalDevGoal, RAG, DeptGoal, KeyResult } from "@/lib/mockData";
 import { Sparkles, X, ChevronRight, ChevronDown, ChevronUp, Flag, AlertCircle, Check, Pencil, CheckCircle2, Loader2, Clock, TriangleAlert, Users, ExternalLink, Plus, MessageSquareHeart, GraduationCap, ThumbsDown, Info, Target, Trash2, UserPlus, UserCircle2, ListChecks, Building2 } from "lucide-react";
 import { CheckInSection } from "./CheckInSection";
@@ -306,30 +307,25 @@ function KeyResultRow({
     setPendingScoreValue(null);
     setScoreRemarkDraft("");
   };
-  const draftAiScoreResponse = () => {
+  const draftAiScoreResponse = async () => {
     if (!kr.scoreRemark) return;
     setDraftingAiScoreResponse(true);
-    setTimeout(() => {
-      const snippet = kr.scoreRemark!.text.length > 70 ? `${kr.scoreRemark!.text.slice(0, 70)}…` : kr.scoreRemark!.text;
-      setScoreResponseDraft(
-        `Thanks for the context on the ${kr.scoreRemark!.score.toFixed(1)} score. On "${snippet}": suggest (1) a short retro on what specifically fell short this quarter, (2) agreeing 1-2 concrete support actions before next quarter's cycle, and (3) a check-in mid-quarter so this doesn't repeat. Let me know if you need me to loop in anyone else.`
-      );
-      setAiScoreDraftUsed(true);
-      setDraftingAiScoreResponse(false);
-    }, 900);
+    const draft = await getAiProvider().draftChallengeResponse({
+      remarkText: kr.scoreRemark.text, urgency: "green", kind: "score", score: kr.scoreRemark.score,
+    });
+    setScoreResponseDraft(draft);
+    setAiScoreDraftUsed(true);
+    setDraftingAiScoreResponse(false);
   };
-  const draftAiChallengeResponse = () => {
+  const draftAiChallengeResponse = async () => {
     if (!kr.challengeRemark) return;
     setDraftingAiResponse(true);
-    setTimeout(() => {
-      const urgent = kr.challengeRemark!.rag === "red";
-      const snippet = kr.challengeRemark!.text.length > 70 ? `${kr.challengeRemark!.text.slice(0, 70)}…` : kr.challengeRemark!.text;
-      setChallengeResponseDraft(
-        `Thanks for flagging this${urgent ? " — since this is Red, let's prioritise unblocking it this week" : ", let's get ahead of it before it slips further"}. On "${snippet}": suggest (1) a short sync to unpack the specific blocker, (2) naming the one thing that would unstick it fastest, and (3) revisiting confidence once that's resolved. Let me know if you need me to loop in anyone else.`
-      );
-      setAiDraftUsed(true);
-      setDraftingAiResponse(false);
-    }, 900);
+    const draft = await getAiProvider().draftChallengeResponse({
+      remarkText: kr.challengeRemark.text, urgency: kr.challengeRemark.rag, kind: "confidence",
+    });
+    setChallengeResponseDraft(draft);
+    setAiDraftUsed(true);
+    setDraftingAiResponse(false);
   };
 
   return (
@@ -715,7 +711,7 @@ function KeyResultRow({
                 />
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <button
-                    onClick={draftAiChallengeResponse}
+                    onClick={() => void draftAiChallengeResponse()}
                     disabled={draftingAiResponse}
                     className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-primary/30 bg-primary/5 text-primary text-[11px] font-medium disabled:opacity-50"
                   >
@@ -801,7 +797,7 @@ function KeyResultRow({
                 />
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <button
-                    onClick={draftAiScoreResponse}
+                    onClick={() => void draftAiScoreResponse()}
                     disabled={draftingAiScoreResponse}
                     className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-primary/30 bg-primary/5 text-primary text-[11px] font-medium disabled:opacity-50"
                   >
@@ -3078,14 +3074,11 @@ function DevGoalManagerInput({ goal, memberName, memberId }: { goal: PersonalDev
     `Recommend specific learning resources to accelerate "${goal.title}"`,
   ];
 
-  const draftWithAI = async (idx: number) => {
+  const draftWithAI = async (idx: 0 | 1) => {
     setActivePrompt(idx);
     setDrafting(true);
-    await new Promise(r => setTimeout(r, 1400));
-    setText(idx === 0
-      ? `Great initiative! To make this goal more impactful, consider adding a measurable milestone — e.g., "achieve IBF-certified proficiency by Q4 2026" or "apply this skill in at least 2 live projects this year." I'd suggest linking it to a specific department initiative so progress is visible to the team. Let's discuss the scope in our next 1:1 to agree on a realistic timeline.`
-      : `For "${goal.title}", here are 3 targeted resources: (1) IBF-accredited e-learning on the SkillsFuture portal — free for Singapore residents; (2) Request an internal mentor via the P&C coaching marketplace; (3) The L&D team's curated reading list is available on the intranet under P&C > Development Resources. I'm also happy to connect you with a colleague who has completed this pathway.`
-    );
+    const draft = await getAiProvider().draftDevGoalFeedback(goal.title, idx);
+    setText(draft);
     setDrafting(false);
   };
 
@@ -3136,7 +3129,7 @@ function DevGoalManagerInput({ goal, memberName, memberId }: { goal: PersonalDev
           {prompts.map((p, i) => (
             <button
               key={i}
-              onMouseDown={() => draftWithAI(i)}
+              onMouseDown={() => void draftWithAI(i as 0 | 1)}
               disabled={drafting}
               className={cn(
                 "text-xs text-left px-3 py-2 rounded-lg border transition-colors disabled:opacity-60",

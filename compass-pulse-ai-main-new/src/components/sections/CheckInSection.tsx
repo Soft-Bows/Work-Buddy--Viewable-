@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useApp } from "@/lib/appContext";
-import { generatePrepTalkingPoints, generateAiMinutes, daysSinceLastCheckIn, CHECK_IN_CADENCE_DAYS, type CheckInActionItem } from "@/lib/checkIns";
-import { mockWorkBuddyAiReply } from "@/lib/workBuddyAiReply";
+import { daysSinceLastCheckIn, CHECK_IN_CADENCE_DAYS, type CheckInActionItem } from "@/lib/checkIns";
+import { getAiProvider } from "@/lib/aiService";
 import type { TeamMember, KeyResult, PersonalDevGoal } from "@/lib/mockData";
 import { ChevronDown, ChevronUp, Sparkles, MessageCircle, Plus, X, Check, Clock, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -43,9 +43,7 @@ export function CheckInSection({
   const [askAnswer, setAskAnswer] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
 
-  const startLogging = () => {
-    const points = generatePrepTalkingPoints(member, memberKeyResults, memberDevGoals, lastCheckIn);
-    setTalkingPoints(points);
+  const startLogging = async () => {
     setNotes("");
     setActionItems([]);
     setActionDraft("");
@@ -53,6 +51,8 @@ export function CheckInSection({
     setAskQuery("");
     setAskAnswer(null);
     setLogging(true);
+    const points = await getAiProvider().draftCheckInPrep(member, memberKeyResults, memberDevGoals, lastCheckIn);
+    setTalkingPoints(points);
     logAiActivity({
       date: new Date().toISOString().slice(0, 10), kind: "prep_agent",
       summary: `Prep brief drafted for ${member.name}'s check-in`, targetName: member.name, actorName: managerName,
@@ -73,8 +73,8 @@ export function CheckInSection({
     if (!askQuery.trim()) return;
     setAsking(true);
     const query = askQuery.trim();
-    await new Promise(r => setTimeout(r, 900));
-    setAskAnswer(mockWorkBuddyAiReply(query, { checkInMemberName: member.name }));
+    const reply = await getAiProvider().answerQuery(query, { checkInMemberName: member.name });
+    setAskAnswer(reply);
     setAsking(false);
     logAiActivity({
       date: new Date().toISOString().slice(0, 10), kind: "prep_agent",
@@ -83,8 +83,8 @@ export function CheckInSection({
     });
   };
 
-  const saveCheckIn = () => {
-    const aiMinutes = generateAiMinutes(member.name, talkingPoints, notes, actionItems);
+  const saveCheckIn = async () => {
+    const aiMinutes = await getAiProvider().draftCheckInMinutes(member.name, talkingPoints, notes, actionItems);
     addCheckIn({
       managerName, memberName: member.name, date: new Date().toISOString().slice(0, 10),
       talkingPoints, notes, actionItems, aiMinutes,
@@ -115,7 +115,7 @@ export function CheckInSection({
           {!logging ? (
             <div className="flex items-center gap-2 flex-wrap">
               {canLog && (
-                <button onClick={startLogging} className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium">
+                <button onClick={() => void startLogging()} className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium">
                   Log a check-in
                 </button>
               )}
@@ -202,7 +202,7 @@ export function CheckInSection({
                 )}
               </div>
               <div className="flex gap-1.5 pt-1">
-                <button onClick={saveCheckIn} className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium">
+                <button onClick={() => void saveCheckIn()} className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium">
                   Save check-in
                 </button>
                 <button onClick={() => setLogging(false)} className="px-3 py-1.5 rounded-md border border-border text-xs">Cancel</button>

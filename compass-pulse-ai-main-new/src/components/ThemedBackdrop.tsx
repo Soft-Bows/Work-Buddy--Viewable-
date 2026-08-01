@@ -250,24 +250,39 @@ function SingaporeScene() {
           is one continuous, unmistakably boat-hulled deck (flat middle, both ends sweeping sharply
           upward) instead of a shallow wave, so it reads at a glance instead of needing a caption. */}
       <svg className={`absolute bottom-0 inset-x-0 w-full h-[48vh] min-h-[270px] ${LANDMARK_OPACITY}`} viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
+        <defs>
+          {/* A rich rose-gold-to-indigo glass-facade gradient instead of a single flat navy fill —
+              the towers were reading as plain black silhouettes at background opacity; a gradient
+              plus lit-window sparkle keeps them colourful even at the same opacity level. */}
+          <linearGradient id="mbsGlass" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#E8A87C" />
+            <stop offset="45%" stopColor="#8B6FA8" />
+            <stop offset="100%" stopColor="#2E3A66" />
+          </linearGradient>
+        </defs>
         <path d="M0 178 Q110 158 220 170 T400 160 V220 H0 Z" fill="#A9D6C9" />
         {/* Three towers, each markedly wider, fanning outward from vertical at the base */}
-        <polygon points="146,172 180,172 158,46 128,46" fill="#3E4C63" />
-        <polygon points="184,172 218,172 214,34 188,34" fill="#3E4C63" />
-        <polygon points="222,172 256,172 272,46 242,46" fill="#3E4C63" />
-        {/* Window banding for scale/texture */}
-        {[70, 90, 110, 130, 150].map(y => (
-          <rect key={y} x="126" y={y} width="150" height="2.5" fill="#2C374A" opacity="0.35" />
+        <polygon points="146,172 180,172 158,46 128,46" fill="url(#mbsGlass)" />
+        <polygon points="184,172 218,172 214,34 188,34" fill="url(#mbsGlass)" />
+        <polygon points="222,172 256,172 272,46 242,46" fill="url(#mbsGlass)" />
+        {/* Lit windows — small warm-gold squares scattered across the glass, the detail that reads
+            as "illuminated tower at dusk" rather than a flat coloured block */}
+        {[
+          [136, 70], [148, 84], [160, 100], [140, 118], [155, 140], [168, 155],
+          [196, 50], [204, 64], [192, 82], [208, 100], [198, 122], [206, 148],
+          [234, 70], [248, 88], [238, 106], [252, 128], [240, 150], [230, 160],
+        ].map(([x, y], i) => (
+          <rect key={i} x={x} y={y} width="3.5" height="4" fill="#FCD98E" opacity={0.75} />
         ))}
         {/* The SkyPark — one continuous hull-shaped deck resting across all three towers */}
         <path d="M118 50 Q118 30 145 24 L279 24 Q306 30 306 50 L296 50 Q296 36 275 33 L149 33 Q128 36 128 50 Z" fill="#F3D26A" />
         <path d="M128 50 L296 50 L296 40 L128 40 Z" fill="#2CA097" />
         <ellipse cx="212" cy="51" rx="95" ry="6" fill="#237E76" opacity="0.55" />
         {/* Reflection in the bay, faint */}
-        <g opacity="0.18" transform="translate(0,344) scale(1,-1)">
-          <polygon points="146,172 180,172 158,46 128,46" fill="#3E4C63" />
-          <polygon points="184,172 218,172 214,34 188,34" fill="#3E4C63" />
-          <polygon points="222,172 256,172 272,46 242,46" fill="#3E4C63" />
+        <g opacity="0.22" transform="translate(0,344) scale(1,-1)">
+          <polygon points="146,172 180,172 158,46 128,46" fill="url(#mbsGlass)" />
+          <polygon points="184,172 218,172 214,34 188,34" fill="url(#mbsGlass)" />
+          <polygon points="222,172 256,172 272,46 242,46" fill="url(#mbsGlass)" />
         </g>
         <path d="M0 195 Q120 180 240 190 T400 184 V220 H0 Z" fill="#CDE9DC" />
       </svg>

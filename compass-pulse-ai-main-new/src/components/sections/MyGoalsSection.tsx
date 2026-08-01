@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, SectionTitle, MonthPicker, formatDueDate, SkillAttachmentModal, RAGInfoPanel, RagPill, RagDot, ActionNeededIcon, MascotFlourish } from "@/components/ui-bits";
 import { useApp } from "@/lib/appContext";
 import type { DevGoalRecommendation, PerfGoalRecommendation } from "@/lib/appContext";
+import { getAiProvider } from "@/lib/aiService";
 import type { RAG, PersonalDevGoal, SkillAttachment, KeyResult, DeptGoal } from "@/lib/mockData";
 import {
   Check, Lock, MessageSquare, Bell, Info, AlertCircle, Clock,
@@ -1588,18 +1589,15 @@ function MyKeyResultCard({ kr, objective, isOps, viewerName }: { kr: KeyResult; 
     setPendingConfidenceChoice(null);
     setChallengeDraft("");
   };
-  const draftAiChallengeResponse = () => {
+  const draftAiChallengeResponse = async () => {
     if (!kr.challengeRemark) return;
     setDraftingAiResponse(true);
-    setTimeout(() => {
-      const urgent = kr.challengeRemark!.rag === "red";
-      const snippet = kr.challengeRemark!.text.length > 70 ? `${kr.challengeRemark!.text.slice(0, 70)}…` : kr.challengeRemark!.text;
-      setChallengeResponseDraft(
-        `Thanks for flagging this${urgent ? " — since this is Red, let's prioritise unblocking it this week" : ", let's get ahead of it before it slips further"}. On "${snippet}": suggest (1) a short sync to unpack the specific blocker, (2) naming the one thing that would unstick it fastest, and (3) revisiting confidence once that's resolved. Let me know if you need me to loop in anyone else.`
-      );
-      setAiDraftUsed(true);
-      setDraftingAiResponse(false);
-    }, 900);
+    const draft = await getAiProvider().draftChallengeResponse({
+      remarkText: kr.challengeRemark.text, urgency: kr.challengeRemark.rag, kind: "confidence",
+    });
+    setChallengeResponseDraft(draft);
+    setAiDraftUsed(true);
+    setDraftingAiResponse(false);
   };
   const handleScoreSubmit = (n: number) => {
     if (n >= 0.7) {
@@ -1620,17 +1618,15 @@ function MyKeyResultCard({ kr, objective, isOps, viewerName }: { kr: KeyResult; 
     setPendingScoreValue(null);
     setScoreRemarkDraft("");
   };
-  const draftAiScoreResponse = () => {
+  const draftAiScoreResponse = async () => {
     if (!kr.scoreRemark) return;
     setDraftingAiScoreResponse(true);
-    setTimeout(() => {
-      const snippet = kr.scoreRemark!.text.length > 70 ? `${kr.scoreRemark!.text.slice(0, 70)}…` : kr.scoreRemark!.text;
-      setScoreResponseDraft(
-        `Thanks for the context on the ${kr.scoreRemark!.score.toFixed(1)} score. On "${snippet}": suggest (1) a short retro on what specifically fell short this quarter, (2) agreeing 1-2 concrete support actions before next quarter's cycle, and (3) a check-in mid-quarter so this doesn't repeat. Let me know if you need me to loop in anyone else.`
-      );
-      setAiScoreDraftUsed(true);
-      setDraftingAiScoreResponse(false);
-    }, 900);
+    const draft = await getAiProvider().draftChallengeResponse({
+      remarkText: kr.scoreRemark.text, urgency: "green", kind: "score", score: kr.scoreRemark.score,
+    });
+    setScoreResponseDraft(draft);
+    setAiScoreDraftUsed(true);
+    setDraftingAiScoreResponse(false);
   };
 
   return (
@@ -1797,7 +1793,7 @@ function MyKeyResultCard({ kr, objective, isOps, viewerName }: { kr: KeyResult; 
                 />
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <button
-                    onClick={draftAiChallengeResponse}
+                    onClick={() => void draftAiChallengeResponse()}
                     disabled={draftingAiResponse}
                     className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-primary/30 bg-primary/5 text-primary text-[11px] font-medium disabled:opacity-50"
                   >
@@ -1869,7 +1865,7 @@ function MyKeyResultCard({ kr, objective, isOps, viewerName }: { kr: KeyResult; 
                 />
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <button
-                    onClick={draftAiScoreResponse}
+                    onClick={() => void draftAiScoreResponse()}
                     disabled={draftingAiScoreResponse}
                     className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-primary/30 bg-primary/5 text-primary text-[11px] font-medium disabled:opacity-50"
                   >
