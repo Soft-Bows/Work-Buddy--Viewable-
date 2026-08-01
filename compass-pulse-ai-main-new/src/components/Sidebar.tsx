@@ -3,7 +3,7 @@ import { useApp } from "@/lib/appContext";
 import { currentUser } from "@/lib/mockData";
 import {
   Home, TrendingUp, Brain, Trophy, Heart, Target, BarChart3, Settings, LogOut,
-  PanelLeftClose, PanelLeftOpen, X, Check, Building2,
+  PanelLeftClose, PanelLeftOpen, X, Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COUNTRY_THEMES } from "@/lib/themes";
@@ -38,18 +38,22 @@ function PaletteMascotSVG({ className }: { className?: string }) {
   );
 }
 
+// Directors are usual accounts with an extra supervisory layer, not a separate isolated page —
+// they get the same nav as everyone else, minus My Goals/Skills Profile/Survey Insights (which
+// assume the viewer owns personal KRs/a skills profile/a single department, none of which a
+// director has in this data model). Their multi-department oversight is embedded directly into
+// Team OKRs' Key Staff Challenges and Admin Console's Departmental Competency Gaps (both already
+// existing pages) via getRelevantDeptsForViewer, exactly like any other real leave supervisor who
+// happens to have more than one HOD reporting to them — see src/lib/insights.ts.
 const NAV = [
-  { id: "home", label: "Home", icon: Home, tiers: ["staff", "manager", "admin"] },
-  { id: "team", label: "Team OKRs", icon: Target, tiers: ["staff", "manager", "admin"] },
+  { id: "home", label: "Home", icon: Home, tiers: ["staff", "manager", "admin", "director1", "director2"] },
+  { id: "team", label: "Team OKRs", icon: Target, tiers: ["staff", "manager", "admin", "director1", "director2"] },
   { id: "mygoals", label: "My Goals", icon: TrendingUp, tiers: ["staff", "manager", "admin"] },
   { id: "skills", label: "Skills Profile", icon: Brain, tiers: ["staff", "manager", "admin"] },
-  { id: "compliments", label: "Appreciation Corner", icon: Heart, tiers: ["staff", "manager", "admin"] },
+  { id: "compliments", label: "Appreciation Corner", icon: Heart, tiers: ["staff", "manager", "admin", "director1", "director2"] },
   { id: "survey", label: "Survey Insights", icon: BarChart3, tiers: ["manager"] },
-  { id: "admin", label: "Admin Console", icon: Settings, tiers: ["admin"] },
-  { id: "rewards", label: "Rewards", icon: Trophy, tiers: ["staff", "manager", "admin"] },
-  // Directors own no department's own OKRs/skills content — this is their only destination,
-  // special-cased into the nav filter below rather than listed in any tier's own `tiers` array.
-  { id: "director", label: "Director Insights", icon: Building2, tiers: [] },
+  { id: "admin", label: "Admin Console", icon: Settings, tiers: ["admin", "director1", "director2"] },
+  { id: "rewards", label: "Rewards", icon: Trophy, tiers: ["staff", "manager", "admin", "director1", "director2"] },
 ] as const;
 
 const OPS_PERSONAS = [
@@ -79,7 +83,7 @@ export function Sidebar({
   countryTheme: string | null;
   onSetCountryTheme: (key: string | null) => void;
 }) {
-  const { tier, setTier, setStaffMemberId, setAdminMemberId, section, setSection, teamMembers, staffList, staffMemberId, adminMemberId, opsMeta } = useApp();
+  const { tier, setTier, setStaffMemberId, setAdminMemberId, section, setSection, teamMembers, staffList, staffMemberId, adminMemberId, opsMeta, directorMeta } = useApp();
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const themePickerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -93,15 +97,12 @@ export function Sidebar({
   const activeTheme = COUNTRY_THEMES.find(t => t.key === countryTheme) ?? null;
   const isOpsTier = OPS_TIER_IDS.includes(tier as typeof OPS_TIER_IDS[number]);
   const isDirectorTier = DIRECTOR_TIER_IDS.includes(tier as typeof DIRECTOR_TIER_IDS[number]);
-  const directorPersona = DIRECTOR_PERSONAS.find(p => p.tier === tier) ?? null;
   const viewMemberId = !isOpsTier ? (tier === "staff" ? staffMemberId : tier === "admin" ? adminMemberId : null) : null;
   const viewMember = viewMemberId ? teamMembers.find((m) => m.id === viewMemberId) : null;
   const viewStaffEntry = viewMemberId && !viewMember ? staffList.find(s => s.id === viewMemberId) : null;
   const items = NAV.filter((n) => {
-    if (n.id === "admin") return tier === "admin";
+    if (n.id === "admin") return tier === "admin" || isDirectorTier;
     if (n.id === "survey") return tier === "manager" || tier === "ops_hod" || tier === "staff" || tier === "ops_mgr1";
-    if (n.id === "director") return isDirectorTier;
-    if (isDirectorTier) return false; // directors only ever see the Director Insights entry
     if (isOpsTier) return true;
     return n.tiers.includes(tier as never);
   });
@@ -115,14 +116,14 @@ export function Sidebar({
   };
   const opsPersonaName = opsMeta?.user.name ?? null;
   const viewName = isDirectorTier
-    ? (directorPersona?.name ?? "Director")
+    ? (directorMeta?.name ?? "Director")
     : isOpsTier
     ? (opsPersonaName ?? "Ops")
     : (viewMember?.name ?? viewStaffEntry?.name ?? currentUser.name);
   const displayUser = {
     name: viewName,
     designation: isDirectorTier
-      ? (directorPersona?.designation ?? "Director")
+      ? (directorMeta?.designation ?? "Director")
       : isOpsTier
       ? (opsMeta?.user.designation ?? "Operations")
       : (viewMember?.role ?? viewStaffEntry?.role ?? currentUser.designation),
@@ -141,7 +142,7 @@ export function Sidebar({
     setTier(persona.tier);
     setStaffMemberId("u1");
     setAdminMemberId("u4");
-    setSection("director");
+    setSection("home");
   };
 
   const navigate = (id: (typeof NAV)[number]["id"]) => {
@@ -369,10 +370,10 @@ export function Sidebar({
 }
 
 export function TopBar({ onOpenSidebar }: { onOpenSidebar: () => void }) {
-  const { tier, teamMembers, staffMemberId, adminMemberId, opsMeta } = useApp();
+  const { tier, teamMembers, staffMemberId, adminMemberId, opsMeta, directorMeta } = useApp();
   const viewMemberId = tier === "staff" ? staffMemberId : tier === "admin" ? adminMemberId : null;
   const viewMember = viewMemberId ? teamMembers.find((m) => m.id === viewMemberId) : null;
-  const displayName = opsMeta ? opsMeta.user.name : (viewMember?.name ?? currentUser.name);
+  const displayName = directorMeta ? directorMeta.name : opsMeta ? opsMeta.user.name : (viewMember?.name ?? currentUser.name);
   const firstName = displayName.split(" ")[0];
 
   return (

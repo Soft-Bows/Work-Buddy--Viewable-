@@ -37,6 +37,7 @@ import {
   opsHodDevMilestones, opsMgr1DevMilestones, opsMgr2DevMilestones,
   opsHodSurveyData, opsMgr1SurveyData,
 } from "./opsData";
+import { DIRECTOR_PERSONAS } from "./directorData";
 import {
   COMPLIANCE_DEPT_NAME,
   complianceDepartmentGoals,
@@ -118,6 +119,18 @@ export interface OpsMeta {
   milestones: Array<{ id: string; name: string; date: string; complete: boolean; type: string }>;
   teamMembers?: TeamMember[];
   departmentGoals?: DeptGoal[];
+}
+
+// A director's real identity — deliberately thin (no personal KRs/dev-goals/skills, unlike
+// OpsMeta) since directors own no department's OKR content of their own in this data model; their
+// real leave-supervisor relationship to one or more HODs (per users.csv) is what actually drives
+// their dashboard, via getRelevantDeptsForViewer (src/lib/insights.ts) rather than anything here.
+export interface DirectorViewMeta {
+  personaId: string;
+  name: string;
+  department: string;
+  designation: string;
+  avatar: string;
 }
 
 interface AppCtx {
@@ -350,6 +363,8 @@ interface AppCtx {
   updateSupervisor: (userId: string, newSupervisor: string) => void;
   // Operations persona overlay — non-null when tier is ops_hod/ops_mgr1/ops_mgr2
   opsMeta: OpsMeta | null;
+  // Director persona overlay — non-null when tier is director1/director2
+  directorMeta: DirectorViewMeta | null;
 }
 
 const Ctx = createContext<AppCtx | null>(null);
@@ -2013,6 +2028,24 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
     liveOpsTeamMembers,
   ]);
 
+  // Director identity — real name/department pulled straight from the same staffList row
+  // everyone else's identity resolves from (u300/u301), not a bespoke hardcoded object, so a
+  // future real-data swap-in (see DIRECTOR_PERSONAS) only ever requires editing users.csv.
+  const directorMeta = useMemo<DirectorViewMeta | null>(() => {
+    const persona = DIRECTOR_PERSONAS.find(p => p.tier === tier);
+    if (!persona) return null;
+    const row = (data?.staffList ?? _staffList as unknown as AppData["staffList"]).find(
+      (s: { id?: string; [key: string]: unknown }) => s.id === persona.id,
+    ) as { name?: string; dept?: string; role?: string } | undefined;
+    return {
+      personaId: persona.id,
+      name: row?.name ?? persona.name,
+      department: row?.dept ?? "Executive Office",
+      designation: row?.role ?? persona.designation,
+      avatar: persona.avatar,
+    };
+  }, [tier, data]);
+
   const d = data;
 
   return (
@@ -2121,6 +2154,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
       managerInputs, saveManagerInput,
       acknowledgedManagerInputs, acknowledgeManagerFeedback,
       opsMeta,
+      directorMeta,
     }}>
       {children}
     </Ctx.Provider>

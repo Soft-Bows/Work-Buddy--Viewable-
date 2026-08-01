@@ -4,11 +4,12 @@ import { useApp } from "@/lib/appContext";
 import { BarChart3, AlertTriangle, Download, Upload, Search, ChevronDown, ChevronUp, ChevronRight, X, UserX, UserCheck, Laptop, Loader2, Calendar, Pencil, Plus, Trash2, Settings2, Save, CheckCircle2, XCircle } from "lucide-react";
 import { cn, stripLeadingZero, pilotTestActivity, recognizeTrigger, workingDaysSince } from "@/lib/utils";
 import { toast } from "sonner";
-import type { Activity } from "@/lib/mockData";
+import type { Activity, DeptGoal } from "@/lib/mockData";
 import { CATEGORY_LABELS, AUDIENCE_LABELS } from "@/lib/mockData";
 import { getRedeemedRewardsFn, disableStaffFn, enableStaffFn, getStaffPointsLogFn, getOrgNetPointsFn } from "@/lib/api/data.functions";
 import { exportActivitiesToExcel, parseActivityImportFile, validateImportRows, type ImportValidationResult } from "@/lib/activityImportExport";
-import { computeChallengeThemes, computeCompetencyGapRow, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
+import { computeChallengeThemes, computeCompetencyGapRow, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
+import { COMPLIANCE_DEPT_NAME, complianceTeamMembers, complianceDepartmentGoals } from "@/lib/complianceData";
 import { AiGovernancePanel } from "@/components/sections/AiGovernancePanel";
 
 // ── PhillipCapital department list ────────────────────────────────────────────
@@ -25,6 +26,7 @@ const PC_DEPARTMENTS = [
   "Group Compliance",
   "Credit Risk Management (F.K.A. Credit Admin)",
   "Accounts Processing Unit",
+  "Compliance",
 ];
 
 // ── Mock action plan data per manager ─────────────────────────────────────────
@@ -1142,10 +1144,17 @@ function ActivityManagementPanel({
 
 export function AdminSection() {
   const {
+    directorMeta,
     staffList, liveActivities, addActivity, updateActivity, deleteActivity, bulkUpsertActivities, updateSupervisor,
     departmentGoals, opsDepartmentGoals, allTeamMemberSkills, opsAllTeamMemberSkills, deptGoalSkills,
     teamMembers, opsTeamMembersAll, disabledStaffList,
   } = useApp();
+  // A director sees only the departments they actually oversee (2+ HODs -> a real multi-department
+  // view); a true admin-tier viewer keeps the full org-wide picture. Same generic resolver Team
+  // OKRs' Key Staff Challenges uses — no director-specific logic duplicated here.
+  const directorScope = directorMeta
+    ? getRelevantDeptsForViewer(directorMeta.name, directorMeta.department, staffList)
+    : null;
 
   const [showActionPlan, setShowActionPlan] = useState(false);
 
@@ -1199,14 +1208,17 @@ export function AdminSection() {
     status: (localStaffStatuses[s.id] ?? s.status) as "active" | "disabled",
   }));
 
-  // Staff grouped by department (only PC departments)
+  // Staff grouped by department (only PC departments) — scoped down to just the departments a
+  // director oversees (per directorScope, above) when viewed by a director; a true admin-tier
+  // viewer keeps every department.
   const deptGroups = useMemo(() => {
-    return PC_DEPARTMENTS.map(dept => ({
+    const depts = directorScope ? PC_DEPARTMENTS.filter(d => directorScope.depts.includes(d)) : PC_DEPARTMENTS;
+    return depts.map(dept => ({
       dept,
       staff: effectiveStaff.filter(s => s.dept === dept),
       activeCount: effectiveStaff.filter(s => s.dept === dept && s.status === "active").length,
     })).filter(g => g.staff.length > 0);
-  }, [effectiveStaff]);
+  }, [effectiveStaff, directorScope]);
 
   // Organisational Competency Gaps — contrasts the skills HODs have tagged as needed on their
   // department's team goals against the skills that department's team members actually possess.
@@ -1216,6 +1228,7 @@ export function AdminSection() {
   const GOALS_BY_DEPT: Record<string, { id: string }[]> = {
     [HCWM_DEPT_NAME]: departmentGoals,
     [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
+    [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals,
   };
   const allMemberSkills = useMemo(
     () => [...allTeamMemberSkills, ...opsAllTeamMemberSkills],
@@ -1354,11 +1367,26 @@ export function AdminSection() {
   const SKILL_GAP_COUNT = competencyGapsByDept.filter(d => d.gapPct !== null && d.gapPct > 30).length;
 
   // ── Key Staff Challenges — real-time, derived from staff's own remarks on their goal progress ──
-  // (src/lib/insights.ts — shared with the HOD/Director-scoped section on the Team OKRs page)
-  const challengeThemes = useMemo(
-    () => computeChallengeThemes([...teamMembers, ...opsTeamMembersAll], [departmentGoals, opsDepartmentGoals]),
-    [teamMembers, opsTeamMembersAll, departmentGoals, opsDepartmentGoals]
-  );
+  // (src/lib/insights.ts — shared with the HOD/Director-scoped section on the Team OKRs page).
+  // Org-wide for a true admin; scoped to just the departments a director oversees otherwise.
+  const CHALLENGE_MEMBERS_BY_DEPT: Record<string, typeof teamMembers> = {
+    [HCWM_DEPT_NAME]: teamMembers, [CREDIT_RISK_DEPT_NAME]: opsTeamMembersAll, [COMPLIANCE_DEPT_NAME]: complianceTeamMembers,
+  };
+  const CHALLENGE_GOALS_BY_DEPT: Record<string, DeptGoal[]> = {
+    [HCWM_DEPT_NAME]: departmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals, [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals,
+  };
+  const challengeThemes = useMemo(() => {
+    if (directorScope) {
+      return computeChallengeThemes(
+        directorScope.depts.flatMap(d => CHALLENGE_MEMBERS_BY_DEPT[d] ?? []),
+        directorScope.depts.map(d => CHALLENGE_GOALS_BY_DEPT[d] ?? []),
+      );
+    }
+    return computeChallengeThemes(
+      [...teamMembers, ...opsTeamMembersAll, ...complianceTeamMembers],
+      [departmentGoals, opsDepartmentGoals, complianceDepartmentGoals],
+    );
+  }, [teamMembers, opsTeamMembersAll, departmentGoals, opsDepartmentGoals, directorScope]);
   const [expandedTheme, setExpandedTheme] = useState<string | null>(null);
 
   return (
@@ -1695,6 +1723,11 @@ export function AdminSection() {
         <Card>
           <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
             <SectionTitle sub="How the skills your HODs have flagged as essential for team goals stack up against the skills your people already have.">Organisational Competency Gaps</SectionTitle>
+            {directorScope && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium shrink-0">
+                {directorScope.depts.length} department{directorScope.depts.length === 1 ? "" : "s"} you oversee
+              </span>
+            )}
             <div className="flex items-center gap-1 bg-muted rounded-full p-0.5 shrink-0">
               <button
                 onClick={() => switchGapView("dept")}
@@ -1761,7 +1794,14 @@ export function AdminSection() {
         </Card>
 
         <Card>
-          <SectionTitle sub="Distilled in real time from staff's own remarks on their goal-progress updates.">Key Staff Challenges</SectionTitle>
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+            <SectionTitle sub="Distilled in real time from staff's own remarks on their goal-progress updates.">Key Staff Challenges</SectionTitle>
+            {directorScope && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium shrink-0">
+                Aggregated across {directorScope.depts.join(", ")}
+              </span>
+            )}
+          </div>
           {challengeThemes.map((t) => (
             <div key={t.theme} className="border-b border-border/60 last:border-0">
               <button

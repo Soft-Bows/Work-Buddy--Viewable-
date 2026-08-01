@@ -1,7 +1,7 @@
 import { useState, useEffect, type CSSProperties } from "react";
 import { Card, SectionTitle, SkillAttachmentModal, SkillsNeededPicker, WatercolorWash } from "@/components/ui-bits";
 import { useApp } from "@/lib/appContext";
-import { CheckCircle2, Circle, Clock, X, Pencil, Trash2, Plus, Gift, Laptop, Target, ExternalLink, AlertCircle, Bell, PartyPopper, ChevronDown, ChevronRight, Send, ListChecks } from "lucide-react";
+import { CheckCircle2, Circle, Clock, X, Pencil, Trash2, Plus, Gift, Laptop, Target, ExternalLink, AlertCircle, Bell, PartyPopper, ChevronDown, ChevronRight, Send, ListChecks, Building2 } from "lucide-react";
 import { TeamDrawer } from "@/components/sections/TeamSection";
 import { toast } from "sonner";
 import { pointsToast } from "@/lib/pointsToast";
@@ -11,6 +11,7 @@ import { TeamHealthWidget } from "@/components/sections/TeamHealthWidget";
 import type { TeamMember, RAG, SkillAttachment, DeptGoal, PersonalDevGoal } from "@/lib/mockData";
 import { getDefaultSkillsForRole, getRegulatorExamsForRole, classifySkill, getIBFJobFunctionUrl, isHCWMDept, getIHRPBadgesForRole, ALL_SKILLS, IHRP_SKILLS_CATALOG } from "@/lib/skillsCatalog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { getRelevantDeptsForViewer } from "@/lib/insights";
 
 // Returns true if dueDate ("YYYY-MM") falls in this or next calendar month
 function isDueWithinOneMonth(dueDate: string): boolean {
@@ -966,6 +967,7 @@ export function HomeSection() {
     allTeamMemberSkills, managerInputs, acknowledgedManagerInputs, opsMeta, teamDevGoalsById,
     nudgedGoalIds, setFocusedGoalId, pendingDevGoalRecs, deptGoalSkills, pendingGoalEditProposals,
     checkIns, setTeamMemberDrawerReturnHome, aiActivityLog, logAiActivity,
+    directorMeta, staffList,
   } = useApp();
 
   const isOpsTier = tier === "ops_hod" || tier === "ops_mgr1" || tier === "ops_mgr2";
@@ -1285,6 +1287,64 @@ export function HomeSection() {
     await saveDepartmentGoals(goals.map(g => ({ ...g, weightage: g.weightage ?? 0 })));
     setDraftGoals(goals);
   };
+
+  // Directors are usual accounts with an added supervisory layer, not a bespoke isolated page —
+  // but they genuinely own no department/team roster of their own in this data model (see
+  // DirectorViewMeta in appContext.tsx), so the dense Department/Team OKRs + Team-at-a-Glance +
+  // Team Health widgets below (all built around owning a real team roster) would only ever show
+  // broken/empty states for them. A light, honest home instead: who they are, which departments
+  // they oversee (real data via getRelevantDeptsForViewer, not hardcoded), and quick links into
+  // where their real content actually lives — Team OKRs' Key Staff Challenges and Admin Console's
+  // Departmental Competency Gaps, both already-existing pages, not a new one.
+  if (directorMeta) {
+    const { depts: directorDepts } = getRelevantDeptsForViewer(directorMeta.name, directorMeta.department, staffList);
+    return (
+      <div className="space-y-6">
+        <div
+          className="rounded-2xl overflow-hidden px-6 py-8 relative"
+          style={{ background: "linear-gradient(135deg, #3B82F6 0%, #6366F1 55%, #8B5CF6 100%)" }}
+        >
+          <Building2 className="absolute -right-3 -bottom-3 text-white/15 pointer-events-none" size={120} strokeWidth={1.2} />
+          <div className="relative text-white">
+            <div className="text-xs uppercase tracking-widest text-white/70">Welcome back</div>
+            <div className="font-display text-3xl mt-1">{directorMeta.name}</div>
+            <div className="text-sm text-white/80 mt-1">{directorMeta.designation}</div>
+          </div>
+        </div>
+        <Card>
+          <SectionTitle sub="Real-time, drawn straight from each department HOD's own leave-supervisor field — nothing hardcoded here.">
+            Departments You Oversee
+          </SectionTitle>
+          {directorDepts.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-2">No department HODs currently list you as their leave supervisor.</p>
+          ) : (
+            <ul className="space-y-2 py-2">
+              {directorDepts.map(dept => (
+                <li key={dept} className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg bg-muted/50">
+                  <Building2 className="size-4 text-primary shrink-0" />
+                  {dept}
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex flex-wrap gap-2 pt-3 mt-2 border-t border-border/60">
+            <button
+              onClick={() => setSection("team")}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground font-medium"
+            >
+              <Target className="size-3.5" /> Key Staff Challenges
+            </button>
+            <button
+              onClick={() => setSection("admin")}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-border font-medium"
+            >
+              <ExternalLink className="size-3.5" /> Departmental Competency Gaps
+            </button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

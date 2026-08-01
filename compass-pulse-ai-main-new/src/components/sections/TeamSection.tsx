@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import { pointsToast } from "@/lib/pointsToast";
 import { cn, workingDaysSince, formatGoalStatusDueDate, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, flattenOkrOptions, objectiveScore, objectiveConfidence, objectiveConfidenceValue, scoreToRag, keyResultsOwnedBy, formatMonthlyConfidenceDueDate, isAmongOwners, ownerNames, isPendingAckFor, hasPendingAck, isKrOverdue, formatEffectiveKrScoreDueDate } from "@/lib/utils";
 import { computeChallengeThemes, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
+import { COMPLIANCE_DEPT_NAME, complianceTeamMembers, complianceDepartmentGoals } from "@/lib/complianceData";
 
 // ── Owner picker — a search combobox over staffList (already active-only). Default (empty query)
 // shows only the current department's roster, unchanged from before; typing searches every active
@@ -2333,7 +2334,7 @@ const TEAM_MASCOT_TINTS = [
 export function TeamSection() {
   const {
     teamMembers, tier, currentUser, focusedTeamMemberId, setFocusedTeamMemberId, departmentGoals,
-    staffMemberId, adminMemberId, opsMeta, staffList, teamOkrEditors, setTeamOkrEditor, renameTeam,
+    staffMemberId, adminMemberId, opsMeta, directorMeta, staffList, teamOkrEditors, setTeamOkrEditor, renameTeam,
     teamBoxNames, renameTeamBox, focusedObjectiveId, clearFocusedObjective, focusedObjectiveExpandKrs,
     opsTeamMembersAll, opsDepartmentGoals, hcwmTeamMembers, hcwmDepartmentGoals,
     teamMemberDrawerReturnHome, setTeamMemberDrawerReturnHome, setSection,
@@ -2372,7 +2373,9 @@ export function TeamSection() {
   const isHod = (tier === "manager" && currentUser.hod) || tier === "ops_hod";
   const isOps = !!opsMeta;
   const viewedMemberId = tier === "staff" ? staffMemberId : tier === "admin" ? adminMemberId : null;
-  const viewedUserName = opsMeta
+  const viewedUserName = directorMeta
+    ? directorMeta.name
+    : opsMeta
     ? opsMeta.user.name
     : (viewedMemberId ? (teamMembers.find(m => m.id === viewedMemberId)?.name ?? currentUser.name) : currentUser.name);
   // The leave supervisor the HOD has granted edit rights to for a *specific* team-level OKR set
@@ -2386,7 +2389,10 @@ export function TeamSection() {
   // joining through staffList by id, since the switchable ops personas (u21/u22/u23) don't share an
   // id namespace with staffList's real CSV-sourced rows and that join would silently fall back to
   // undefined (showing a generic "Department OKRs" instead of e.g. "Credit Risk Management OKRs").
-  const resolvedDept = opsMeta ? opsMeta.user.department : currentUser.department;
+  // A director's own "department" (Executive Office) genuinely has no Objectives of its own — that's
+  // an honest empty state below, not a bug — their real content is the Key Staff Challenges section
+  // further down, which reads real multi-department data via getRelevantDeptsForViewer instead.
+  const resolvedDept = directorMeta ? directorMeta.department : opsMeta ? opsMeta.user.department : currentUser.department;
 
   // Owner names are just strings on Objectives/KRs — resolving to an actual TeamMember (to open
   // their drawer) only works for names present in this department's roster. Permission: the HOD
@@ -2454,15 +2460,24 @@ export function TeamSection() {
   // A non-HOD leave supervisor also gets this section, scoped to just their own direct reports —
   // they're routed a challenge response whenever they happen to be a Key Result's Objective owner,
   // but they should see their team's open challenges either way, not just the ones addressed to them.
-  const MEMBERS_BY_DEPT: Record<string, TeamMember[]> = { [HCWM_DEPT_NAME]: hcwmTeamMembers, [CREDIT_RISK_DEPT_NAME]: opsTeamMembersAll };
-  const GOALS_BY_DEPT: Record<string, DeptGoal[]> = { [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals };
+  const MEMBERS_BY_DEPT: Record<string, TeamMember[]> = {
+    [HCWM_DEPT_NAME]: hcwmTeamMembers, [CREDIT_RISK_DEPT_NAME]: opsTeamMembersAll, [COMPLIANCE_DEPT_NAME]: complianceTeamMembers,
+  };
+  const GOALS_BY_DEPT: Record<string, DeptGoal[]> = {
+    [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals, [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals,
+  };
   const canonicalOwnDept = staffList.find(s => s.name === viewedUserName)?.dept ?? resolvedDept ?? "";
-  const { depts: relevantDepts, isDirector } = isHod
+  // A director (hod=false themselves, but real leave supervisor of one or more HODs per
+  // users.csv) is exactly the case getRelevantDeptsForViewer already generalizes for — it looks at
+  // who reports to *this name* as an HOD, not at whether the viewer is one themselves. Running it
+  // for any HOD or director viewer (not just tier-HODs) is what makes "2+ HODs report to you ->
+  // multi-department view" work for a real leave supervisor with no special-cased tier at all.
+  const { depts: relevantDepts, isDirector } = (isHod || !!directorMeta)
     ? getRelevantDeptsForViewer(viewedUserName, canonicalOwnDept, staffList)
     : { depts: [] as string[], isDirector: false };
-  const isLeaveSupervisorViewer = !isHod && isTeamLead(viewedUserName);
-  const showKeyStaffChallenges = isHod || isLeaveSupervisorViewer;
-  const keyStaffChallenges = isHod
+  const isLeaveSupervisorViewer = !isHod && !directorMeta && isTeamLead(viewedUserName);
+  const showKeyStaffChallenges = isHod || isLeaveSupervisorViewer || !!directorMeta;
+  const keyStaffChallenges = (isHod || directorMeta)
     ? computeChallengeThemes(
         relevantDepts.flatMap(d => MEMBERS_BY_DEPT[d] ?? []),
         relevantDepts.map(d => GOALS_BY_DEPT[d] ?? []),

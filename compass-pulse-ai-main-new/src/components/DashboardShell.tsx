@@ -11,7 +11,6 @@ import { ComplimentsSection } from "@/components/sections/ComplimentsSection";
 import { MyGoalsSection } from "@/components/sections/MyGoalsSection";
 import { SkillsSection } from "@/components/sections/SkillsSection";
 import { AdminSection } from "@/components/sections/AdminSection";
-import { DirectorInsightsSection } from "@/components/sections/DirectorInsightsSection";
 import { AIAssistant } from "@/components/AIAssistant";
 import type { Tier } from "@/lib/mockData";
 import { COUNTRY_THEME_STORAGE_KEY, COUNTRY_THEMES, themeClassName, buildCursorStyle, buildOmbreCursorStyle } from "@/lib/themes";
@@ -164,7 +163,6 @@ function Content() {
       case "mygoals": return <MyGoalsSection />;
       case "skills": return <SkillsSection />;
       case "admin": return <AdminSection />;
-      case "director": return <DirectorInsightsSection />;
       default: return <HomeSection />;
     }
   })();
