@@ -51,25 +51,37 @@ export const seedCheckIns: CheckIn[] = [
   },
 ];
 
+// "This month," computed at load time rather than hardcoded — a literal "2026-07" here silently
+// stops being "this month" the moment the calendar rolls over, which is exactly what happened once
+// this demo kept running past July: every seeded response quietly aged into "last month" and the
+// widget fell back to its empty "not enough responses yet" state despite the data still being
+// right there. Computing it fresh means the seed data is always "current" whenever this is viewed.
+const CURRENT_MONTH = new Date().toISOString().slice(0, 7);
+
 // Current month's pulse — 4 HCWM + 3 Credit Risk responses, both above the 3-response anonymity
 // threshold so both teams' aggregates are visible without the user submitting anything first.
 export const seedPulseResponses: PulseResponse[] = [
-  { id: "pr-seed-1", respondentName: "Belle Lim", department: "Human Capital & Workplace Management", month: "2026-07", ratings: { workload: 3, clarity: 4, support: 4, growth: 4 } },
-  { id: "pr-seed-2", respondentName: "Rhea Yee", department: "Human Capital & Workplace Management", month: "2026-07", ratings: { workload: 3, clarity: 4, support: 5, growth: 3 } },
-  { id: "pr-seed-3", respondentName: "Bryan Goh", department: "Human Capital & Workplace Management", month: "2026-07", ratings: { workload: 2, clarity: 3, support: 4, growth: 3 } },
-  { id: "pr-seed-4", respondentName: "Anabelle Tan", department: "Human Capital & Workplace Management", month: "2026-07", ratings: { workload: 2, clarity: 4, support: 4, growth: 4 } },
-  { id: "pr-seed-5", respondentName: "Diana Chang", department: "Credit Risk Management (F.K.A. Credit Admin)", month: "2026-07", ratings: { workload: 3, clarity: 4, support: 4, growth: 3 } },
-  { id: "pr-seed-6", respondentName: "Elton Phua", department: "Credit Risk Management (F.K.A. Credit Admin)", month: "2026-07", ratings: { workload: 3, clarity: 4, support: 5, growth: 4 } },
-  { id: "pr-seed-7", respondentName: "Bella Lim", department: "Credit Risk Management (F.K.A. Credit Admin)", month: "2026-07", ratings: { workload: 4, clarity: 4, support: 4, growth: 3 } },
+  { id: "pr-seed-1", respondentName: "Belle Lim", department: "Human Capital & Workplace Management", month: CURRENT_MONTH, ratings: { workload: 3, clarity: 4, support: 4, growth: 4 } },
+  { id: "pr-seed-2", respondentName: "Rhea Yee", department: "Human Capital & Workplace Management", month: CURRENT_MONTH, ratings: { workload: 3, clarity: 4, support: 5, growth: 3 } },
+  { id: "pr-seed-3", respondentName: "Bryan Goh", department: "Human Capital & Workplace Management", month: CURRENT_MONTH, ratings: { workload: 2, clarity: 3, support: 4, growth: 3 } },
+  { id: "pr-seed-4", respondentName: "Anabelle Tan", department: "Human Capital & Workplace Management", month: CURRENT_MONTH, ratings: { workload: 2, clarity: 4, support: 4, growth: 4 } },
+  { id: "pr-seed-5", respondentName: "Diana Chang", department: "Credit Risk Management (F.K.A. Credit Admin)", month: CURRENT_MONTH, ratings: { workload: 3, clarity: 4, support: 4, growth: 3 } },
+  { id: "pr-seed-6", respondentName: "Elton Phua", department: "Credit Risk Management (F.K.A. Credit Admin)", month: CURRENT_MONTH, ratings: { workload: 3, clarity: 4, support: 5, growth: 4 } },
+  { id: "pr-seed-7", respondentName: "Bella Lim", department: "Credit Risk Management (F.K.A. Credit Admin)", month: CURRENT_MONTH, ratings: { workload: 4, clarity: 4, support: 4, growth: 3 } },
+  { id: "pr-seed-8", respondentName: "Michelle Sylvia", department: "Marketing Communications", month: CURRENT_MONTH, ratings: { workload: 3, clarity: 4, support: 4, growth: 4 } },
+  { id: "pr-seed-9", respondentName: "Rave Tan", department: "Marketing Communications", month: CURRENT_MONTH, ratings: { workload: 3, clarity: 3, support: 4, growth: 3 } },
+  { id: "pr-seed-10", respondentName: "Christabel Lin", department: "Marketing Communications", month: CURRENT_MONTH, ratings: { workload: 4, clarity: 3, support: 5, growth: 5 } },
 ];
 
 export const seedManagerRatings: ManagerEffectivenessRating[] = [
-  { id: "mr-seed-1", managerName: "Sarah Chen", raterName: "Anabelle Tan", month: "2026-07", ratings: { coach: 5, empower: 4, wellbeing: 5, communicate: 4, career: 4, vision: 5 } },
-  { id: "mr-seed-2", managerName: "Sarah Chen", raterName: "Bryan Goh", month: "2026-07", ratings: { coach: 4, empower: 4, wellbeing: 4, communicate: 5, career: 3, vision: 4 } },
-  { id: "mr-seed-3", managerName: "Sarah Chen", raterName: "Marcus Teo", month: "2026-07", ratings: { coach: 4, empower: 5, wellbeing: 4, communicate: 4, career: 4, vision: 4 } },
-  { id: "mr-seed-4", managerName: "Nadia Yong", raterName: "Victor Lai", month: "2026-07", ratings: { coach: 4, empower: 3, wellbeing: 4, communicate: 4, career: 3, vision: 4 } },
-  { id: "mr-seed-5", managerName: "Nadia Yong", raterName: "Diana Chang", month: "2026-07", ratings: { coach: 3, empower: 3, wellbeing: 4, communicate: 3, career: 3, vision: 4 } },
-  { id: "mr-seed-6", managerName: "Nadia Yong", raterName: "Elton Phua", month: "2026-07", ratings: { coach: 4, empower: 4, wellbeing: 4, communicate: 4, career: 4, vision: 3 } },
+  { id: "mr-seed-1", managerName: "Sarah Chen", raterName: "Anabelle Tan", month: CURRENT_MONTH, ratings: { coach: 5, empower: 4, wellbeing: 5, communicate: 4, career: 4, vision: 5 } },
+  { id: "mr-seed-2", managerName: "Sarah Chen", raterName: "Bryan Goh", month: CURRENT_MONTH, ratings: { coach: 4, empower: 4, wellbeing: 4, communicate: 5, career: 3, vision: 4 } },
+  { id: "mr-seed-3", managerName: "Sarah Chen", raterName: "Marcus Teo", month: CURRENT_MONTH, ratings: { coach: 4, empower: 5, wellbeing: 4, communicate: 4, career: 4, vision: 4 } },
+  { id: "mr-seed-4", managerName: "Nadia Yong", raterName: "Victor Lai", month: CURRENT_MONTH, ratings: { coach: 4, empower: 3, wellbeing: 4, communicate: 4, career: 3, vision: 4 } },
+  { id: "mr-seed-5", managerName: "Nadia Yong", raterName: "Diana Chang", month: CURRENT_MONTH, ratings: { coach: 3, empower: 3, wellbeing: 4, communicate: 3, career: 3, vision: 4 } },
+  { id: "mr-seed-6", managerName: "Nadia Yong", raterName: "Elton Phua", month: CURRENT_MONTH, ratings: { coach: 4, empower: 4, wellbeing: 4, communicate: 4, career: 4, vision: 3 } },
+  { id: "mr-seed-7", managerName: "Michelle Sylvia", raterName: "Rave Tan", month: CURRENT_MONTH, ratings: { coach: 4, empower: 4, wellbeing: 4, communicate: 4, career: 3, vision: 4 } },
+  { id: "mr-seed-8", managerName: "Michelle Sylvia", raterName: "Christabel Lin", month: CURRENT_MONTH, ratings: { coach: 5, empower: 4, wellbeing: 5, communicate: 5, career: 4, vision: 4 } },
 ];
 
 export const seedAiActivityLog: AiActivityLogEntry[] = [

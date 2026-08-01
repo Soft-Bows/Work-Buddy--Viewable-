@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Sparkles, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { mockPulseAiReply } from "@/lib/pulseAiReply";
 
 interface Msg { role: "user" | "ai"; text: string }
 
@@ -29,7 +30,7 @@ export function AIAssistant() {
     setInput("");
     setThinking(true);
     await new Promise((r) => setTimeout(r, 1200));
-    const reply = mockReply(text);
+    const reply = mockPulseAiReply(text);
     setThinking(false);
     setMsgs((m) => [...m, { role: "ai", text: reply }]);
   };
@@ -53,7 +54,11 @@ export function AIAssistant() {
               <div className="size-8 rounded-full bg-amber text-amber-foreground grid place-items-center"><Sparkles className="size-4" /></div>
               <div>
                 <div className="font-medium text-sm">Pulse AI</div>
-                <div className="text-[10px] opacity-70">Claude Sonnet · always-on</div>
+                {/* No live LLM call — same rule-based pattern as every other "AI" feature in this
+                    app (see pulseAiReply.ts's own header comment). "Claude Sonnet" here used to
+                    claim a real model connection that doesn't exist; this is the honest label until
+                    this is actually wired to the company's LLM/chatbot system. */}
+                <div className="text-[10px] opacity-70">Rule-based assistant · always-on</div>
               </div>
             </div>
             <button onClick={() => setOpen(false)} className="size-7 rounded-full hover:bg-primary-foreground/10 grid place-items-center">
@@ -110,13 +115,4 @@ export function AIAssistant() {
       )}
     </>
   );
-}
-
-function mockReply(q: string): string {
-  const t = q.toLowerCase();
-  if (t.includes("marcus")) return "Marcus is currently RED on senior engineering hires (2 of 8) and time-to-hire (38 days vs 30 target). His diversity slate work is healthy. Suggested next step: a 30-min coaching session focused on pipeline triage and re-prioritising the 3 most critical roles. I can draft talking points.";
-  if (t.includes("james") || t.includes("coaching plan")) return "Here's a 4-week coaching plan for James:\n\n• Week 1 — Shadow your Q3 manager training, identify 2 facilitation patterns to adopt.\n• Week 2 — Co-lead one module; structured debrief with you.\n• Week 3 — Solo cohort delivery; you observe.\n• Week 4 — Reflective journal + 360 feedback from 3 participants.\n\nWant me to schedule the touchpoints?";
-  if (t.includes("parental")) return "Our 2026 parental leave policy: 20 weeks fully paid for primary caregivers, 8 weeks for secondary caregivers (regardless of gender or family structure). Can be taken in up to 3 blocks within the first 18 months. Full policy PDF lives in the Human Capital knowledge base — want me to share the link?";
-  if (t.includes("survey") || t.includes("benchmark")) return "You're tracking above benchmark on 5 of 6 competencies. Mentoring & Coaching is the one gap (68 vs 81). I've curated a 4-item action plan on your Survey Insights page — completing it before Dec 31 unlocks +100 bonus pts.";
-  return "Great question. Based on your team's current data and our Human Capital policies, here are three things I'd suggest: (1) prioritise a 1:1 with Marcus this week on hiring pipeline, (2) wrap up your Mentoring action plan before Q3 close, and (3) consider linking James's coaching cert to your team's L&D budget request. Want me to expand on any of these?";
 }

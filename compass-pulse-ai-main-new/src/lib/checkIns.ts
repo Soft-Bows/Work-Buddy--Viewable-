@@ -32,10 +32,13 @@ export interface CheckIn {
 const RECENT_WINDOW_DAYS = 30;
 const daysSince = (iso?: string): number => (iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000) : Infinity);
 
-// Drafts 3-6 talking points for an upcoming check-in from the member's live KR/dev-goal state —
-// the same inputs a manager would otherwise have to reassemble by hand from Team OKRs before every
-// 1:1. Ordered by urgency: open risks first, then overdue items, then genuine wins, then a followed-
-// up action item from the last check-in, falling back to a generic prompt if nothing else applies.
+// Drafts up to the top 5 talking points for an upcoming check-in from the member's live KR/dev-goal
+// state — the same inputs a manager would otherwise have to reassemble by hand from Team OKRs
+// before every 1:1. Ordered by what most helps the member's actual performance: open risks first
+// (the thing most likely to need course-correction), then overdue items, then genuine wins worth
+// reinforcing, then a followed-up action item from the last check-in, falling back to a generic
+// prompt if nothing else applies. Capped at 5, not 6 — a prep brief long enough to need scrolling
+// stops being a quick pre-read.
 export function generatePrepTalkingPoints(
   member: TeamMember,
   memberKeyResults: KeyResult[],
@@ -76,7 +79,7 @@ export function generatePrepTalkingPoints(
   if (points.length === 0) {
     points.push("No open risks or overdue items right now — a good check-in for workload, priorities, and career development.");
   }
-  return points.slice(0, 6);
+  return points.slice(0, 5);
 }
 
 // Templated "minutes" from what was actually captured — not invented content. Mirrors Lattice's

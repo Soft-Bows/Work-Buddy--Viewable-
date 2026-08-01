@@ -2,8 +2,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useApp } from "@/lib/appContext";
 import { generatePrepTalkingPoints, generateAiMinutes, daysSinceLastCheckIn, CHECK_IN_CADENCE_DAYS, type CheckInActionItem } from "@/lib/checkIns";
+import { mockPulseAiReply } from "@/lib/pulseAiReply";
 import type { TeamMember, KeyResult, PersonalDevGoal } from "@/lib/mockData";
-import { ChevronDown, ChevronUp, Sparkles, MessageCircle, Plus, X, Check, Clock } from "lucide-react";
+import { ChevronDown, ChevronUp, Sparkles, MessageCircle, Plus, X, Check, Clock, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // 1:1 check-ins, collapsed by default — a Conversation Prep Agent drafts talking points from the
@@ -37,6 +38,10 @@ export function CheckInSection({
   const [actionDraft, setActionDraft] = useState("");
   const [actionItems, setActionItems] = useState<CheckInActionItem[]>([]);
   const [talkingPoints, setTalkingPoints] = useState<string[]>([]);
+  const [askOpen, setAskOpen] = useState(false);
+  const [askQuery, setAskQuery] = useState("");
+  const [askAnswer, setAskAnswer] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
 
   const startLogging = () => {
     const points = generatePrepTalkingPoints(member, memberKeyResults, memberDevGoals, lastCheckIn);
@@ -44,6 +49,9 @@ export function CheckInSection({
     setNotes("");
     setActionItems([]);
     setActionDraft("");
+    setAskOpen(false);
+    setAskQuery("");
+    setAskAnswer(null);
     setLogging(true);
     logAiActivity({
       date: new Date().toISOString().slice(0, 10), kind: "prep_agent",
@@ -55,6 +63,24 @@ export function CheckInSection({
     if (!actionDraft.trim()) return;
     setActionItems(prev => [...prev, { id: `tmp${Date.now()}`, text: actionDraft.trim(), done: false }]);
     setActionDraft("");
+  };
+
+  // Free-form, on top of the auto-drafted prep brief above — for anything the top-5 talking points
+  // don't cover (how to open a hard conversation, how to phrase feedback, etc.). Same rule-based
+  // reply engine as the floating Pulse AI assistant (pulseAiReply.ts), just asked in-context here so
+  // the manager doesn't have to leave the check-in flow to get it.
+  const askPulseAi = async () => {
+    if (!askQuery.trim()) return;
+    setAsking(true);
+    const query = askQuery.trim();
+    await new Promise(r => setTimeout(r, 900));
+    setAskAnswer(mockPulseAiReply(query, { checkInMemberName: member.name }));
+    setAsking(false);
+    logAiActivity({
+      date: new Date().toISOString().slice(0, 10), kind: "prep_agent",
+      summary: `Pulse AI asked for help with ${member.name}'s check-in: "${query.length > 60 ? `${query.slice(0, 60)}…` : query}"`,
+      targetName: member.name, actorName: managerName,
+    });
   };
 
   const saveCheckIn = () => {
@@ -111,6 +137,36 @@ export function CheckInSection({
                   </li>
                 ))}
               </ul>
+
+              {/* Ask Pulse AI — on top of the top-5 auto-drafted points above, for anything else:
+                  how to phrase feedback, open a hard conversation, etc. */}
+              <div className="border-t border-primary/15 pt-2">
+                {!askOpen ? (
+                  <button onClick={() => setAskOpen(true)} className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline">
+                    <MessageCircle className="size-3" /> Ask Pulse AI for more help
+                  </button>
+                ) : (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-muted-foreground">Ask Pulse AI — e.g. "how do I bring up a hard topic with {member.name.split(" ")[0]}?"</label>
+                    <div className="flex gap-1.5">
+                      <input
+                        value={askQuery} onChange={e => setAskQuery(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); void askPulseAi(); } }}
+                        placeholder="Ask anything about this check-in…"
+                        className="flex-1 text-xs rounded-md border border-input bg-background px-2 py-1.5"
+                      />
+                      <button onClick={() => void askPulseAi()} disabled={asking || !askQuery.trim()} className="size-7 rounded-md border border-border grid place-items-center shrink-0 disabled:opacity-40">
+                        <Send className="size-3.5" />
+                      </button>
+                    </div>
+                    {asking && <div className="text-[11px] text-muted-foreground">Thinking…</div>}
+                    {askAnswer && !asking && (
+                      <p className="text-xs text-foreground/85 leading-relaxed bg-background rounded-md border border-border p-2">{askAnswer}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="text-[10px] text-muted-foreground">Notes from the conversation</label>
                 <textarea

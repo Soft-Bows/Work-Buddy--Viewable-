@@ -125,7 +125,16 @@ export function TeamHealthWidget({
         <div className="flex items-center gap-2">
           <HeartPulse className="size-4 text-rose-500 shrink-0" />
           <span className="text-sm font-semibold">Team Health check-in</span>
-          {bothDone && <span className="text-[10px] text-rag-green font-medium">✓ Done this month</span>}
+          {bothDone ? (
+            <span className="text-[10px] text-rag-green font-medium">✓ Done this month</span>
+          ) : (
+            // A "collapsed by default" widget nobody notices needs input never gets filled in —
+            // this is the same amber not-yet-done signal every other pending action in the app
+            // uses, so this reads as "something to do" at a glance instead of easy to forget.
+            <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-rag-amber/15 text-amber-foreground border border-rag-amber/30">
+              <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" /> 2 min · takes just a moment
+            </span>
+          )}
         </div>
         {expanded ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
       </button>
