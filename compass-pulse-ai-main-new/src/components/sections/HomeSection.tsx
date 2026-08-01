@@ -965,7 +965,7 @@ export function HomeSection() {
     staffDevGoals, adminDevGoals, teamMemberPendingSkills, setFocusedSkillsMemberId,
     allTeamMemberSkills, managerInputs, acknowledgedManagerInputs, opsMeta, teamDevGoalsById,
     nudgedGoalIds, setFocusedGoalId, pendingDevGoalRecs, deptGoalSkills, pendingGoalEditProposals,
-    checkIns, setTeamMemberDrawerReturnHome,
+    checkIns, setTeamMemberDrawerReturnHome, aiActivityLog, logAiActivity,
   } = useApp();
 
   const isOpsTier = tier === "ops_hod" || tier === "ops_mgr1" || tier === "ops_mgr2";
@@ -1145,6 +1145,26 @@ export function HomeSection() {
         .slice(0, 5)
     : [];
 
+  // Log each surfaced check-in nudge once per member per day to the AI activity log — so the AI
+  // Governance panel's audit trail reflects nudges actually shown to a manager, not just seed
+  // history. Mirrors Viva Glint's guardrail that every nudge sent is logged and never silent.
+  const openPendingActions = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    overdueCheckInNudges.forEach(({ member, days }) => {
+      const alreadyLoggedToday = aiActivityLog.some(
+        e => e.kind === "nudge" && e.targetName === member.name && e.date === today,
+      );
+      if (!alreadyLoggedToday) {
+        logAiActivity({
+          date: today, kind: "nudge",
+          summary: `Nudged ${effectiveName} — no check-in with ${member.name} in ${days ?? CHECK_IN_CADENCE_DAYS}+ days`,
+          targetName: member.name, actorName: effectiveName,
+        });
+      }
+    });
+    setPendingOpen(true);
+  };
+
   const allNotifItems = [
     ...nudgedNotifItems,
     ...overdueCheckInNudges.map(({ member, days }) => ({
@@ -1275,7 +1295,7 @@ export function HomeSection() {
             <div
               className="relative overflow-hidden rounded-xl p-5 cursor-pointer hover:opacity-95 transition-opacity shadow-sm"
               style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 55%, #1D4ED8 100%)" }}
-              onClick={() => setPendingOpen(true)}
+              onClick={openPendingActions}
             >
               <Laptop
                 className="absolute -right-3 -bottom-3 text-white/20 pointer-events-none"

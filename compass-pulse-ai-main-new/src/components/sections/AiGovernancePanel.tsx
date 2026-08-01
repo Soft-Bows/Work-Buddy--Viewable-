@@ -19,7 +19,7 @@ const KIND_ICON: Record<AiActivityKind, typeof Bell> = {
 // nothing here should act invisibly. Collapsed by default, tucked into Admin (the appropriate
 // oversight-only surface) rather than the main dashboards everyone sees daily.
 export function AiGovernancePanel() {
-  const { aiActivityLog, hcwmDepartmentGoals, opsDepartmentGoals } = useApp();
+  const { aiActivityLog, hcwmDepartmentGoals, opsDepartmentGoals, logAiActivity } = useApp();
   const [expanded, setExpanded] = useState(false);
 
   const deptGoalLists: Record<string, typeof hcwmDepartmentGoals> = {
@@ -42,9 +42,32 @@ export function AiGovernancePanel() {
     .map(d => ({ ...d, deviation: d.avg - overallAvg }))
     .filter(d => Math.abs(d.deviation) >= CALIBRATION_THRESHOLD && d.n >= 3);
 
+  // Log each freshly-detected calibration flag once per department per day when an admin actually
+  // opens the panel — keeps the audit trail honest (a flag that's never been seen shouldn't claim to
+  // have been "logged"), without spamming the log on every 5s data poll.
+  const openPanel = () => {
+    const opening = !expanded;
+    if (opening) {
+      const today = new Date().toISOString().slice(0, 10);
+      calibrationFlags.forEach(f => {
+        const alreadyLoggedToday = aiActivityLog.some(
+          e => e.kind === "calibration_flag" && e.targetName === f.dept && e.date === today,
+        );
+        if (!alreadyLoggedToday) {
+          logAiActivity({
+            date: today, kind: "calibration_flag",
+            summary: `Quarterly scores from ${f.dept} deviate ${f.deviation > 0 ? "+" : ""}${f.deviation.toFixed(2)} from the cross-department average — worth a calibration check`,
+            targetName: f.dept,
+          });
+        }
+      });
+    }
+    setExpanded(v => !v);
+  };
+
   return (
     <div className="rounded-xl border border-border/70 bg-card overflow-hidden">
-      <button onClick={() => setExpanded(v => !v)} className="w-full flex items-center justify-between gap-2 px-4 py-3.5 text-left">
+      <button onClick={openPanel} className="w-full flex items-center justify-between gap-2 px-4 py-3.5 text-left">
         <div className="flex items-center gap-2">
           <ShieldCheck className="size-4 text-indigo-500 shrink-0" />
           <span className="text-sm font-semibold">AI Governance &amp; Calibration</span>
