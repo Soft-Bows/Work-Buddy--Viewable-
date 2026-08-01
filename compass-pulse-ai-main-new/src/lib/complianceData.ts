@@ -1,4 +1,4 @@
-// Compliance department mock data — created solely to give the new "Director" persona (see
+// Compliance department mock data — created solely to give the "Director" persona (see
 // directorData.ts) real, non-empty content to aggregate in its multi-department Key Staff
 // Challenges / Departmental Competency Gap view. Deliberately much lighter than opsData.ts's
 // Credit Risk bundle (no survey data, dev goals, job matches, or opsMeta-style persona object) —
@@ -33,7 +33,7 @@ export const complianceDepartmentGoals: DeptGoal[] = [
 ];
 
 export const complianceTeamMembers: TeamMember[] = [
-  { id: "u302", name: "Reuben Tan", role: "Head, Compliance", avatar: "RT", rag: "amber" as RAG, directManager: "Daniel Lee", pointsYTD: 0, joinDate: "2018-01-15", goals: [] },
+  { id: "u302", name: "Reuben Tan", role: "Head, Compliance", avatar: "RT", rag: "amber" as RAG, directManager: "Elsa Ling", pointsYTD: 0, joinDate: "2018-01-15", goals: [] },
   { id: "u303", name: "Michelle Ho", role: "Senior Executive, Compliance", avatar: "MH", rag: "amber" as RAG, directManager: "Reuben Tan", pointsYTD: 0, joinDate: "2020-06-01", goals: [] },
   { id: "u304", name: "Faizal Rahman", role: "Executive, Compliance", avatar: "FR", rag: "green" as RAG, directManager: "Reuben Tan", pointsYTD: 0, joinDate: "2022-09-01", goals: [] },
 ];

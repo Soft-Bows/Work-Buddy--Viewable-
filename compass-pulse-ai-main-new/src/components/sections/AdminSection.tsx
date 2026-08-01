@@ -10,6 +10,7 @@ import { getRedeemedRewardsFn, disableStaffFn, enableStaffFn, getStaffPointsLogF
 import { exportActivitiesToExcel, parseActivityImportFile, validateImportRows, type ImportValidationResult } from "@/lib/activityImportExport";
 import { computeChallengeThemes, computeCompetencyGapRow, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
 import { COMPLIANCE_DEPT_NAME, complianceTeamMembers, complianceDepartmentGoals } from "@/lib/complianceData";
+import { MARKETING_DEPT_NAME, marketingTeamMembers, marketingDepartmentGoals } from "@/lib/marketingData";
 import { AiGovernancePanel } from "@/components/sections/AiGovernancePanel";
 
 // ── PhillipCapital department list ────────────────────────────────────────────
@@ -27,6 +28,7 @@ const PC_DEPARTMENTS = [
   "Credit Risk Management (F.K.A. Credit Admin)",
   "Accounts Processing Unit",
   "Compliance",
+  "Marketing Communications",
 ];
 
 // ── Mock action plan data per manager ─────────────────────────────────────────
@@ -1229,6 +1231,7 @@ export function AdminSection() {
     [HCWM_DEPT_NAME]: departmentGoals,
     [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
     [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals,
+    [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
   };
   const allMemberSkills = useMemo(
     () => [...allTeamMemberSkills, ...opsAllTeamMemberSkills],
@@ -1371,9 +1374,11 @@ export function AdminSection() {
   // Org-wide for a true admin; scoped to just the departments a director oversees otherwise.
   const CHALLENGE_MEMBERS_BY_DEPT: Record<string, typeof teamMembers> = {
     [HCWM_DEPT_NAME]: teamMembers, [CREDIT_RISK_DEPT_NAME]: opsTeamMembersAll, [COMPLIANCE_DEPT_NAME]: complianceTeamMembers,
+    [MARKETING_DEPT_NAME]: marketingTeamMembers,
   };
   const CHALLENGE_GOALS_BY_DEPT: Record<string, DeptGoal[]> = {
     [HCWM_DEPT_NAME]: departmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals, [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals,
+    [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
   };
   const challengeThemes = useMemo(() => {
     if (directorScope) {
@@ -1383,8 +1388,8 @@ export function AdminSection() {
       );
     }
     return computeChallengeThemes(
-      [...teamMembers, ...opsTeamMembersAll, ...complianceTeamMembers],
-      [departmentGoals, opsDepartmentGoals, complianceDepartmentGoals],
+      [...teamMembers, ...opsTeamMembersAll, ...complianceTeamMembers, ...marketingTeamMembers],
+      [departmentGoals, opsDepartmentGoals, complianceDepartmentGoals, marketingDepartmentGoals],
     );
   }, [teamMembers, opsTeamMembersAll, departmentGoals, opsDepartmentGoals, directorScope]);
   const [expandedTheme, setExpandedTheme] = useState<string | null>(null);

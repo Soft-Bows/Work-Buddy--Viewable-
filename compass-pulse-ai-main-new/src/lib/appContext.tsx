@@ -38,6 +38,7 @@ import {
   opsHodSurveyData, opsMgr1SurveyData,
 } from "./opsData";
 import { DIRECTOR_PERSONAS } from "./directorData";
+import { marketingGoalSkills } from "./marketingData";
 import {
   COMPLIANCE_DEPT_NAME,
   complianceDepartmentGoals,
@@ -1297,6 +1298,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
     ad1: ["Credit Risk Assessment", "Financial Analysis"],
     ad2: ["AI/ML in Credit Scoring", "Credit Risk Assessment"],
     ...complianceGoalSkills,
+    ...marketingGoalSkills,
   });
   const updateGoalSkills = (goalId: string, skills: string[]) => {
     const previousSkills = deptGoalSkills[goalId] ?? [];

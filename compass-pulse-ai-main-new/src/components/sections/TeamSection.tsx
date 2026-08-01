@@ -30,6 +30,7 @@ import { pointsToast } from "@/lib/pointsToast";
 import { cn, workingDaysSince, formatGoalStatusDueDate, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, flattenOkrOptions, objectiveScore, objectiveConfidence, objectiveConfidenceValue, scoreToRag, keyResultsOwnedBy, formatMonthlyConfidenceDueDate, isAmongOwners, ownerNames, isPendingAckFor, hasPendingAck, isKrOverdue, formatEffectiveKrScoreDueDate } from "@/lib/utils";
 import { computeChallengeThemes, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
 import { COMPLIANCE_DEPT_NAME, complianceTeamMembers, complianceDepartmentGoals } from "@/lib/complianceData";
+import { MARKETING_DEPT_NAME, marketingTeamMembers, marketingDepartmentGoals } from "@/lib/marketingData";
 
 // ── Owner picker — a search combobox over staffList (already active-only). Default (empty query)
 // shows only the current department's roster, unchanged from before; typing searches every active
@@ -2462,9 +2463,11 @@ export function TeamSection() {
   // but they should see their team's open challenges either way, not just the ones addressed to them.
   const MEMBERS_BY_DEPT: Record<string, TeamMember[]> = {
     [HCWM_DEPT_NAME]: hcwmTeamMembers, [CREDIT_RISK_DEPT_NAME]: opsTeamMembersAll, [COMPLIANCE_DEPT_NAME]: complianceTeamMembers,
+    [MARKETING_DEPT_NAME]: marketingTeamMembers,
   };
   const GOALS_BY_DEPT: Record<string, DeptGoal[]> = {
     [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals, [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals,
+    [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
   };
   const canonicalOwnDept = staffList.find(s => s.name === viewedUserName)?.dept ?? resolvedDept ?? "";
   // A director (hod=false themselves, but real leave supervisor of one or more HODs per

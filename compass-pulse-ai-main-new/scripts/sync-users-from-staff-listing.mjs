@@ -20,11 +20,21 @@
 // Eliza Lim / Brandon Lim / Goi Teck Poh are excluded from the bulk import since their
 // rows already exist and are already sourced from this same listing.
 //
-// Also hand-maintained: u300-u304 — the 2 "Director" demo accounts (Daniel Lee, Priya
-// Goh, each the leave supervisor of one or more department HODs) and the 3-person
-// Compliance department (Reuben Tan + 2 reports) created to give the multi-department
-// Director view real data to aggregate. None of these exist in the real staff listing —
-// don't remove them from HAND_MAINTAINED_IDS or a re-sync will silently delete them.
+// Also hand-maintained: u300-u304 — the 3-person Compliance department (Reuben Tan + 2
+// reports, u302-u304) created to give the multi-department Director view real data to
+// aggregate (none of these 3 exist in the real staff listing), plus u300/u301 which
+// *are* real people (Elsa Ling, Ethan Lim, per "Staff Listing 2 (MGT).pdf") — their
+// real supervisor is "Jong Kook", who has no account of his own here. Also hand-
+// maintained: u305-u307 — the real, active Marketing Communications roster (Michelle
+// Sylvia HOD, Rave Tan, Christabel Lin intern) per the same PDF, needed alongside u300/
+// u301 so Elsa Ling's real multi-department oversight (HCWM via Sarah Chen + Marketing
+// Communications via Michelle Sylvia) has real department data to aggregate. Don't
+// remove any of u300-u307 from HAND_MAINTAINED_IDS or a re-sync will silently delete
+// or reshuffle them. If a future "Staff Listing 2" export includes Elsa Ling/Ethan Lim/
+// Michelle Sylvia/Rave Tan/Christabel Lin as real rows, update u300-u307 here by hand
+// from that export rather than removing them from this allowlist — letting the bulk
+// importer touch them would reassign them a new anonymized identity instead of keeping
+// their real name.
 //
 // Only active, permanent staff become NEW accounts: rows whose Designation contains "Intern"
 // or "Temporary Assistant" are always skipped, and a person with no existing account who
@@ -219,7 +229,10 @@ const sourceRows = parseCsv(readFileSync(sourcePath, "utf8"));
 // those must NOT be treated as "existing" and kept alongside a freshly regenerated
 // batch (that would duplicate every bulk row). Anything outside this allowlist is
 // always fully regenerated from the source + the stable id/name map below.
-const HAND_MAINTAINED_IDS = new Set(["u0", "u1", "u2", "u4", "u21", "u22", "u23", "u42", "u300", "u301", "u302", "u303", "u304"]);
+const HAND_MAINTAINED_IDS = new Set([
+  "u0", "u1", "u2", "u4", "u21", "u22", "u23", "u42",
+  "u300", "u301", "u302", "u303", "u304", "u305", "u306", "u307",
+]);
 const allExistingRows = parseCsv(readFileSync(USERS_FILE, "utf8"));
 const existingRows = allExistingRows.filter((u) => HAND_MAINTAINED_IDS.has(u.id));
 // disabled_detected_date must only ever be stamped once — preserve whatever's already on disk for
@@ -291,8 +304,9 @@ function roleTypeOf(row) {
 const JOB_FAMILY_OVERRIDES = {
   u0: "Human Capital", u1: "Human Capital", u2: "Human Capital", u4: "Human Capital",
   u21: "Sales", u22: "Dealing", u23: "Dealing", u42: "Human Capital",
-  u300: "Executive Office", u301: "Executive Office",
+  u300: "Management", u301: "Management",
   u302: "Compliance", u303: "Compliance", u304: "Compliance",
+  u305: "Marketing", u306: "Marketing", u307: "Marketing",
 };
 // James Okafor's title/grade must always match a title that is *currently held by an
 // active (non-resigned) HCWM employee* in the listing — a title that only exists among

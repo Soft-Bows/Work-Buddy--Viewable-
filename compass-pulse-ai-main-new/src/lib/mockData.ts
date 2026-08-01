@@ -1,7 +1,9 @@
-// director1/director2 — the 2 "Director" demo personas (Daniel Lee, Priya Goh), each the direct
-// leave supervisor of one or more department HODs per users.csv. Unlike every other tier, a
-// director doesn't own a department's own OKRs/skills content — their whole dashboard is the
-// aggregated multi-department Director Insights view (see DirectorInsightsSection).
+// director1/director2 — the 2 "Director" demo personas (Elsa Ling, Ethan Lim — real people per
+// "Staff Listing 2 (MGT).pdf"), each the real direct leave supervisor of one or more department
+// HODs per users.csv. Unlike every other tier, a director doesn't own a department's own OKRs/
+// skills content of their own — their real multi-department oversight is embedded into Team OKRs'
+// Key Staff Challenges and Admin Console's Departmental Competency Gaps (see getRelevantDeptsForViewer
+// in insights.ts), not a dedicated page.
 export type Tier = "staff" | "manager" | "admin" | "ops_hod" | "ops_mgr1" | "ops_mgr2" | "director1" | "director2";
 export type RAG = "red" | "amber" | "green";
 
