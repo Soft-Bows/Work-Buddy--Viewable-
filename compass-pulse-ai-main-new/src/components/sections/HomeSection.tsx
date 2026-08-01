@@ -5,13 +5,64 @@ import { CheckCircle2, Circle, Clock, X, Pencil, Trash2, Plus, Gift, Laptop, Tar
 import { TeamDrawer } from "@/components/sections/TeamSection";
 import { toast } from "sonner";
 import { pointsToast } from "@/lib/pointsToast";
-import { cn, isAmongOwners, keyResultsOwnedBy, objectivesOwnedBy, isPendingAckFor, objectiveConfidence, objectiveConfidenceValue, objectiveScore, scoreToRag } from "@/lib/utils";
+import { cn, isAmongOwners, keyResultsOwnedBy, objectivesOwnedBy, isPendingAckFor, objectiveConfidence, objectiveConfidenceValue, objectiveScore, scoreToRag, isConfidenceStale } from "@/lib/utils";
 import { daysSinceLastCheckIn, CHECK_IN_CADENCE_DAYS } from "@/lib/checkIns";
 import { TeamHealthWidget } from "@/components/sections/TeamHealthWidget";
 import type { TeamMember, RAG, SkillAttachment, DeptGoal, PersonalDevGoal } from "@/lib/mockData";
-import { getDefaultSkillsForRole, getRegulatorExamsForRole, classifySkill, getIBFJobFunctionUrl, isHCWMDept, getIHRPBadgesForRole, ALL_SKILLS, IHRP_SKILLS_CATALOG } from "@/lib/skillsCatalog";
+import { getDefaultSkillsForRole, getRegulatorExamsForRole, classifySkill, getSSGJobFunctionUrl, isHCWMDept, getIHRPBadgesForRole, ALL_SKILLS, IHRP_SKILLS_CATALOG } from "@/lib/skillsCatalog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getRelevantDeptsForViewer } from "@/lib/insights";
+
+// A category-grouped rendering for the "What Needs Your Attention" popups (both the manager/HOD and
+// staff versions) — a flat list of a dozen-plus different notification types read as noise; grouping
+// under a category header with a count ("1:1 Check-ins · 3") lets someone scan what KIND of thing
+// needs attention before reading individual rows, and shows at a glance whether there are several
+// queued up rather than just one.
+interface NotifItem { category: string; icon: string; title: string; sub: string; time: string; action: () => void }
+function groupNotifsByCategory(items: NotifItem[]): { category: string; items: NotifItem[] }[] {
+  const order: string[] = [];
+  const map = new Map<string, NotifItem[]>();
+  for (const item of items) {
+    if (!map.has(item.category)) { map.set(item.category, []); order.push(item.category); }
+    map.get(item.category)!.push(item);
+  }
+  return order.map(category => ({ category, items: map.get(category)! }));
+}
+
+function GroupedNotifList({ items }: { items: NotifItem[] }) {
+  const groups = groupNotifsByCategory(items);
+  return (
+    <>
+      {groups.map(({ category, items: groupItems }) => (
+        <div key={category}>
+          <div className="px-5 pt-3 pb-1 flex items-center gap-2 bg-muted/30 sticky top-0">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{category}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">{groupItems.length}</span>
+          </div>
+          {groupItems.map((item, i) => (
+            <button
+              key={i}
+              onClick={item.action}
+              className={cn(
+                "w-full text-left px-5 py-3.5 hover:bg-muted/40 transition-colors border-b border-border/50 last:border-0",
+                item.time === "Nudged" && "bg-amber-50/50 dark:bg-rag-amber/5 border-l-2 border-rag-amber/60"
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <span className="text-base mt-0.5 shrink-0">{item.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium leading-snug">{item.title}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5 leading-snug line-clamp-2">{item.sub}</div>
+                </div>
+                <span className="text-[10px] text-muted-foreground shrink-0 mt-0.5 whitespace-nowrap bg-muted px-1.5 py-0.5 rounded-full">{item.time}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      ))}
+    </>
+  );
+}
 
 // Returns true if dueDate ("YYYY-MM") falls in this or next calendar month
 function isDueWithinOneMonth(dueDate: string): boolean {
@@ -700,7 +751,7 @@ function GoalEditorModal({
   // Include HOD (currentUser) as a selectable owner alongside team members
   const staffNames = [currentUser.name, ...staffList.map(s => s.name)];
   // HCWM HODs tag from the full IHRP Skills Badges catalog; every other department's HOD tags
-  // from the full IBF Skills Framework catalog — the same catalogs shown on the Skills Profile page.
+  // from the full SSG Skills Framework catalog — the same catalogs shown on the Skills Profile page.
   const skillCatalog = isHCWMDept(effectiveDept) ? IHRP_SKILLS_CATALOG : ALL_SKILLS;
 
   const [draft, setDraft] = useState<DeptGoal[]>(initialGoals.map(g => ({ ...g })));
@@ -1142,7 +1193,7 @@ export function HomeSection() {
   // point deduction.
   const staleConfidenceKrs = departmentGoals.flatMap(dg =>
     (dg.keyResults ?? [])
-      .filter(k => isAmongOwners(k.owner, effectiveName) && !isPendingAckFor(k, effectiveName) && (!k.ragConfidenceUpdatedDate || daysSinceJoin(k.ragConfidenceUpdatedDate) > 30))
+      .filter(k => isAmongOwners(k.owner, effectiveName) && !isPendingAckFor(k, effectiveName) && isConfidenceStale(k.ragConfidenceUpdatedDate))
       .map(k => ({ dg, k }))
   );
 
@@ -1180,8 +1231,9 @@ export function HomeSection() {
   };
 
   const allNotifItems = [
-    ...nudgedNotifItems,
+    ...nudgedNotifItems.map(n => ({ ...n, category: "Goal Nudges" })),
     ...overdueCheckInNudges.map(({ member, days }) => ({
+      category: "1:1 Check-ins",
       icon: "💬",
       title: `Check in with ${member.name}`,
       sub: days === null ? "No check-in logged yet" : `Last check-in was ${days} days ago — recommended cadence is every 30 days`,
@@ -1189,6 +1241,7 @@ export function HomeSection() {
       action: () => { setPendingOpen(false); setTeamMemberDrawerReturnHome(true); setFocusedTeamMemberId(member.id); setSection("team"); },
     })),
     ...staleConfidenceKrs.map(({ dg, k }) => ({
+      category: "Confidence Updates",
       icon: "🔄",
       title: `Update RAG confidence — "${k.title}"`,
       sub: `Recommended monthly cadence · last updated ${k.ragConfidenceUpdatedDate ?? "never"} · part of "${dg.title}"`,
@@ -1196,6 +1249,7 @@ export function HomeSection() {
       action: () => { setPendingOpen(false); setSection("team"); },
     })),
     ...mixedRagGoals.map(g => ({
+      category: "Progress Status",
       icon: "🔀",
       title: `${g.title} — ${currentQuarterKey()} progress status needs confirmation`,
       sub: "Team members have differing statuses — please confirm the overall quarterly progress status",
@@ -1204,9 +1258,11 @@ export function HomeSection() {
     })),
     ...teamMembers
       .filter(m => directReportIds.has(m.id))
-      .flatMap(m => goalStatusNotifsFor(m, () => { setPendingOpen(false); setFocusedTeamMemberId(m.id); setSection("team"); })),
+      .flatMap(m => goalStatusNotifsFor(m, () => { setPendingOpen(false); setFocusedTeamMemberId(m.id); setSection("team"); }))
+      .map(n => ({ ...n, category: "Progress Status" })),
     // Type A: goals pending manager approval (+10 pts per review, +5 with feedback)
     ...pendingApprovalByMember.map(({ member, goals }) => ({
+      category: "Goal Approvals",
       icon: "📋",
       title: `${member.name} — ${goals.length} goal${goals.length > 1 ? "s" : ""} pending your approval`,
       sub: `Review within 7 working days: +${goals.length * 10} pts (+5 per goal with feedback). ${goals.slice(0, 1).map(g => g.title).join("")}${goals.length > 1 ? ` +${goals.length - 1} more` : ""}`,
@@ -1215,6 +1271,7 @@ export function HomeSection() {
     })),
     // Type B: approved goals with RAG status submitted, pending manager acknowledgment
     ...pendingRagApprovalByMember.map(({ member, goal }) => ({
+      category: "Progress Status",
       icon: "📊",
       title: `${member.name} — ${goal.ragPendingApproval} status update pending your review`,
       sub: `"${goal.title}" · Review the ${goal.ragPendingApproval} progress status to earn +10 pts; overdue reviews incur −10 pts`,
@@ -1223,6 +1280,7 @@ export function HomeSection() {
     })),
     // A direct supervisor proposed a change to a report's contributing goal — HOD review, no penalty SLA
     ...myPendingGoalEditProposals.filter(p => p.source === "supervisor").map(p => ({
+      category: "Goal Change Requests",
       icon: "✏️",
       title: `${p.proposedBy} proposed a change to ${p.memberName}'s goal — pending your review`,
       sub: `"${p.goalTitle}" · Review and adjust % contribution as needed before saving`,
@@ -1231,6 +1289,7 @@ export function HomeSection() {
     })),
     // A staff member proposed a change to their own goal — HOD accept/reject within 7 working days
     ...myPendingGoalEditProposals.filter(p => p.source === "self").map(p => ({
+      category: "Goal Change Requests",
       icon: "✏️",
       title: `${p.memberName} proposed a change to their goal — pending your approval`,
       sub: `"${p.goalTitle}" · Review within 7 working days: accept or reject, with an optional remark — or a 5-point penalty applies`,
@@ -1239,6 +1298,7 @@ export function HomeSection() {
     })),
     // Overdue approvals: -10 pts automatically deducted per goal after 7 working days
     ...overdueApprovalByMember.map(({ member, goals }) => ({
+      category: "Goal Approvals",
       icon: "🔴",
       title: `⚠️ Overdue: ${member.name}'s ${goals.length} goal${goals.length > 1 ? "s" : ""} unreviewed past 7 working days`,
       sub: `Point deduction applied: −${goals.length * 10} pts. Review now to stop further deductions.`,
@@ -1246,6 +1306,7 @@ export function HomeSection() {
       action: () => { setPendingOpen(false); setFocusedTeamMemberId(member.id); setSection("team"); },
     })),
     ...pendingByMember.map(({ member, count, goalTitles }) => ({
+      category: "Remarks",
       icon: "⏳",
       title: `${member.name} — ${count} pending remark${count > 1 ? "s" : ""}`,
       sub: goalTitles.join(" · ") || member.role,
@@ -1253,6 +1314,7 @@ export function HomeSection() {
       action: () => { setPendingOpen(false); setActiveMember(member); },
     })),
     {
+      category: "Rewards",
       icon: "🎁",
       title: `Redemption closes ${redemptionDate}`,
       sub: `Exchange your ${points} pts for Giftano vouchers before the deadline`,
@@ -1260,6 +1322,7 @@ export function HomeSection() {
       action: () => { setPendingOpen(false); setSection("rewards"); },
     },
     ...redMembers.map(m => ({
+      category: "Alerts",
       icon: "🔴",
       title: `Goal at risk — ${m.name}`,
       sub: `${m.name}'s goals have moved to RED — click to review`,
@@ -1269,6 +1332,7 @@ export function HomeSection() {
     ...allTeamMemberSkills
       .filter(m => directReportIds.has(m.memberId) && m.pending.length > 0)
       .map(m => ({
+        category: "Skill Endorsements",
         icon: "🎓",
         title: `${m.memberName} — ${m.pending.length} skill${m.pending.length > 1 ? "s" : ""} pending your endorsement`,
         sub: `Endorse within 7 working days: +10 pts per skill. Overdue endorsements incur −10 pts each. ${m.pending.join(", ")}`,
@@ -1283,6 +1347,7 @@ export function HomeSection() {
     ...teamMemberPendingSkills
       .filter(m => directReportIds.has(m.memberId) && workingDaysSince(m.notifiedDate) > 7)
       .map(m => ({
+        category: "Skill Endorsements",
         icon: "🔴",
         title: `⚠️ Overdue: ${m.memberName}'s ${m.pending.length} skill${m.pending.length > 1 ? "s" : ""} unendorsed past 7 working days`,
         sub: `Point deduction applied: −${m.pending.length * 10} pts. Endorse now to stop further deductions.`,
@@ -1511,12 +1576,14 @@ export function HomeSection() {
         const staffNotifItems = [
           // Goal minimums — 30-day rule: 3–5 performance goals, 1–10 development goals required
           ...(staffDevGoalCount < DEV_GOAL_MIN ? [staffWithinWindow ? {
+            category: "Goal Minimums",
             icon: "⏰",
             title: `${DEV_GOAL_MIN - staffDevGoalCount} more development goal${DEV_GOAL_MIN - staffDevGoalCount > 1 ? "s" : ""} needed`,
             sub: `You have ${staffDevGoalCount}/${DEV_GOAL_MIN} minimum (max ${DEV_GOAL_MAX}). Day ${staffDaysIn}/${GOAL_WINDOW_DAYS} · +10 pts per goal set.`,
             time: "30-Day Rule",
             action: () => { setStaffPendingOpen(false); setSection("mygoals"); },
           } : {
+            category: "Goal Minimums",
             icon: "🔴",
             title: "Development goals minimum not met",
             sub: `You have ${staffDevGoalCount}/${DEV_GOAL_MIN} minimum. 30-day window passed — −30 pts deducted.`,
@@ -1524,12 +1591,14 @@ export function HomeSection() {
             action: () => { setStaffPendingOpen(false); setSection("mygoals"); },
           }] : []),
           ...(staffPerfGoalCount < PERF_GOAL_MIN ? [staffWithinWindow ? {
+            category: "Goal Minimums",
             icon: "⏰",
             title: `${PERF_GOAL_MIN - staffPerfGoalCount} more performance goal${PERF_GOAL_MIN - staffPerfGoalCount > 1 ? "s" : ""} needed`,
             sub: `You have ${staffPerfGoalCount}/${PERF_GOAL_MIN} minimum (max ${PERF_GOAL_MAX}). Day ${staffDaysIn}/${GOAL_WINDOW_DAYS} · +10 pts per goal set.`,
             time: "30-Day Rule",
             action: () => { setStaffPendingOpen(false); setSection("mygoals"); },
           } : {
+            category: "Goal Minimums",
             icon: "🔴",
             title: "Performance goals minimum not met",
             sub: `You have ${staffPerfGoalCount}/${PERF_GOAL_MIN} minimum. 30-day window passed — −30 pts deducted.`,
@@ -1538,6 +1607,7 @@ export function HomeSection() {
           }] : []),
           // Type A: own performance goals pending manager approval
           ...(pendingApprovalGoals.length > 0 ? [{
+            category: "Goal Approvals",
             icon: "📋",
             title: `${pendingApprovalGoals.length} performance goal${pendingApprovalGoals.length > 1 ? "s" : ""} pending manager approval`,
             sub: `No goal status will be shown until approved. ${pendingApprovalGoals.slice(0, 1).map(g => g.title).join("")}${pendingApprovalGoals.length > 1 ? ` +${pendingApprovalGoals.length - 1} more` : ""}`,
@@ -1546,6 +1616,7 @@ export function HomeSection() {
           }] : []),
           // Type B: approved goals where submitted RAG status is pending manager acknowledgment
           ...staffRagPendingGoals.map(g => ({
+            category: "Progress Status",
             icon: "📊",
             title: `${g.ragPendingApproval} status update pending manager review`,
             sub: `"${g.title}" · Awaiting your manager's acknowledgment before status is confirmed`,
@@ -1553,6 +1624,7 @@ export function HomeSection() {
             action: () => { setStaffPendingOpen(false); setSection("mygoals"); },
           })),
           ...pendingAckGoals.map(g => ({
+            category: "Goal Change Requests",
             icon: "✏️",
             title: `Goal modified by your manager: "${g.title}"`,
             sub: "Review the updated goal description, metric, or linkage and acknowledge the change",
@@ -1560,6 +1632,7 @@ export function HomeSection() {
             action: () => { setStaffPendingOpen(false); setFocusedGoalId(g.id); setSection("mygoals"); },
           })),
           ...devGoalsDueSoon.map(g => ({
+            category: "Development Goals",
             icon: "🎯",
             title: `Dev goal due soon: ${g.title}`,
             sub: `Due: ${formatDueDate(g.dueDate)} — mark complete or update your progress`,
@@ -1569,6 +1642,7 @@ export function HomeSection() {
           ...currentStaffDevGoals
             .filter(g => managerInputs[`${currentStaffMemberId}:${g.id}`] && !acknowledgedManagerInputs[`${currentStaffMemberId}:${g.id}`])
             .map(g => ({
+              category: "Development Goals",
               icon: "💬",
               title: `Manager feedback: ${g.title}`,
               sub: "Your manager has shared feedback & recommendations on this development goal",
@@ -1579,6 +1653,7 @@ export function HomeSection() {
             const daysElapsed = workingDaysSince(rec.recommendedDate);
             const isOverdue = daysElapsed >= 7;
             return {
+              category: "Development Goals",
               icon: isOverdue ? "🔴" : "🎓",
               title: `Recommended development goal: ${rec.title}`,
               sub: isOverdue
@@ -1591,8 +1666,10 @@ export function HomeSection() {
           // Team notifications — only surfaced when the viewed staff member manages direct reports
           ...(staffMemberHasTeam ? teamMembers
             .filter(m => staffTeamDirectReportIds.has(m.id))
-            .flatMap(m => goalStatusNotifsFor(m, () => { setStaffPendingOpen(false); setFocusedTeamMemberId(m.id); setSection("team"); })) : []),
+            .flatMap(m => goalStatusNotifsFor(m, () => { setStaffPendingOpen(false); setFocusedTeamMemberId(m.id); setSection("team"); }))
+            .map(n => ({ ...n, category: "Progress Status" })) : []),
           ...staffTeamPendingApprovalByMember.map(({ member, goals }) => ({
+            category: "Goal Approvals",
             icon: "📋",
             title: `${member.name} — ${goals.length} goal${goals.length > 1 ? "s" : ""} pending your approval`,
             sub: `Review within 7 working days: +${goals.length * 10} pts (+5 per goal with feedback). ${goals.slice(0, 1).map(g => g.title).join("")}${goals.length > 1 ? ` +${goals.length - 1} more` : ""}`,
@@ -1600,6 +1677,7 @@ export function HomeSection() {
             action: () => { setStaffPendingOpen(false); setFocusedTeamMemberId(member.id); setSection("team"); },
           })),
           ...staffTeamPendingByMember.map(({ member, count, goalTitles }) => ({
+            category: "Remarks",
             icon: "⏳",
             title: `${member.name} — ${count} pending remark${count > 1 ? "s" : ""}`,
             sub: goalTitles.join(" · ") || member.role,
@@ -1607,6 +1685,7 @@ export function HomeSection() {
             action: () => { setStaffPendingOpen(false); setActiveMember(member); },
           })),
           ...staffTeamRedMembers.map(m => ({
+            category: "Alerts",
             icon: "🔴",
             title: `Goal at risk — ${m.name}`,
             sub: `${m.name}'s goals have moved to RED — click to review`,
@@ -1614,6 +1693,7 @@ export function HomeSection() {
             action: () => { setStaffPendingOpen(false); setFocusedTeamMemberId(m.id); setSection("team"); },
           })),
           ...staffTeamPendingSkills.map(m => ({
+            category: "Skill Endorsements",
             icon: "🎓",
             title: `${m.memberName} — ${m.pending.length} skill${m.pending.length > 1 ? "s" : ""} pending your endorsement`,
             sub: m.pending.join(", "),
@@ -1621,6 +1701,7 @@ export function HomeSection() {
             action: () => { setStaffPendingOpen(false); setFocusedSkillsMemberId(m.memberId); setSection("skills"); },
           })),
           {
+            category: "Rewards",
             icon: "🎁",
             title: `Redemption closes ${redemptionDate}`,
             sub: `Exchange your ${staffPoints} pts for Giftano vouchers before the deadline`,
@@ -1757,22 +1838,7 @@ export function HomeSection() {
                     {staffNotifItems.length === 0 ? (
                       <div className="px-5 py-10 text-center text-sm text-muted-foreground">All caught up! 🎉</div>
                     ) : (
-                      staffNotifItems.map((item, i) => (
-                        <button
-                          key={i}
-                          onClick={item.action}
-                          className="w-full text-left px-5 py-3.5 hover:bg-muted/40 transition-colors"
-                        >
-                          <div className="flex items-start gap-3">
-                            <span className="text-base mt-0.5 shrink-0">{item.icon}</span>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium leading-snug">{item.title}</div>
-                              <div className="text-xs text-muted-foreground mt-0.5 leading-snug line-clamp-2">{item.sub}</div>
-                            </div>
-                            <span className="text-[10px] text-muted-foreground shrink-0 mt-0.5 whitespace-nowrap bg-muted px-1.5 py-0.5 rounded-full">{item.time}</span>
-                          </div>
-                        </button>
-                      ))
+                      <GroupedNotifList items={staffNotifItems} />
                     )}
                   </div>
                   <div className="px-5 py-2.5 border-t border-border bg-muted/20 shrink-0">
@@ -1809,30 +1875,7 @@ export function HomeSection() {
               {allNotifItems.length === 0 ? (
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">All caught up! 🎉</div>
               ) : (
-                allNotifItems.map((item, i) => (
-                  <button
-                    key={i}
-                    onClick={item.action}
-                    className={cn(
-                      "w-full text-left px-5 py-3.5 hover:bg-muted/40 transition-colors",
-                      item.time === "Nudged" && "bg-amber-50/50 dark:bg-rag-amber/5 border-l-2 border-rag-amber/60"
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="text-base mt-0.5 shrink-0">{item.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium leading-snug">{item.title}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5 leading-snug line-clamp-2">{item.sub}</div>
-                      </div>
-                      <span className={cn(
-                        "text-[10px] shrink-0 mt-0.5 whitespace-nowrap px-1.5 py-0.5 rounded-full",
-                        item.time === "Nudged"
-                          ? "bg-rag-amber/15 text-amber-foreground border border-rag-amber/30"
-                          : "bg-muted text-muted-foreground"
-                      )}>{item.time}</span>
-                    </div>
-                  </button>
-                ))
+                <GroupedNotifList items={allNotifItems} />
               )}
             </div>
 
@@ -1899,7 +1942,7 @@ function DevelopmentRoadmap() {
   const upsertDevGoal = opsMeta ? opsMeta.upsertDevGoal : isAdmin ? upsertAdminDevGoal : isStaff ? upsertStaffDevGoal : upsertManagerDevGoal;
   const devGoalMemberId = opsMeta ? opsMeta.personaId : isAdmin ? adminMemberId : isStaff ? staffMemberId : "u0";
 
-  // Resolve the viewed user's role/dept/grade for IBF-matched skill recommendations
+  // Resolve the viewed user's role/dept/grade for SSG Skills Framework-matched skill recommendations
   const viewedMemberId = tier === "admin" ? adminMemberId : tier === "staff" ? staffMemberId : null;
   const viewedMember = viewedMemberId ? teamMembers.find(m => m.id === viewedMemberId) : null;
   const designation = isOpsTier ? (opsMeta?.user.designation ?? currentUser.designation) : (viewedMember?.role ?? currentUser.designation);
@@ -1913,15 +1956,15 @@ function DevelopmentRoadmap() {
   const verifiedSkills: string[] = memberSkills ? memberSkills.verified : (skills as { verified: string[] }).verified ?? [];
   const pendingSkills: string[] = memberSkills ? memberSkills.pending : (skills as { pending: string[] }).pending ?? [];
 
-  // Route to IHRP for HCWM staff, IBF for all others
+  // Route to IHRP for HCWM staff, the SSG Skills Framework for all others
   const isHCWM = isHCWMDept(dept);
   const ihrpBadges = isHCWM ? getIHRPBadgesForRole(designation, grade) : null;
   const roadmapUrl = isHCWM
     ? "https://ihrp.sg/skill-badges-overview/"
-    : getIBFJobFunctionUrl(designation, dept).url;
+    : getSSGJobFunctionUrl(designation, dept).url;
   const roadmapTrack = isHCWM
     ? "Human Capital Professionals"
-    : getIBFJobFunctionUrl(designation, dept).track;
+    : getSSGJobFunctionUrl(designation, dept).track;
 
   const grouped: [string, string[], string][] = [];
 
@@ -2082,7 +2125,7 @@ function DevelopmentRoadmap() {
           >
             {isHCWM
               ? "Click here to view IHRP Skills Badges for Human Capital Professionals"
-              : `Click here to view the full IBF Skills Framework for ${roadmapTrack}`
+              : `Click here to view the full SSG Skills Framework for ${roadmapTrack}`
             }
           </a>
         </p>

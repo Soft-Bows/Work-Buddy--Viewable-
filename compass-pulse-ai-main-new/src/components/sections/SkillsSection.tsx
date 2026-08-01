@@ -8,7 +8,7 @@ import { Check, Clock, Plus, Award, ArrowLeftRight, ExternalLink, CheckCircle2, 
 import { toast } from "sonner";
 import { cn, formatJobGrade } from "@/lib/utils";
 import { fetchPhillipJobsFn } from "@/lib/api/data.functions";
-import { SKILLS_BY_CATEGORY, getDefaultSkillsForRole, getRegulatorExamsForRole, getSkillCategoriesForRole, classifySkill, getIBFJobFunctionUrl, IHRP_SKILLS_CATALOG, isHCWMDept, getIHRPBadgesForRole, classifyIHRPBadge } from "@/lib/skillsCatalog";
+import { SKILLS_BY_CATEGORY, getDefaultSkillsForRole, getRegulatorExamsForRole, getSkillCategoriesForRole, classifySkill, getSSGJobFunctionUrl, IHRP_SKILLS_CATALOG, isHCWMDept, getIHRPBadgesForRole, classifyIHRPBadge } from "@/lib/skillsCatalog";
 import { computeCompetencyGapRow, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
 
 // ── Job function picker data ───────────────────────────────────────────────────
@@ -312,7 +312,7 @@ export function SkillsSection() {
   const viewedDesignation = isOpsTier && opsMeta ? opsMeta.user.designation : (viewedMember?.role ?? currentUser.designation);
   const viewedDept = isOpsTier && opsMeta ? opsMeta.user.department : (viewedMember?.dept ?? currentUser.department);
 
-  // HCWM staff use IHRP Skills Badges; all others use the IBF Skills Framework.
+  // HCWM staff use IHRP Skills Badges; all others use the SSG Skills Framework.
   const isHCWM = isHCWMDept(viewedDept);
   const ihrpBadges = isHCWM ? getIHRPBadgesForRole(viewedDesignation, experienceProfile?.grade ?? 3) : null;
 
@@ -322,9 +322,9 @@ export function SkillsSection() {
   const regulatoryExams = isHCWM
     ? (ihrpBadges?.certifications ?? [])
     : getRegulatorExamsForRole(viewedDesignation, viewedDept);
-  const { url: ibfUrl, track: ibfTrack } = isHCWM
+  const { url: ssgUrl, track: ssgTrack } = isHCWM
     ? { url: "https://ihrp.sg/skill-badges-overview/", track: "HR Professionals" }
-    : getIBFJobFunctionUrl(viewedDesignation, viewedDept);
+    : getSSGJobFunctionUrl(viewedDesignation, viewedDept);
   const jobFamilySkills = isHCWM
     ? IHRP_SKILLS_CATALOG
     : [...new Set(getSkillCategoriesForRole(viewedDesignation, viewedDept).flatMap(cat => SKILLS_BY_CATEGORY[cat] ?? []))];
@@ -610,7 +610,7 @@ export function SkillsSection() {
               ))}
               {available.length === 0 && (
                 <span className="text-xs text-muted-foreground">
-                  {isHCWM ? "No matching IHRP Skills Badges found." : "No matching skills found in your IBF job family."}
+                  {isHCWM ? "No matching IHRP Skills Badges found." : "No matching skills found in your SSG Skills Framework job family."}
                 </span>
               )}
             </div>
@@ -637,7 +637,7 @@ export function SkillsSection() {
                     <span className="text-xs text-muted-foreground">
                       {isHCWM
                         ? "All recommended IHRP Skills Badges for your role are in your profile. Type to browse more."
-                        : "All recommended skills for your role are already in your profile. Type to browse more skills from your IBF job family."
+                        : "All recommended skills for your role are already in your profile. Type to browse more skills from your SSG Skills Framework job family."
                       }
                     </span>
                   );
@@ -660,10 +660,10 @@ export function SkillsSection() {
               })()}
               <p className="text-[10px] text-muted-foreground mt-1">
                 Showing up to 15 recommended skills &amp; certifications for your role.{" "}
-                <a href={ibfUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-primary transition-colors">
+                <a href={ssgUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-primary transition-colors">
                   {isHCWM
                     ? "View IHRP Skills Badges for Human Capital Professionals"
-                    : `View the full IBF Skills Framework for ${ibfTrack}`
+                    : `View the full SSG Skills Framework for ${ssgTrack}`
                   }
                 </a>
               </p>

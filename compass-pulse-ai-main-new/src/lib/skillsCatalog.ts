@@ -1,11 +1,18 @@
-// IBF Skills Framework for Financial Services — curated for PhillipCapital
-// Source: https://www.ibf.org.sg/home/for-financial-institutions/resource-tools/skills-framework-for-financial-services
+// SSG Skills Framework for Financial Services — curated for PhillipCapital
+// Source: https://jobsandskills.swda.gov.sg/frameworks/skills-frameworks#skills-frameworks-sfw
+// (financial services sector only — the SSG-hosted, quarterly-updated Jobs-Skills Portal delivery
+// of the Skills Framework for Financial Services, jointly developed by SkillsFuture Singapore,
+// Workforce Singapore, MAS, and IBF — it builds on and supersedes the standalone IBF-hosted
+// version this catalog previously linked to). Individual exam/certification names below (CMFAS,
+// IBF Qualified, IBF Standards, etc.) are left as-is — those are real credentials administered by
+// their respective real-world bodies, not framework branding, and renaming them would be inaccurate.
 //
 // Covers PhillipCapital's full business scope:
 //   Investment brokerage · Fintech arm · Digital media · Wealth management · Web3 / crypto
 //
-// To update: revise the skill arrays below when IBF publishes a new version of the framework.
-// The app derives the catalog from this file — no CSV changes are needed.
+// To update: revise the skill arrays below when SSG publishes a new quarterly version of the
+// framework on the Jobs-Skills Portal. The app derives the catalog from this file — no CSV changes
+// are needed.
 
 export type SkillCategory =
   | "Management"
@@ -78,7 +85,7 @@ export const SKILLS_BY_CATEGORY: Record<SkillCategory, string[]> = {
     "Industrial Relations",
     // Below 15: specialised — accessible via search
     "Instructional Design",
-    "IBF Accreditation Management",
+    "SSG Skills Framework Accreditation Management",
     "Skills Gap Analysis",
     "Competency Framework Design",
     "Compensation & Benefits Design",
@@ -384,9 +391,11 @@ const ROLE_CATEGORY_MAP: Array<{
   },
 ];
 
-// ── IBF skill type classification ─────────────────────────────────────────────
+// ── SSG skill type classification ─────────────────────────────────────────────
 
-// Keywords that signal a Critical Core Skill (IBF CCS); everything else → TSC
+// Keywords that signal a Critical Core Skill (SSG CCS — the national Critical Core Skills taxonomy
+// the Skills Framework classifies every skill against); everything else → TSC (Technical Skill &
+// Competency)
 export const CCS_KEYWORDS = [
   "stakeholder", "coach", "mentor", "engagement", "leadership", "change",
   "collaborat", "teamwork", "communicat", "customer", "service", "learning",
@@ -459,12 +468,13 @@ export function getRegulatorExamsForRole(designation: string, dept: string): str
   return entry?.exams ?? [];
 }
 
-// ── IBF Skills Framework job-function URLs ────────────────────────────────────
-// Verified: the IBF SFS interactive framework lives at the main page below.
-// Track-specific sub-pages do not exist as stable URLs — all tracks link to the main page.
-const IBF_SFS_URL = "https://www.ibf.org.sg/home/for-financial-institutions/resource-tools/skills-framework-for-financial-services";
+// ── SSG Skills Framework job-function URLs ────────────────────────────────────
+// The Jobs-Skills Portal's Skills Frameworks landing page (financial services sector). Track-
+// specific sub-pages/deep-links aren't stable on the portal, so every track links to this same
+// page, same as the previous IBF-hosted version did.
+const SSG_SFW_URL = "https://jobsandskills.swda.gov.sg/frameworks/skills-frameworks#skills-frameworks-sfw";
 
-const IBF_TRACK_MAP: Array<{
+const SSG_TRACK_MAP: Array<{
   test: (d: string, dept: string) => boolean;
   track: string;
 }> = [
@@ -482,9 +492,9 @@ const IBF_TRACK_MAP: Array<{
   { test: d => /marketing|brand|communications/i.test(d), track: "General Management" },
 ];
 
-export function getIBFJobFunctionUrl(designation: string, dept: string): { url: string; track: string } {
-  const entry = IBF_TRACK_MAP.find(r => r.test(designation, dept));
-  return { url: IBF_SFS_URL, track: entry?.track ?? "Financial Services" };
+export function getSSGJobFunctionUrl(designation: string, dept: string): { url: string; track: string } {
+  const entry = SSG_TRACK_MAP.find(r => r.test(designation, dept));
+  return { url: SSG_SFW_URL, track: entry?.track ?? "Financial Services" };
 }
 
 // ── IHRP Skills Badges — for Human Capital & Workplace Management staff ───────
@@ -596,18 +606,18 @@ export function classifyIHRPBadge(badge: string): "IHRP Functional Competency" |
   return IHRP_BEHAVIOURAL_BADGES.includes(badge) ? "IHRP Mindsets & Behaviours" : "IHRP Functional Competency";
 }
 
-// Returns the IBF skill categories that apply to a user's role — used to scope the searchable
-// pool to the user's job family only (i.e. no cross-family skills shown when searching).
+// Returns the SSG Skills Framework skill categories that apply to a user's role — used to scope
+// the searchable pool to the user's job family only (i.e. no cross-family skills shown when searching).
 export function getSkillCategoriesForRole(designation: string, dept: string): SkillCategory[] {
   const entry = ROLE_CATEGORY_MAP.find(r => r.test(designation, dept));
   return entry?.categories ?? ["Human Capital", "Management"];
 }
 
 // Returns the default skill pool for a user's role and experience level (grade).
-// Skills are returned in IBF priority order: primary category first, then secondary.
+// Skills are returned in SSG Skills Framework priority order: primary category first, then secondary.
 // Single-category roles receive up to 15 from their primary.
 // Multi-category roles use [8, 4, 3] per-category limits (total ≤ 15).
-// grade maps to IBF experience tracks: 5-6 = Senior/VP (strategic), 3-4 = Mid (specialist), 1-2 = Entry (operational).
+// grade maps to SSG Skills Framework experience tracks: 5-6 = Senior/VP (strategic), 3-4 = Mid (specialist), 1-2 = Entry (operational).
 // Typing in the search bar switches the pool to the user's job-family categories (not ALL_SKILLS).
 export function getDefaultSkillsForRole(designation: string, dept: string, grade: number = 4): string[] {
   const entry = ROLE_CATEGORY_MAP.find(r => r.test(designation, dept));

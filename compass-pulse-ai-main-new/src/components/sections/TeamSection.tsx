@@ -27,7 +27,7 @@ function TeamSVG() {
 
 import { toast } from "sonner";
 import { pointsToast } from "@/lib/pointsToast";
-import { cn, workingDaysSince, formatGoalStatusDueDate, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, flattenOkrOptions, objectiveScore, objectiveConfidence, objectiveConfidenceValue, ragConfidenceValue, scoreToRag, keyResultsOwnedBy, formatMonthlyConfidenceDueDate, isAmongOwners, ownerNames, isPendingAckFor, hasPendingAck, isKrOverdue, formatEffectiveKrScoreDueDate } from "@/lib/utils";
+import { cn, workingDaysSince, formatGoalStatusDueDate, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, flattenOkrOptions, objectiveScore, objectiveConfidence, objectiveConfidenceValue, ragConfidenceValue, scoreToRag, keyResultsOwnedBy, formatMonthlyConfidenceDueDate, isAmongOwners, ownerNames, isPendingAckFor, hasPendingAck, isKrOverdue, formatEffectiveKrScoreDueDate, isConfidenceStale } from "@/lib/utils";
 import { computeChallengeThemes, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
 import { COMPLIANCE_DEPT_NAME, complianceTeamMembers, complianceDepartmentGoals } from "@/lib/complianceData";
 import { MARKETING_DEPT_NAME, marketingTeamMembers, marketingDepartmentGoals } from "@/lib/marketingData";
@@ -241,12 +241,12 @@ function KeyResultRow({
   // window, without asking them to click anything. 7 *working* days, same SLA window used for the
   // acknowledgement penalties elsewhere, so "recent" means the same thing throughout the app.
   const confidenceRecentlyUpdated = !!kr.ragConfidenceUpdatedDate && workingDaysSince(kr.ragConfidenceUpdatedDate) < 7;
-  // "Needs attention" the opposite way — a confidence value that's gone stale (45+ working days
-  // with no refresh) is itself a risk signal worth surfacing before anyone thinks to ask, same
-  // spirit as R4 from the platform research (Lattice/Workday "find risk ahead of it being noticed").
-  // This app has no historical confidence time-series to detect "two consecutive downgrades" from,
-  // so staleness is the honest signal available from what's actually tracked (latest value + date).
-  const confidenceStale = !!kr.ragConfidenceUpdatedDate && workingDaysSince(kr.ragConfidenceUpdatedDate) >= 45;
+  // "Needs attention" the opposite way — a confidence value that's gone stale is itself a risk
+  // signal worth surfacing before anyone thinks to ask, same spirit as R4 from the platform research
+  // (Lattice/Workday "find risk ahead of it being noticed"). Since confidence is rated on a monthly
+  // cadence (not a rolling working-day window), staleness follows that same cadence: no rating for
+  // the previous month once the new month's first working day has passed (see isConfidenceStale).
+  const confidenceStale = isConfidenceStale(kr.ragConfidenceUpdatedDate);
   const canEdit = isHod || (level === "team" && isTeamOkrEditor);
   const coOwnerConfPending = kr.pendingCoOwnerConfidence;
   const coOwnerScorePending = kr.pendingCoOwnerScore;
@@ -471,7 +471,7 @@ function KeyResultRow({
                   )}
                   title={
                     confidenceRecentlyUpdated && !isOwnerViewer ? "Updated within the last 7 working days"
-                    : confidenceStale ? "Not updated in 45+ working days — may need a refresh"
+                    : confidenceStale ? "No confidence rating recorded for last month yet — may need a refresh"
                     : undefined
                   }
                 >

@@ -290,6 +290,28 @@ export function formatMonthlyConfidenceDueDate(reference: Date = new Date()): st
   return getMonthlyConfidenceDueDate(reference).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" });
 }
 
+// First working day (Mon–Fri) of the current calendar month — the staleness rule's grace-period
+// boundary: a confidence rating isn't flagged stale just for existing in a new month, only once
+// this date has passed without a rating recorded for last month (or this one).
+function getFirstWorkingDayOfMonth(reference: Date): Date {
+  const d = new Date(reference.getFullYear(), reference.getMonth(), 1);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+// A Key Result's monthly confidence is stale once we're past the first working day of the new
+// month and no rating has been recorded since the start of the *previous* month — i.e. "no
+// confidence score made for the previous month by the first working day of the new month," per the
+// monthly (not 45-working-day) cadence the rest of the app rates confidence on.
+export function isConfidenceStale(updatedDate: string | undefined, reference: Date = new Date()): boolean {
+  if (reference < getFirstWorkingDayOfMonth(reference)) return false;
+  if (!updatedDate) return true;
+  const updated = new Date(updatedDate);
+  const updatedYM = updated.getFullYear() * 12 + updated.getMonth();
+  const refYM = reference.getFullYear() * 12 + reference.getMonth();
+  return updatedYM < refYM - 1;
+}
+
 // Last working day (Mon–Fri) of January for a given year — the deadline for the HOD SLA requiring
 // at least 3 department-level Objectives, each with at least 3 Key Results.
 export function getJanuaryDeadline(year: number): Date {
