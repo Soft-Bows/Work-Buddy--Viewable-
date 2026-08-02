@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Card, SectionTitle } from "@/components/ui-bits";
+import { Card, SectionTitle, RagPill } from "@/components/ui-bits";
 import { useApp } from "@/lib/appContext";
-import { BarChart3, AlertTriangle, Download, Upload, Search, ChevronDown, ChevronUp, ChevronRight, X, UserX, UserCheck, Laptop, Loader2, Calendar, Pencil, Plus, Trash2, Settings2, Save, CheckCircle2, XCircle } from "lucide-react";
+import { BarChart3, AlertTriangle, Download, Upload, Search, ChevronDown, ChevronUp, ChevronRight, X, UserX, UserCheck, Laptop, Loader2, Calendar, Pencil, Plus, Trash2, Settings2, Save, CheckCircle2, XCircle, GraduationCap, Users2, Award } from "lucide-react";
 import { cn, stripLeadingZero, pilotTestActivity, recognizeTrigger, workingDaysSince } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Activity, DeptGoal } from "@/lib/mockData";
@@ -1144,6 +1144,98 @@ function ActivityManagementPanel({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+// ── Learning & Development ────────────────────────────────────────────────────
+//
+// Three org-wide panels for HCWPM/L&D admin use, grounded in the 2026 AI-HR-platform research
+// pattern (Cornerstone, Workday Illuminate, Visier, Eightfold): connect skills/development data to
+// completion analytics and succession/bench-strength gaps, rather than a generic dashboard.
+// Deliberately computed live from data this app already has (dev goals, the existing "Grade 5+
+// single point of failure" succession Key Results, IBF/SkillsFuture-flavoured KR titles already
+// seeded across HCWM/Credit Risk/Marketing) — no new seed data invented for this.
+function LearningDevelopmentPanel() {
+  const { hcwmDepartmentGoals, opsDepartmentGoals, teamDevGoalsById } = useApp();
+  const allGoals = [...hcwmDepartmentGoals, ...opsDepartmentGoals, ...marketingDepartmentGoals];
+  const allKrs = allGoals.flatMap(g => (g.keyResults ?? []).map(k => ({ k, objectiveTitle: g.title })));
+
+  const allDevGoals = Object.values(teamDevGoalsById).flat();
+  const completedDevGoals = allDevGoals.filter(g => g.completed).length;
+  const devGoalCompletionPct = allDevGoals.length > 0 ? Math.round((completedDevGoals / allDevGoals.length) * 100) : null;
+
+  const successionKrs = allKrs.filter(({ k }) => /succession|single point of failure|bench-ready|bench strength/i.test(k.title));
+  const certKrs = allKrs.filter(({ k }) => /IBF|certif|SkillsFuture|AI[- ]Fluency|AI[- ]governance training/i.test(k.title));
+
+  return (
+    <Card className="space-y-4">
+      <SectionTitle sub="Org-wide skills/development analytics — dev-goal completion, succession bench-strength, and certification tracking, computed live across every department.">
+        Learning &amp; Development
+      </SectionTitle>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Dev-goal completion rate */}
+        <div className="rounded-xl border border-border p-3 space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold">
+            <GraduationCap className="size-3.5 text-teal shrink-0" /> Dev Goal Completion
+          </div>
+          {devGoalCompletionPct === null ? (
+            <p className="text-[11px] text-muted-foreground">No development goals set yet across the org.</p>
+          ) : (
+            <>
+              <div className="text-2xl font-bold text-teal">{devGoalCompletionPct}%</div>
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div className="h-full rounded-full bg-teal" style={{ width: `${devGoalCompletionPct}%` }} />
+              </div>
+              <p className="text-[10px] text-muted-foreground">{completedDevGoals} of {allDevGoals.length} development goals completed org-wide.</p>
+            </>
+          )}
+        </div>
+
+        {/* Succession / bench-strength */}
+        <div className="rounded-xl border border-border p-3 space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold">
+            <Users2 className="size-3.5 text-violet-500 shrink-0" /> Succession Bench-Strength
+          </div>
+          {successionKrs.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">No succession/bench-strength Key Results tagged yet.</p>
+          ) : (
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
+              {successionKrs.map(({ k, objectiveTitle }) => (
+                <div key={k.id} className="text-[11px] border-t border-border/40 pt-1.5 first:border-0 first:pt-0">
+                  <div className="flex items-start justify-between gap-1.5">
+                    <span className="min-w-0 flex-1">{k.title}</span>
+                    {k.score !== undefined ? <RagPill rag={k.score >= 0.7 ? "green" : k.score >= 0.4 ? "amber" : "red"} value={k.score} /> : <RagPill rag={k.ragConfidence} />}
+                  </div>
+                  <div className="text-muted-foreground">{objectiveTitle}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Certification / training completion */}
+        <div className="rounded-xl border border-border p-3 space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold">
+            <Award className="size-3.5 text-amber-500 shrink-0" /> Certification Tracking
+          </div>
+          {certKrs.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">No certification/training Key Results tagged yet.</p>
+          ) : (
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
+              {certKrs.map(({ k, objectiveTitle }) => (
+                <div key={k.id} className="text-[11px] border-t border-border/40 pt-1.5 first:border-0 first:pt-0">
+                  <div className="flex items-start justify-between gap-1.5">
+                    <span className="min-w-0 flex-1">{k.title}</span>
+                    {k.score !== undefined ? <RagPill rag={k.score >= 0.7 ? "green" : k.score >= 0.4 ? "amber" : "red"} value={k.score} /> : <RagPill rag={k.ragConfidence} />}
+                  </div>
+                  <div className="text-muted-foreground">{objectiveTitle}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function AdminSection() {
   const {
     directorMeta,
@@ -1728,6 +1820,8 @@ export function AdminSection() {
         onDelete={deleteActivity}
         onBulkUpsert={bulkUpsertActivities}
       />
+
+      <LearningDevelopmentPanel />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
