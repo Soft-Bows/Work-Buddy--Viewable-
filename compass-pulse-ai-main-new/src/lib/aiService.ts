@@ -109,7 +109,7 @@ const ruleBasedProvider: AiProvider = {
       if (lowest && lowest.score < ATTENTION_THRESHOLD) {
         items.push({
           title: `Focus area: "${lowest.b.text}" (${lowest.score.toFixed(1)}/5)`,
-          desc: `The lowest-rated behaviour in this cycle's Manager Self-Improvement Survey. Consider raising it with your own leave supervisor as a coaching focus, and revisiting it at next cycle.`,
+          desc: `The lowest-rated behaviour in this cycle's Manager Self-Improvement Survey. Consider raising it with your own manager as a coaching focus, and revisiting it at next cycle.`,
           source: "Manager Survey",
         });
       }

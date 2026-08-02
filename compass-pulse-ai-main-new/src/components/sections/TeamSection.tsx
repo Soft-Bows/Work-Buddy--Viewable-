@@ -1673,7 +1673,7 @@ function CreateObjectivePanel({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <MultiOwnerSelect value={owner} onChange={setOwner} dept={dept} staffList={staffList} teamLeadsOnly={level === "team"} />
-          {level === "team" && <p className="text-[10px] text-muted-foreground mt-1">Must be a leave supervisor/team lead — they'll be able to propose changes to this set.</p>}
+          {level === "team" && <p className="text-[10px] text-muted-foreground mt-1">Must be a manager/team lead — they'll be able to propose changes to this set.</p>}
         </div>
         <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="text-sm rounded-lg border border-input bg-background px-2.5 py-1.5" />
       </div>
@@ -2581,7 +2581,7 @@ export function TeamSection() {
         <div className="space-y-3">
           <h2 className="font-display text-2xl">Departments You Oversee</h2>
           {directorDeptList.length === 0 ? (
-            <Card><p className="text-sm text-muted-foreground py-2">No department HODs currently list you as their leave supervisor.</p></Card>
+            <Card><p className="text-sm text-muted-foreground py-2">No department HODs currently list you as their manager.</p></Card>
           ) : (
             directorDeptList.map(dept => {
               const isExpanded = expandedDirectorDept === dept;
@@ -2821,7 +2821,7 @@ export function TeamSection() {
             </div>
             <Card className="space-y-3">
               <p className="text-xs text-muted-foreground">
-                Someone from your team has been proposed as a co-owner of a Key Result in another department. As their HOD or direct leave supervisor, your consent is needed — along with theirs and the requesting HOD's — before the appointment is confirmed. Rejecting removes them from the appointment and lets you enclose a reason for the requesting HOD.
+                Someone from your team has been proposed as a co-owner of a Key Result in another department. As their HOD or direct manager, your consent is needed — along with theirs and the requesting HOD's — before the appointment is confirmed. Rejecting removes them from the appointment and lets you enclose a reason for the requesting HOD.
               </p>
               {crossDeptApprovalsForViewer.map(({ objective, kr, isOpsGoal }) => (
                 <div key={kr.id} className="rounded-lg border border-amber-300/60 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-700/40 p-3 space-y-1.5">

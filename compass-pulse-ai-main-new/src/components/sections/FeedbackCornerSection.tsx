@@ -7,7 +7,8 @@ import {
   currentQuarterLabel, previousQuarterLabel, isPulseWindowOpen, isNewInsightsBadgeActive, aggregateFirstShownDate,
 } from "@/lib/pulseSurvey";
 import {
-  MANAGER_BEHAVIORS, averageManagerScores, MIN_RATERS_FOR_AGGREGATE,
+  MANAGER_BEHAVIORS, LEADERSHIP_AREAS, MANAGER_SURVEY_TEXT_QUESTIONS,
+  averageManagerScores, averageManagerScoresByArea, collectTextResponses, MIN_RATERS_FOR_AGGREGATE,
   isManagerSurveyWindowOpen, currentManagerSurveyCycleYear,
 } from "@/lib/managerEffectiveness";
 import { resolveOwnScopeChallenges, computeChallengeThemes, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
@@ -191,9 +192,16 @@ function ManagerSurveyCard({
 }: { viewerName: string; mySupervisorName: string | null; canViewAggregate: boolean; tenureOk: boolean }) {
   const { managerEffectivenessRatings, submitManagerEffectivenessRating } = useApp();
   const [expanded, setExpanded] = useState(true);
+  const [expandedAreas, setExpandedAreas] = useState<Set<string>>(new Set());
+  const toggleArea = (a: string) => setExpandedAreas(prev => {
+    const next = new Set(prev);
+    if (next.has(a)) next.delete(a); else next.add(a);
+    return next;
+  });
   const cycleYear = currentManagerSurveyCycleYear();
   const windowOpen = isManagerSurveyWindowOpen();
   const [ratings, setRatings] = useState<Record<string, number>>(() => Object.fromEntries(MANAGER_BEHAVIORS.map(b => [b.id, 3])));
+  const [textAnswers, setTextAnswers] = useState<Record<string, string>>(() => Object.fromEntries(MANAGER_SURVEY_TEXT_QUESTIONS.map(q => [q.id, ""])));
 
   const alreadySubmitted = mySupervisorName
     ? managerEffectivenessRatings.some(r => r.raterName === viewerName && r.managerName === mySupervisorName && r.cycleYear === cycleYear)
@@ -201,23 +209,29 @@ function ManagerSurveyCard({
 
   const submit = () => {
     if (!mySupervisorName) return;
-    submitManagerEffectivenessRating({ managerName: mySupervisorName, raterName: viewerName, cycleYear, submittedAt: new Date().toISOString(), ratings });
+    const textResponses = Object.fromEntries(Object.entries(textAnswers).filter(([, v]) => v.trim()));
+    submitManagerEffectivenessRating({
+      managerName: mySupervisorName, raterName: viewerName, cycleYear, submittedAt: new Date().toISOString(),
+      ratings, textResponses: Object.keys(textResponses).length ? textResponses : undefined,
+    });
     toast.success("Thanks — your feedback is anonymous and helps shape support this cycle.");
   };
 
   const myRatings = managerEffectivenessRatings.filter(r => r.managerName === viewerName && r.cycleYear === cycleYear);
   const myAvgs = averageManagerScores(myRatings);
+  const myAreaAvgs = averageManagerScoresByArea(myAvgs);
   const companyRatings = managerEffectivenessRatings.filter(r => r.cycleYear === cycleYear);
   const companyAvgs = averageManagerScores(companyRatings);
+  const companyAreaAvgs = averageManagerScoresByArea(companyAvgs);
   const lastYearRatings = managerEffectivenessRatings.filter(r => r.managerName === viewerName && r.cycleYear === cycleYear - 1);
   const lastYearAvgs = averageManagerScores(lastYearRatings);
   const myOverall = overallAverage(myAvgs);
   const lastYearOverall = overallAverage(lastYearAvgs);
 
-  const radarData = MANAGER_BEHAVIORS.map(b => ({
-    behaviour: b.text.length > 24 ? `${b.text.slice(0, 24)}…` : b.text,
-    you: myAvgs?.[b.id] ?? 0,
-    "company avg": companyAvgs?.[b.id] ?? 0,
+  const radarData = LEADERSHIP_AREAS.map(area => ({
+    area: area.length > 20 ? `${area.slice(0, 20)}…` : area,
+    you: myAreaAvgs?.[area] ?? 0,
+    "company avg": companyAreaAvgs?.[area] ?? 0,
   }));
 
   return (
@@ -233,23 +247,44 @@ function ManagerSurveyCard({
       {expanded && (
         <div className="px-4 pb-4 space-y-4">
           {tenureOk && mySupervisorName && (
-            <div className="rounded-lg border border-border/60 bg-background/60 p-3 space-y-2.5">
+            <div className="rounded-lg border border-border/60 bg-background/60 p-3 space-y-3">
               <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                How's {mySupervisorName.split(" ")[0]} doing as your leave supervisor? {!windowOpen && <span className="text-rag-amber">(opens Oct 1)</span>}
+                How's {mySupervisorName.split(" ")[0]} doing as your manager? {!windowOpen && <span className="text-rag-amber">(opens Aug 1)</span>}
               </div>
               {alreadySubmitted ? (
                 <p className="text-xs text-rag-green font-medium">✓ Submitted for the {cycleYear} cycle — thanks!</p>
               ) : windowOpen ? (
                 <>
-                  <div className="space-y-2">
-                    {MANAGER_BEHAVIORS.map(b => (
-                      <RatingRow key={b.id} label={b.text} value={ratings[b.id]} onChange={v => setRatings(prev => ({ ...prev, [b.id]: v }))} />
+                  <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
+                    {LEADERSHIP_AREAS.map(area => (
+                      <div key={area}>
+                        <div className="text-[11px] font-semibold text-primary mb-1.5">{area}</div>
+                        <div className="space-y-1.5">
+                          {MANAGER_BEHAVIORS.filter(b => b.leadershipArea === area).map(b => (
+                            <RatingRow key={b.id} label={b.text} value={ratings[b.id]} onChange={v => setRatings(prev => ({ ...prev, [b.id]: v }))} />
+                          ))}
+                        </div>
+                      </div>
                     ))}
+                    <div>
+                      <div className="text-[11px] font-semibold text-primary mb-1.5">General</div>
+                      <div className="space-y-2">
+                        {MANAGER_SURVEY_TEXT_QUESTIONS.map(q => (
+                          <div key={q.id}>
+                            <label className="text-[10px] text-muted-foreground">{q.text}</label>
+                            <textarea
+                              value={textAnswers[q.id]} onChange={e => setTextAnswers(prev => ({ ...prev, [q.id]: e.target.value }))} rows={2}
+                              className="w-full text-xs rounded-md border border-input bg-background px-2 py-1.5 mt-0.5"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                   <button onClick={submit} className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium">Submit anonymously</button>
                 </>
               ) : (
-                <p className="text-xs text-muted-foreground">Runs annually, Oct 1 – Nov 30. Check back then.</p>
+                <p className="text-xs text-muted-foreground">Runs annually, Aug 1 – Sep 30. Check back then.</p>
               )}
             </div>
           )}
@@ -260,13 +295,13 @@ function ManagerSurveyCard({
                 <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">How your team sees you</div>
                 {myOverall !== null && lastYearOverall !== null && <TrendBadge delta={myOverall - lastYearOverall} />}
               </div>
-              {myAvgs ? (
+              {myAvgs && myAreaAvgs ? (
                 <>
                   <div className="h-[260px] -mx-2">
                     <ResponsiveContainer width="100%" height="100%">
                       <RadarChart data={radarData}>
                         <PolarGrid stroke="oklch(0.916 0.022 248)" />
-                        <PolarAngleAxis dataKey="behaviour" tick={{ fontSize: 10, fill: "oklch(0.40 0.07 258)" }} />
+                        <PolarAngleAxis dataKey="area" tick={{ fontSize: 10, fill: "oklch(0.40 0.07 258)" }} />
                         <PolarRadiusAxis domain={[0, 5]} tick={false} axisLine={false} />
                         <Radar name="Company avg" dataKey="company avg" stroke="oklch(0.74 0.20 190)" fill="oklch(0.74 0.20 190)" fillOpacity={0.15} strokeWidth={2} />
                         <Radar name="You" dataKey="you" stroke="oklch(0.56 0.24 255)" fill="oklch(0.56 0.24 255)" fillOpacity={0.30} strokeWidth={2} />
@@ -275,7 +310,42 @@ function ManagerSurveyCard({
                       </RadarChart>
                     </ResponsiveContainer>
                   </div>
-                  <p className="text-[10px] text-muted-foreground">Based on {myRatings.length} anonymous ratings this cycle. Grouped by leadership area once the reference framework is added.</p>
+                  <p className="text-[10px] text-muted-foreground mb-2">Based on {myRatings.length} anonymous ratings this cycle.</p>
+
+                  {/* Drill-down: every individual item's score within each leadership area */}
+                  <div className="space-y-1.5">
+                    {LEADERSHIP_AREAS.map(area => (
+                      <div key={area} className="rounded-lg border border-border/60 bg-background/70">
+                        <button onClick={() => toggleArea(area)} className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left">
+                          <span className="text-xs font-medium">{area}</span>
+                          <span className="text-[10px] text-muted-foreground">{(myAreaAvgs[area] ?? 0).toFixed(1)}</span>
+                        </button>
+                        {expandedAreas.has(area) && (
+                          <div className="px-3 pb-2.5 space-y-1.5">
+                            {MANAGER_BEHAVIORS.filter(b => b.leadershipArea === area).map(b => (
+                              <AverageBar key={b.id} label={b.text} value={myAvgs[b.id] ?? 0} benchmark={companyAvgs?.[b.id]} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Free-text answers, listed anonymously — nothing to average about open-ended comments */}
+                  {MANAGER_SURVEY_TEXT_QUESTIONS.map(q => {
+                    const answers = collectTextResponses(myRatings, q.id);
+                    if (answers.length === 0) return null;
+                    return (
+                      <div key={q.id} className="mt-3">
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">{q.text}</div>
+                        <ul className="space-y-1">
+                          {answers.map((a, i) => (
+                            <li key={i} className="text-xs text-foreground/80 bg-background rounded-md border border-border p-2">&ldquo;{a}&rdquo;</li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
                 </>
               ) : (
                 <p className="text-xs text-muted-foreground">Not enough ratings yet this cycle (need {MIN_RATERS_FOR_AGGREGATE}+ to protect anonymity) — {myRatings.length} so far.</p>

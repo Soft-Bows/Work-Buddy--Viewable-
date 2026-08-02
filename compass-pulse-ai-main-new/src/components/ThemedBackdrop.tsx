@@ -244,37 +244,50 @@ function MalaysiaScene() {
 function SingaporeScene() {
   return (
     <Scene>
-      {/* "Arrived at Changi at night" — a deep indigo/navy night sky instead of a daytime wash, no
-          dawn pastels; SkyLayer's white cloud-cluster blurs and glow now read as moonlit haze rather
-          than daytime cloud, which is exactly the effect an evening arrival scene wants. */}
+      {/* "Arrived at Gardens by the Bay at night" — a deep indigo/navy sky, no daytime pastels;
+          SkyLayer's white cloud-cluster blurs and glow read as moonlit haze rather than daytime
+          cloud, the right backdrop for the nightly Garden Rhapsody light show at Supertree Grove. */}
       <SkyLayer sky="linear-gradient(180deg, #0B1230 0%, #16204A 32%, #223B72 66%, #2E4E86 100%)" glow="#9FC4FF" />
-      {/* Changi Airport at night — a long lit terminal building plus the airport's distinctive
-          control tower (tall shaft, wide disc-shaped cab), with warm lit windows and a runway-light
-          string along the ground, replacing the previous daytime Marina Bay Sands scene entirely. */}
+      {/* Supertree Grove, illuminated for Garden Rhapsody — 5 Supertrees of varying height, each a
+          tapered trunk under a lit canopy, in the mixed jewel-tone palette the real light show
+          actually cycles through (magenta, teal, amber, violet, cyan), plus the OCBC Skyway canopy
+          walkway linking two of the tallest trees. Replaces the earlier boxy Changi Airport
+          buildings, which read as plain rectangles rather than a real landmark. */}
       <svg className={`absolute bottom-0 inset-x-0 w-full h-[48vh] min-h-[270px] ${LANDMARK_OPACITY}`} viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
-        <defs>
-          <linearGradient id="changiFacade" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#3E4E78" />
-            <stop offset="100%" stopColor="#1C2848" />
-          </linearGradient>
-        </defs>
-        <path d="M0 178 Q110 158 220 170 T400 160 V220 H0 Z" fill="#141B36" />
-        {/* Terminal building — long, low, glass-fronted, glowing from within */}
-        <rect x="34" y="148" width="332" height="30" fill="url(#changiFacade)" />
-        <rect x="34" y="144" width="332" height="6" fill="#0F1730" />
-        {Array.from({ length: 24 }).map((_, i) => (
-          <rect key={i} x={42 + i * 13.5} y="154" width="8" height="18" fill={i % 3 === 0 ? "#FCD98E" : "#FFE9B0"} opacity={i % 4 === 1 ? 0.35 : 0.85} />
+        <path d="M0 178 Q110 158 220 170 T400 160 V220 H0 Z" fill="#0F1D18" />
+        {[
+          { x: 55, h: 78, r: 24, c: "#E85FA0", glow: "#FFD1EA" },
+          { x: 128, h: 112, r: 28, c: "#3FC7C2", glow: "#C9F7F2" },
+          { x: 212, h: 150, r: 34, c: "#F0B23C", glow: "#FCE3A0" },
+          { x: 296, h: 118, r: 28, c: "#9A6FD6", glow: "#E4D3FA" },
+          { x: 358, h: 84, r: 22, c: "#4FA8E8", glow: "#CDE7FA" },
+        ].map((t, i) => {
+          const baseY = 192, topY = baseY - t.h;
+          return (
+            <g key={i}>
+              <path d={`M${t.x - 5} ${baseY} L${t.x - 8} ${topY} L${t.x + 8} ${topY} L${t.x + 5} ${baseY} Z`} fill="#3A2C1E" />
+              <ellipse cx={t.x} cy={topY} rx={t.r} ry={t.r * 0.45} fill={t.c} opacity="0.9" />
+              <ellipse cx={t.x} cy={topY - 3} rx={t.r * 0.65} ry={t.r * 0.28} fill={t.glow} opacity="0.65" />
+            </g>
+          );
+        })}
+        {/* OCBC Skyway — a slung walkway between the two tallest trees, with small hanging lights */}
+        <path d="M212 122 Q254 132 296 104" stroke="#2A3B5C" strokeWidth="4" fill="none" />
+        {[228, 244, 260, 276].map(x => (
+          <circle key={x} cx={x} cy={125 - (x - 212) * 0.2} r="1.6" fill="#FFE9B0" opacity="0.9" />
         ))}
-        {/* Control tower — tall shaft with a wide disc cab, the airport's most recognisable shape */}
-        <rect x="227" y="62" width="10" height="88" fill="url(#changiFacade)" />
-        <ellipse cx="232" cy="58" rx="24" ry="13" fill="url(#changiFacade)" />
-        <ellipse cx="232" cy="54" rx="19" ry="7.5" fill="#FCD98E" opacity="0.6" />
-        <circle cx="232" cy="40" r="2" fill="#FF8A8A" opacity="0.9" />
-        {/* Runway lights, a string of small glowing dots along the tarmac */}
-        {[54, 82, 110, 138, 166, 194, 222, 250, 278, 306, 334].map(x => (
-          <circle key={x} cx={x} cy="181" r="1.8" fill="#8FD6FF" opacity="0.85" />
+        {/* Flower bed along the walkway, mixed colours standing in for whichever seasonal Flower
+            Dome display is running (Balinese-orchid Orchid Extravaganza in early Aug 2026, giving
+            way to the Egypt-themed Lilytopia) — swap the palette here when the season changes. */}
+        {[40, 66, 92, 300, 326, 352, 378].map((x, i) => (
+          <g key={x}>
+            {[0, 72, 144, 216, 288].map(deg => (
+              <ellipse key={deg} cx={x} cy="186" rx="3.2" ry="7" fill={["#E8A0C4", "#F3D26A", "#B98AE8", "#F0A83C"][i % 4]} transform={`rotate(${deg} ${x} 186)`} opacity="0.85" />
+            ))}
+            <circle cx={x} cy="186" r="2.2" fill="#FFF3D0" />
+          </g>
         ))}
-        <path d="M0 195 Q120 180 240 190 T400 184 V220 H0 Z" fill="#0F1730" />
+        <path d="M0 195 Q120 180 240 190 T400 184 V220 H0 Z" fill="#0A1712" />
       </svg>
       {/* Vanda Miss Joaquim orchid, Singapore's national flower — bottom-right */}
       <svg className={`absolute bottom-8 right-[6%] ${FOREGROUND_OPACITY}`} width="64" height="76" viewBox="0 0 60 70" fill="none">
@@ -483,9 +496,13 @@ function JapanScene() {
           gradient fill instead of one flat colour for warmth/depth. */}
       <svg className={`absolute bottom-0 inset-x-0 w-full h-[46vh] min-h-[260px] ${LANDMARK_OPACITY}`} viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
         <defs>
+          {/* Warm dusk-lit "Red Fuji" palette (after Hokusai's famous print) instead of a flat
+              grey-blue — coral catching the light near the peak, deepening to plum at the base —
+              rather than a cooler, colourless silhouette. */}
           <linearGradient id="fujiSlope" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#9CB0CC" />
-            <stop offset="100%" stopColor="#5E7396" />
+            <stop offset="0%" stopColor="#E8927A" />
+            <stop offset="45%" stopColor="#B06A8C" />
+            <stop offset="100%" stopColor="#5C3F6B" />
           </linearGradient>
         </defs>
         <path d="M0 170 Q90 140 180 160 T400 145 V220 H0 Z" fill="#BFE0D8" />

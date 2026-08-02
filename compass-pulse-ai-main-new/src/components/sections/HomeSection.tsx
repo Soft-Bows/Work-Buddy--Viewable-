@@ -1407,7 +1407,7 @@ export function HomeSection() {
             </button>
           </div>
           {directorDepts.length === 0 ? (
-            <Card><p className="text-sm text-muted-foreground py-2">No department HODs currently list you as their leave supervisor.</p></Card>
+            <Card><p className="text-sm text-muted-foreground py-2">No department HODs currently list you as their manager.</p></Card>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {directorDepts.map(dept => {

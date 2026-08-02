@@ -398,7 +398,7 @@ function StaffProfilePopup({
             {/* Leave Supervisor — editable */}
             <div className="col-span-2 rounded-lg bg-muted/40 px-3 py-2.5 border border-border/60">
               <div className="flex items-center justify-between mb-0.5">
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Leave Supervisor</div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Manager</div>
                 {!editingSupervisor && (
                   <button onClick={() => setEditingSupervisor(true)} className="flex items-center gap-1 text-[10px] text-primary hover:opacity-70 transition-opacity">
                     <Pencil className="size-3" /> Edit
