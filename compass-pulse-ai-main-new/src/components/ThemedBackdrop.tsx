@@ -249,54 +249,64 @@ function SingaporeScene() {
           night (no daytime pastels). SkyLayer's white cloud-cluster blurs and glow read as moonlit/
           light-show haze, the right backdrop for the nightly Garden Rhapsody show. */}
       <SkyLayer sky="linear-gradient(180deg, #131A3D 0%, #202B5E 28%, #38468C 60%, #52619E 100%)" glow="#C99FF0" />
-      {/* Supertree Grove, illuminated for Garden Rhapsody — 7 Supertrees (up from 5, a fuller grove),
-          each with a layered canopy (base colour + inner glow core + scattered sparkle lights, the
-          same "lit window" technique used for Changi/MBS) plus a soft ground-uplight pool at its
-          base, so the grove reads as genuinely glowing rather than a flat coloured block. A glass
-          conservatory dome (standing in for the Flower Dome/Cloud Forest) sits low in the background
-          for extra depth. A custom, brighter-than-usual opacity override (most other scenes stay at
-          the shared LANDMARK_OPACITY) sells the "illuminated at night" effect without touching any
-          other country's backdrop. */}
-      <svg className="absolute bottom-0 inset-x-0 w-full h-[48vh] min-h-[270px] opacity-[0.68] dark:opacity-[0.42]" viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
+      {/* A second, scene-local light-show glow — a wide soft magenta/gold wash sitting low over the
+          grove, unique to this scene (not touching the shared SkyLayer component that every other
+          country also uses), suggesting stage lighting bouncing off the canopies. */}
+      <div className="absolute bottom-[8vh] inset-x-[10%] h-[26vh] rounded-full blur-3xl opacity-70 dark:opacity-50" style={{ background: "radial-gradient(ellipse, #FF9FE0 0%, #FFD98A 45%, transparent 75%)" }} />
+      {/* Supertree Grove, illuminated for Garden Rhapsody — 7 Supertrees, each with a layered canopy
+          (base colour + brighter inner core + scattered sparkle lights, the same "lit window"
+          technique used for Changi/MBS) plus a ground-uplight pool at its base. A glass conservatory
+          dome (standing in for the Flower Dome/Cloud Forest) sits low in the background for depth.
+          First pass at this scene still read as dim, undifferentiated "vertical shapes": canopies
+          were too flat/narrow relative to their trunks and the whole svg's opacity was still too low
+          against a dark sky. Fixed here with a much higher local opacity override (0.97/0.85 — this
+          scene's own custom className, not the shared LANDMARK_OPACITY every other country still
+          uses unchanged), wider/taller canopies, brighter saturated colours, and bigger, more numerous
+          sparkle points. */}
+      <svg className="absolute bottom-0 inset-x-0 w-full h-[48vh] min-h-[270px] opacity-[0.97] dark:opacity-[0.85]" viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
         <defs>
           <radialGradient id="domeGlow" cx="50%" cy="35%" r="65%">
-            <stop offset="0%" stopColor="#FFE9B0" stopOpacity="0.5" />
+            <stop offset="0%" stopColor="#FFE9B0" stopOpacity="0.6" />
             <stop offset="100%" stopColor="#FFE9B0" stopOpacity="0" />
           </radialGradient>
+          <linearGradient id="sgGround" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#1C3348" />
+            <stop offset="100%" stopColor="#142838" />
+          </linearGradient>
         </defs>
-        <path d="M0 178 Q110 158 220 170 T400 160 V220 H0 Z" fill="#101C2E" />
+        <path d="M0 178 Q110 158 220 170 T400 160 V220 H0 Z" fill="url(#sgGround)" />
         {/* Flower Dome / Cloud Forest — a low glass conservatory silhouette, softly lit from within */}
-        <path d="M20 178 Q20 128 90 122 Q160 128 160 178 Z" fill="#243252" opacity="0.85" />
+        <path d="M20 178 Q20 128 90 122 Q160 128 160 178 Z" fill="#33456C" opacity="0.9" />
         <path d="M20 178 Q20 128 90 122 Q160 128 160 178 Z" fill="url(#domeGlow)" />
         {[38, 56, 74, 92, 110, 128, 146].map(x => (
-          <line key={x} x1={x} y1="178" x2="90" y2="124" stroke="#3A4B72" strokeWidth="1" opacity="0.6" />
+          <line key={x} x1={x} y1="178" x2="90" y2="124" stroke="#516992" strokeWidth="1" opacity="0.7" />
         ))}
-        {[{ x: 46, h: 92 }, { x: 118, h: 128 }, { x: 178, h: 156 }, { x: 232, h: 176 }, { x: 286, h: 144 }, { x: 336, h: 116 }, { x: 378, h: 86 }].map((t, i) => {
-          const c = ["#E85FA0", "#3FC7C2", "#F0B23C", "#B85CE0", "#F0B23C", "#3FC7C2", "#4FA8E8"][i];
-          const glow = ["#FFD1EA", "#C9F7F2", "#FCE3A0", "#E9CFFA", "#FCE3A0", "#C9F7F2", "#CDE7FA"][i];
-          const r = 18 + t.h * 0.13;
+        {[{ x: 46, h: 96 }, { x: 118, h: 134 }, { x: 178, h: 162 }, { x: 232, h: 182 }, { x: 286, h: 150 }, { x: 336, h: 122 }, { x: 378, h: 90 }].map((t, i) => {
+          const c = ["#FF6FB0", "#48E0D8", "#FFC24C", "#C374F0", "#FFC24C", "#48E0D8", "#5FBBFF"][i];
+          const glow = ["#FFDFF0", "#DEFFFB", "#FFF0C8", "#F3E2FF", "#FFF0C8", "#DEFFFB", "#E4F4FF"][i];
+          const r = 22 + t.h * 0.17;
           const baseY = 192, topY = baseY - t.h;
           const sparkles = [
-            [-0.5, -0.1], [0.4, -0.35], [-0.2, -0.5], [0.55, 0.1], [-0.6, 0.15], [0.15, -0.15],
+            [-0.55, -0.15], [0.45, -0.4], [-0.15, -0.55], [0.6, 0.15], [-0.65, 0.2], [0.1, -0.2], [0.7, -0.1], [-0.4, 0.3],
           ];
           return (
             <g key={t.x}>
               {/* Ground uplight — a soft wide glow pool at the base, selling "lit from below" */}
-              <ellipse cx={t.x} cy={baseY + 1} rx={r * 0.9} ry="4" fill={c} opacity="0.35" />
-              <path d={`M${t.x - 4} ${baseY} L${t.x - 7} ${topY} L${t.x + 7} ${topY} L${t.x + 4} ${baseY} Z`} fill="#2E2418" />
-              {/* Canopy: base disc, brighter inner core, then scattered sparkle points for texture */}
-              <ellipse cx={t.x} cy={topY} rx={r} ry={r * 0.44} fill={c} opacity="0.92" />
-              <ellipse cx={t.x} cy={topY - 2} rx={r * 0.62} ry={r * 0.26} fill={glow} opacity="0.75" />
+              <ellipse cx={t.x} cy={baseY + 1} rx={r * 1.05} ry="6" fill={c} opacity="0.5" />
+              <path d={`M${t.x - 4} ${baseY} L${t.x - 7} ${topY} L${t.x + 7} ${topY} L${t.x + 4} ${baseY} Z`} fill="#3A2C1E" />
+              {/* Canopy: wide base disc, brighter inner core, then scattered sparkle points for texture */}
+              <ellipse cx={t.x} cy={topY} rx={r} ry={r * 0.56} fill={c} opacity="0.97" />
+              <ellipse cx={t.x} cy={topY - 3} rx={r * 0.68} ry={r * 0.34} fill={glow} opacity="0.85" />
               {sparkles.map(([dx, dy], si) => (
-                <circle key={si} cx={t.x + dx * r} cy={topY + dy * r * 0.4} r="1.4" fill="#FFFDF0" opacity={0.7 + (si % 2) * 0.2} />
+                <circle key={si} cx={t.x + dx * r} cy={topY + dy * r * 0.5} r="2.1" fill="#FFFDF0" opacity={0.85 + (si % 2) * 0.15} />
               ))}
             </g>
           );
         })}
         {/* OCBC Skyway — a slung walkway between two of the tallest trees, with hanging lights */}
-        <path d="M178 118 Q205 130 232 108" stroke="#3A4B72" strokeWidth="4" fill="none" />
+        <path d="M178 118 Q205 130 232 108" stroke="#5A6FA0" strokeWidth="4" fill="none" />
         {[190, 202, 214, 226].map(x => (
-          <circle key={x} cx={x} cy={122 - (x - 178) * 0.2} r="1.6" fill="#FFE9B0" opacity="0.9" />
+          <circle key={x} cx={x} cy={122 - (x - 178) * 0.2} r="2" fill="#FFE9B0" opacity="0.95" />
         ))}
         {/* A wide, varied flower field along the base — three distinct bloom types (five-petal
             blossoms, clustered hydrangea-style pom-poms, tall flower spikes) rather than one repeated
@@ -569,8 +579,12 @@ function JapanScene() {
         <rect x="10" y="24" width="66" height="7" fill="#B23A26" />
         <rect x="38" y="10" width="10" height="10" fill="#7A2A1C" />
       </svg>
-      {/* Cherry blossom branch, top-left corner */}
-      <svg className={`absolute top-0 left-0 ${FOREGROUND_OPACITY}`} width="180" height="150" viewBox="0 0 180 150" fill="none">
+      {/* Cherry blossom branch — moved from the top-LEFT corner to top-RIGHT (mirrored via scaleX,
+          the artwork itself is untouched). The Sidebar is always `fixed left-0`, up to 288px wide on
+          mobile/expanded desktop — a top-left branch sat entirely underneath it and was never once
+          visible behind the app chrome. The right corner is never covered by a left-anchored panel,
+          at any collapse state or viewport width. */}
+      <svg className={`absolute top-0 right-0 ${FOREGROUND_OPACITY}`} style={{ transform: "scaleX(-1)" }} width="180" height="150" viewBox="0 0 180 150" fill="none">
         <path d="M-10 10 Q50 5 90 45 Q120 70 100 60" stroke="#7A5C4A" strokeWidth="4" fill="none" strokeLinecap="round" />
         <path d="M40 25 Q60 15 75 30" stroke="#7A5C4A" strokeWidth="3" fill="none" strokeLinecap="round" />
         {[{ x: 24, y: 14 }, { x: 44, y: 8 }, { x: 62, y: 20 }, { x: 55, y: 36 }, { x: 78, y: 30 }, { x: 34, y: 32 }, { x: 68, y: 12 }, { x: 90, y: 45 }].map((p, i) => (
