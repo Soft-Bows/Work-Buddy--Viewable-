@@ -48,10 +48,10 @@ export const opsDepartmentGoals: DeptGoal[] = [
     level: "department", linkedPhillyGoalId: "pg2", linkedPhillyKrId: "pg2kr1",
     keyResults: [
       { id: "akr1", title: "Cut the non-performing loan (NPL) ratio from 3.2% to under 2.5%", owner: "Nadia Yong, Diana Chang", dueDate: "2026-12-15", ragConfidence: "amber", ragConfidenceUpdatedDate: "2026-06-20",
-        challengeRemark: { text: "Recovery team is stretched thin covering both the legacy NPL book and the new enhanced due-diligence reviews — could use additional headcount to hit the December target.", date: "2026-06-20", rag: "amber" } },
+        challengeRemark: { text: "Recovery team is stretched thin covering both the legacy NPL book and the new enhanced due-diligence reviews — could use additional headcount to hit the December target.", date: "2026-06-20", rag: "amber", submittedBy: "Nadia Yong" } },
       { id: "akr2", title: "Complete enhanced due-diligence review for 100% of the top-20 credit exposures", owner: "Victor Lai", dueDate: "2026-10-31", ragConfidence: "green", ragConfidenceUpdatedDate: "2026-06-18" },
       { id: "akr16", title: "Deploy an agentic-AI covenant-monitoring assistant that auto-flags breaches across 100% of corporate facilities", owner: "Elton Phua, Diana Chang", dueDate: "2026-12-15", ragConfidence: "amber", ragConfidenceUpdatedDate: "2026-07-21",
-        challengeRemark: { text: "Awaiting sign-off from Legal and Compliance on the assistant's auto-flagging thresholds before we can move past the pilot cohort.", date: "2026-07-21", rag: "amber" } },
+        challengeRemark: { text: "Awaiting sign-off from Legal and Compliance on the assistant's auto-flagging thresholds before we can move past the pilot cohort.", date: "2026-07-21", rag: "amber", submittedBy: "Elton Phua" } },
       { id: "akr17", title: "Cut portfolio-review cycle time by 25% via AI-assisted financial spreading", owner: "Bella Lim", dueDate: "2026-11-30", ragConfidence: "green", ragConfidenceUpdatedDate: "2026-07-19" },
     ],
   },

@@ -445,7 +445,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
   // change (new/edited Objectives or Key Results), so browsers with an older cached copy pick up the
   // fresh seed instead of silently keeping stale content forever (this is exactly the bug where
   // HCWM's OKR refresh wasn't showing up — the localStorage copy predated the content change).
-  const SEED_VERSION = "2026-09-01-philly-group-okrs";
+  const SEED_VERSION = "2026-09-02-credit-risk-rename-and-fixes";
   // Department-level Objective count is capped 3-5 everywhere a HOD can create one (see
   // MAX_OBJECTIVES_PER_SET in TeamSection.tsx's CreateObjectivePanel) — but that cap only guards
   // the *creation* UI, not whatever's sitting in localStorage. A cached copy that predates this
@@ -1693,7 +1693,11 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
           assignedDate: pendingFor.length > 0 ? new Date().toISOString().slice(0, 10) : k.assignedDate,
           ackPenaltyApplied: pendingFor.length > 0 ? false : k.ackPenaltyApplied,
           crossDeptApproval,
-          definitionEditedDate: new Date().toISOString().slice(0, 10),
+          // Only a real TITLE change invalidates a past-quarter score display (isKrScoreStaleForDisplay
+          // in utils.ts) — an owner or due-date change alone shouldn't hide a score that still describes
+          // the same underlying Key Result.
+          definitionEditedDate: changes.title !== undefined && changes.title !== k.title
+            ? new Date().toISOString().slice(0, 10) : k.definitionEditedDate,
         };
       }),
     })));
@@ -1802,7 +1806,8 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
               pendingChangeType: pendingFor.length > 0 ? "hodEdit" : k.pendingChangeType,
               assignedDate: pendingFor.length > 0 ? new Date().toISOString().slice(0, 10) : k.assignedDate,
               ackPenaltyApplied: pendingFor.length > 0 ? false : k.ackPenaltyApplied,
-              definitionEditedDate: new Date().toISOString().slice(0, 10),
+              definitionEditedDate: resolution.changes.title !== undefined && resolution.changes.title !== k.title
+                ? new Date().toISOString().slice(0, 10) : k.definitionEditedDate,
             };
           }),
         })));
@@ -1865,7 +1870,8 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
             counterProposal: undefined, lastCounterRejection: undefined,
             pendingAcknowledgementFor: pendingFor,
             pendingChangeType: pendingFor.length > 0 ? "hodEdit" : k.pendingChangeType,
-            definitionEditedDate: new Date().toISOString().slice(0, 10),
+            definitionEditedDate: k.counterProposal.title !== undefined && k.counterProposal.title !== k.title
+              ? new Date().toISOString().slice(0, 10) : k.definitionEditedDate,
           };
         }),
       };
@@ -1905,7 +1911,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
           ? { challengeRemark: undefined, pendingChallengeResponseFor: undefined, challengeResponse: undefined, pendingChallengeAckByOwner: undefined }
           : challengeText
             ? {
-                challengeRemark: { text: challengeText, date: new Date().toISOString().slice(0, 10), rag: ragConfidence as "red" | "amber" },
+                challengeRemark: { text: challengeText, date: new Date().toISOString().slice(0, 10), rag: ragConfidence as "red" | "amber", submittedBy: proposedBy },
                 pendingChallengeResponseFor: resolveChallengeRecipients(g.owner, isOps, proposedBy, g.level, g.teamName),
                 challengeResponse: undefined,
                 pendingChallengeAckByOwner: false,

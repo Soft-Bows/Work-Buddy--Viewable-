@@ -166,7 +166,10 @@ export interface KeyResult {
   // what's blocking progress before the update is accepted (see submitKeyResultConfidenceWithChallenge
   // in appContext.tsx). Cleared the next time the owner submits green, since a recovered confidence
   // has nothing further to report.
-  challengeRemark?: { text: string; date: string; rag: "red" | "amber" };
+  // submittedBy is the specific owner who actually submitted this — on a multi-owner Key Result,
+  // Key Staff Challenges must attribute the remark to just this one person, never imply every
+  // co-owner submitted the same challenge (no two people can submit the exact same feedback).
+  challengeRemark?: { text: string; date: string; rag: "red" | "amber"; submittedBy: string };
   // Names still owing a response to the open challengeRemark — the Objective's own owner(s) plus the
   // department's HOD, minus the KR owner themselves (no point routing feedback to yourself) and
   // minus whoever has already responded. Cleared once challengeResponse is set.
@@ -265,7 +268,7 @@ export const departmentGoals: DeptGoal[] = [
       { id: "kr20", title: "Certify 50% of dealing, trading, and relationship-manager staff on AI-assisted client-suitability and trade-surveillance tools", owner: "Bryan Goh, Marcus Teo", dueDate: "2026-11-15", ragConfidence: "amber", ragConfidenceUpdatedDate: "2026-07-21" },
       { id: "kr21", title: "Roll out an AI-assisted onboarding and HR-helpdesk chatbot resolving 70% of new-hire queries without escalation", owner: "Diana Eng, Rhea Yee", dueDate: "2026-12-15", ragConfidence: "green", ragConfidenceUpdatedDate: "2026-07-18" },
       { id: "kr22", title: "Achieve 65% completion of the IBF-aligned \"AI in Financial Services\" foundational course among Grade 3+ staff", owner: "Caleb Ong, Belle Lim", dueDate: "2026-11-30", ragConfidence: "amber", ragConfidenceUpdatedDate: "2026-07-20",
-        challengeRemark: { text: "Enrolment is lagging on the dealing desk — team bandwidth is stretched during quarter-end, and we're waiting on desk heads to free up training slots.", date: "2026-07-20", rag: "amber" } },
+        challengeRemark: { text: "Enrolment is lagging on the dealing desk — team bandwidth is stretched during quarter-end, and we're waiting on desk heads to free up training slots.", date: "2026-07-20", rag: "amber", submittedBy: "Caleb Ong" } },
     ],
   },
   {
@@ -302,7 +305,7 @@ export const departmentGoals: DeptGoal[] = [
       { id: "kr10", title: "Cut average time-to-shortlist by 30% using AI-assisted screening", owner: "Rhea Yee", dueDate: "2026-11-30", ragConfidence: "amber", ragConfidenceUpdatedDate: "2026-06-24" },
       { id: "kr11", title: "70% of HC team actively using an approved AI tool weekly (usage, not just training completion)", owner: "Belle Lim", dueDate: "2026-10-31", ragConfidence: "amber", ragConfidenceUpdatedDate: "2026-06-24" },
       { id: "kr12", title: "Launch an AI-assisted internal Q&A assistant, resolving 40% of routine HC queries without escalation", owner: "Sarah Chen", dueDate: "2026-12-15", ragConfidence: "red", ragConfidenceUpdatedDate: "2026-06-24",
-        challengeRemark: { text: "Blocked on IT security sign-off for the assistant's access to HR system data — need Infosec's approval before we can move past the pilot sandbox.", date: "2026-06-24", rag: "red" } },
+        challengeRemark: { text: "Blocked on IT security sign-off for the assistant's access to HR system data — need Infosec's approval before we can move past the pilot sandbox.", date: "2026-06-24", rag: "red", submittedBy: "Sarah Chen" } },
       { id: "kr15", title: "Certify 75% of the HC team on agentic-AI governance, data ethics, and prompt literacy for HR use cases", owner: "Anabelle Tan", dueDate: "2026-11-30", ragConfidence: "amber", ragConfidenceUpdatedDate: "2026-06-24" },
       { id: "kr16", title: "Launch a cross-office HR ambassador programme linking 3 regional network offices, lifting internal employer-brand consistency and shared-culture pulse-survey scores by 15%", owner: "Sarah Chen", dueDate: "2026-12-15", ragConfidence: "amber", ragConfidenceUpdatedDate: "2026-06-24" },
     ],

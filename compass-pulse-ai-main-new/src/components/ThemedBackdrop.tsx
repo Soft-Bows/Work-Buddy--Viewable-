@@ -241,53 +241,80 @@ function MalaysiaScene() {
   );
 }
 
+// Supertree Grove trunk positions/heights — extracted so the fan-frond canopy generator below
+// (a real Supertree silhouette: a tapered trunk topped by lattice fronds radiating out wide, not
+// a simple mushroom-cap ellipse) can iterate them.
+const SG_TREES = [
+  { x: 46, h: 96, r: 22 }, { x: 82, h: 138, r: 28 }, { x: 112, h: 168, r: 34 },
+  { x: 146, h: 188, r: 38 }, { x: 178, h: 152, r: 27 }, { x: 212, h: 120, r: 22 }, { x: 246, h: 88, r: 18 },
+];
+const SG_FROND_ANGLES = [-70, -45, -22, 0, 22, 45, 70];
+
+function SupertreeGrove() {
+  return (
+    <>
+      {SG_TREES.map(t => {
+        const baseY = 192, topY = baseY - t.h;
+        return (
+          <g key={t.x}>
+            <path d={`M${t.x - 5.5} ${baseY} L${t.x - 2.2} ${topY} L${t.x + 2.2} ${topY} L${t.x + 5.5} ${baseY} Z`} fill="url(#sgTrunk)" />
+            {SG_FROND_ANGLES.map(deg => {
+              const rad = (deg * Math.PI) / 180;
+              const len = t.r * 1.15;
+              const ex = t.x + Math.sin(rad) * len;
+              const ey = topY - Math.cos(rad) * len * 0.62;
+              return (
+                <g key={deg}>
+                  <line x1={t.x} y1={topY} x2={ex} y2={ey} stroke="url(#sgTrunk)" strokeWidth="1.6" />
+                  <ellipse cx={ex} cy={ey} rx={t.r * 0.3} ry={t.r * 0.18} fill="url(#sgCanopy)" transform={`rotate(${deg} ${ex} ${ey})`} />
+                </g>
+              );
+            })}
+            <ellipse cx={t.x} cy={topY - t.r * 0.15} rx={t.r * 0.55} ry={t.r * 0.32} fill="url(#sgCanopy)" />
+          </g>
+        );
+      })}
+    </>
+  );
+}
+
 function SingaporeScene() {
-  // Rebuilt from scratch as a bright DAYTIME scene after 2 night-theme passes kept reading as
-  // "just dark vertical shapes" no matter how much colour or opacity was added. Rendered this
-  // exact SVG to a PNG (via @resvg/resvg-js, composited over both a light and dark page
-  // background at realistic in-app opacity) to actually verify before shipping — the night
-  // version's problem wasn't the artwork, it was any dark-toned sky rendering flat and murky at
-  // this layer's necessarily-low opacity in dark mode; a bright sky doesn't have that failure
-  // mode at all. This also fixes the accuracy complaint: Singapore is a year-round tropical
-  // summer climate, so a sunny midday Gardens by the Bay is the truer "arrived here" moment than
-  // a night scene ever was.
+  // Rebuilt a 3rd time — the 2nd pass (bright daytime sky, correct for the climate) still read as
+  // "grey graphics with colourful flowers": rendered it to a PNG (via @resvg/resvg-js) and found
+  // two real causes, not an opacity problem this time. (1) The Supertrees were plain mushroom-cap
+  // ellipses — nothing about that silhouette reads as "Supertree," so the whole grove read as
+  // generic/grey trees no matter the colour. (2) The OCBC Skyway used a literal grey-blue stroke
+  // (#7A8FA8) as a prominent mid-scene line — an actually-grey element, not a rendering artifact.
+  // Fixed by replacing the canopy with a real Supertree silhouette (tapered trunk fanning into
+  // wide lattice fronds — SupertreeGrove above) and dropping the Skyway line entirely, plus a more
+  // structurally-recognisable Flower Dome (an actual arched greenhouse outline with a visible
+  // panel grid, not a small unlabelled blob). Re-verified via the same PNG-render pipeline,
+  // composited over both a light and dark page background at the real in-app opacity, before
+  // shipping this time.
   return (
     <Scene>
       <SkyLayer sky="linear-gradient(180deg, #4FB8E8 0%, #7DCBEE 30%, #B8E4F5 60%, #E8F7FB 100%)" glow="#FFEB99" />
-      {/* Supertree Grove by day — leafy green mushroom-cap canopies (the real Supertrees are
-          covered in ~163,000 live plants/ferns, which reads as green foliage in daylight, not
-          coloured light) over bark-brown trunks, plus the Flower Dome conservatory and the OCBC
-          Skyway. Verified opacity 0.6 (both modes — a bright sky doesn't need dark mode to be
-          much dimmer than light mode the way a navy night sky did) against both a light and a
-          dark page background before shipping. */}
       <svg className="absolute bottom-0 inset-x-0 w-full h-[48vh] min-h-[270px] opacity-[0.6]" viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
         <defs>
           <linearGradient id="sgCanopy" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#8FD48A" />
-            <stop offset="100%" stopColor="#4A9B4A" />
+            <stop offset="0%" stopColor="#B8F08A" />
+            <stop offset="55%" stopColor="#5FBF52" />
+            <stop offset="100%" stopColor="#2E8B3D" />
+          </linearGradient>
+          <linearGradient id="sgTrunk" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#6B4A2A" />
+            <stop offset="100%" stopColor="#3E2A16" />
           </linearGradient>
         </defs>
-        <path d="M0 178 Q110 158 220 170 T400 160 V220 H0 Z" fill="#6FBF6A" />
-        {/* Flower Dome — a glass conservatory dome, sunlit */}
-        <path d="M20 178 Q20 128 90 122 Q160 128 160 178 Z" fill="#EAF6FA" stroke="#BFE0EE" strokeWidth="1.5" opacity="0.95" />
-        <path d="M30 176 Q32 132 90 126" fill="none" stroke="#9FCBDE" strokeWidth="1" opacity="0.6" />
-        <ellipse cx="70" cy="140" rx="14" ry="8" fill="#FFFFFF" opacity="0.7" />
-        {[
-          { x: 46, h: 96, r: 26 }, { x: 118, h: 134, r: 32 }, { x: 178, h: 162, r: 38 }, { x: 232, h: 182, r: 42 },
-          { x: 286, h: 150, r: 30 }, { x: 336, h: 122, r: 24 }, { x: 378, h: 90, r: 20 },
-        ].map(t => {
-          const baseY = 192, topY = baseY - t.h;
-          return (
-            <g key={t.x}>
-              <path d={`M${t.x - 4} ${baseY} L${t.x - 8} ${topY} L${t.x + 8} ${topY} L${t.x + 4} ${baseY} Z`} fill="#3A2C1E" />
-              <ellipse cx={t.x} cy={topY} rx={t.r} ry={t.r * 0.48} fill="url(#sgCanopy)" />
-              <ellipse cx={t.x} cy={topY - t.r * 0.2} rx={t.r * 0.62} ry={t.r * 0.24} fill="#A6E39D" opacity="0.85" />
-            </g>
-          );
-        })}
-        {/* OCBC Skyway */}
-        <path d="M178 58 Q205 68 232 40" stroke="#7A8FA8" strokeWidth="4" fill="none" />
-        <path d="M0 195 Q120 180 240 190 T400 184 V220 H0 Z" fill="#5CA858" />
+        <path d="M0 178 Q110 158 220 170 T400 160 V220 H0 Z" fill="#7CCB68" />
+        {/* Flower Dome — an arched glass greenhouse shell with a visible panel grid, sunlit */}
+        <path d="M14 180 Q14 108 96 100 Q178 108 178 180 Z" fill="#DCF1F7" stroke="#8FBFD6" strokeWidth="2" opacity="0.98" />
+        <path d="M20 180 Q20 116 96 108 Q172 116 172 180" fill="none" stroke="#6FA3BE" strokeWidth="1" opacity="0.55" />
+        <path d="M96 100 L96 180 M55 104 L60 180 M137 104 L132 180 M28 140 L172 140 M40 160 L156 160" fill="none" stroke="#6FA3BE" strokeWidth="0.8" opacity="0.5" />
+        <ellipse cx="70" cy="128" rx="16" ry="9" fill="#FFFFFF" opacity="0.8" />
+        <rect x="10" y="178" width="172" height="6" rx="2" fill="#B7CDD8" />
+        <SupertreeGrove />
+        <path d="M0 196 Q120 182 240 190 T400 186 V220 H0 Z" fill="#4FA84F" />
         {/* A wide, varied flower field — three distinct bloom types (five-petal blossoms,
             clustered hydrangea-style pom-poms, tall flower spikes) standing in for whichever
             seasonal Flower Dome display is running (Balinese-orchid Orchid Extravaganza into

@@ -26,7 +26,7 @@ const PC_DEPARTMENTS = [
   "Operations - Unit Trust",
   "Partnership",
   "CFD Market Making",
-  "Credit Risk Management (F.K.A. Credit Admin)",
+  "Credit Risk Management",
   "Accounts Processing Unit",
   "Marketing Communications",
 ];
@@ -51,7 +51,7 @@ const MANAGER_ACTION_PLANS: {
       { title: "Book: The Coaching Habit (Bungay Stanier)", done: false },
     ],
   },
-  { id: "u21", name: "Nadia Yong", dept: "Credit Risk Management (F.K.A. Credit Admin)",
+  { id: "u21", name: "Nadia Yong", dept: "Credit Risk Management",
     items: [
       { title: "MAS Credit Risk Regulatory Update Briefing", done: true },
       { title: "Q2 Portfolio Credit Quality Review with Group Risk", done: true },
@@ -59,7 +59,7 @@ const MANAGER_ACTION_PLANS: {
       { title: "Credit Risk Leadership Workshop", done: false },
     ],
   },
-  { id: "u22", name: "Victor Lai", dept: "Credit Risk Management (F.K.A. Credit Admin)",
+  { id: "u22", name: "Victor Lai", dept: "Credit Risk Management",
     items: [
       { title: "MAS Credit Risk Regulatory Update Briefing", done: true },
       { title: "Q2 Credit Approval Turnaround Review", done: false },

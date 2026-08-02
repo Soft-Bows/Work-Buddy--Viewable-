@@ -18,13 +18,13 @@ export const marketingDepartmentGoals: DeptGoal[] = [
       {
         id: "mkr1", title: "Launch the refreshed corporate brand identity across all client-facing touchpoints", owner: "Michelle Sylvia",
         dueDate: "2026-11-15", ragConfidence: "amber", ragConfidenceUpdatedDate: "2026-07-21",
-        challengeRemark: { text: "Creative agency handover slipped by 3 weeks — re-baselining the rollout schedule with Legal & Compliance sign-off still pending.", date: "2026-07-21", rag: "amber" },
+        challengeRemark: { text: "Creative agency handover slipped by 3 weeks — re-baselining the rollout schedule with Legal & Compliance sign-off still pending.", date: "2026-07-21", rag: "amber", submittedBy: "Michelle Sylvia" },
       },
       { id: "mkr2", title: "Grow qualified website traffic from earned media coverage by 25%", owner: "Rave Tan", dueDate: "2026-10-31", ragConfidence: "green", ragConfidenceUpdatedDate: "2026-07-19" },
       {
         id: "mkr3", title: "Publish 12 client-education content pieces supporting the Financial Literacy campaign", owner: "Christabel Lin",
         dueDate: "2026-09-30", ragConfidence: "amber", ragConfidenceUpdatedDate: "2026-07-23",
-        challengeRemark: { text: "Only 4 of 12 pieces published so far — internal subject-matter-expert review turnaround is the bottleneck.", date: "2026-07-23", rag: "amber" },
+        challengeRemark: { text: "Only 4 of 12 pieces published so far — internal subject-matter-expert review turnaround is the bottleneck.", date: "2026-07-23", rag: "amber", submittedBy: "Christabel Lin" },
       },
     ],
   },

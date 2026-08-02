@@ -165,7 +165,12 @@ const HOME_TEAM_ROW_COLORS = [
   { border: "border-l-amber-500", chip: "bg-amber-500 text-white", text: "text-amber-700 dark:text-amber-300", cardBorder: "border-amber-300/60 dark:border-amber-500/40", cardBg: "bg-amber-50/90 dark:bg-amber-900/38", dot: "bg-amber-500" },
   { border: "border-l-blue-500", chip: "bg-blue-500 text-white", text: "text-blue-700 dark:text-blue-300", cardBorder: "border-blue-300/60 dark:border-blue-500/40", cardBg: "bg-blue-50/90 dark:bg-blue-900/38", dot: "bg-blue-500" },
 ];
-const HOME_DEPT_ROW_COLOR = { chip: "bg-primary text-primary-foreground", text: "text-primary", cardBorder: "border-primary/40", cardBg: "bg-primary/22", dot: "bg-primary" };
+// cardBg is deliberately an opaque, theme-neutral surface (matching the default Card component),
+// not a translucent wash of --primary — that CSS var is sometimes a light/saturated hue depending
+// on the active country theme, and a translucent wash of it reads as near-invisible for those
+// themes (unlike HOME_TEAM_ROW_COLORS below, which use fixed light Tailwind pastels at high
+// opacity and never have this problem). --primary stays reserved for small accents (border/dot/chip).
+const HOME_DEPT_ROW_COLOR = { chip: "bg-primary text-primary-foreground", text: "text-primary", cardBorder: "border-primary/40", cardBg: "bg-card", dot: "bg-primary" };
 const HOME_TEAM_ROW_CAP = 5;
 
 const DEPT_WASH_BLOBS = [
@@ -1394,6 +1399,23 @@ export function HomeSection() {
     // just the director's immediate HOD reports) so expanding a supervisor's row can still find
     // *their* reports within the same department, exactly like the normal HOD flow does.
     const allKnownMembers = [...hcwmTeamMembers, ...opsTeamMembersAll, ...marketingTeamMembers];
+    // A department's own HOD (Sarah Chen for HCWM, Nadia Yong for Credit Risk, ...) is that
+    // department's `currentUser`-equivalent, never a row inside its own team-member roster (that
+    // roster is, by definition, "people who report to the HOD") — so a director's real HOD direct
+    // reports were invisible here even though they genuinely report to the director per users.csv.
+    // Synthesize one TeamMember row per real HOD from staffList (the CSV-driven source of truth,
+    // which has everyone including HODs) so Team at a Glance's existing directManager-based filter
+    // picks them up correctly.
+    const initialsFor = (name: string) => name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+    const synthesizedHodRows: TeamMember[] = [HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME, MARKETING_DEPT_NAME]
+      .map(deptName => staffList.find(s => s.dept === deptName && s.hod))
+      .filter((s): s is NonNullable<typeof s> => !!s)
+      .filter(s => !allKnownMembers.some(m => m.name === s.name))
+      .map(s => ({
+        id: s.id, name: s.name, role: s.role, avatar: initialsFor(s.name),
+        rag: "green" as RAG, directManager: s.supervisor, pointsYTD: s.pointsYTD, goals: [],
+      }));
+    const allKnownMembersWithHods = [...allKnownMembers, ...synthesizedHodRows];
 
     return (
       <div className="space-y-6">
@@ -1452,9 +1474,15 @@ export function HomeSection() {
                             kr.ragConfidence === "red" ? "bg-rag-red/10 border-rag-red/30" : "bg-rag-amber/10 border-rag-amber/30",
                           )}>
                             <AlertCircle className={cn("size-3 shrink-0 mt-0.5", kr.ragConfidence === "red" ? "text-rag-red" : "text-amber-foreground")} />
-                            <div className="min-w-0">
-                              <div className="font-medium text-foreground truncate">{kr.title}</div>
-                              <div className="text-muted-foreground truncate">{objectiveTitle}</div>
+                            <div className="min-w-0 space-y-0.5">
+                              <div>
+                                <span className="text-[8px] uppercase tracking-wider font-bold text-muted-foreground/70">Key Result </span>
+                                <span className="font-medium text-foreground">{kr.title}</span>
+                              </div>
+                              <div>
+                                <span className="text-[8px] uppercase tracking-wider font-bold text-muted-foreground/70">Objective </span>
+                                <span className="text-muted-foreground">{objectiveTitle}</span>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -1479,7 +1507,7 @@ export function HomeSection() {
             <h2 className="font-display text-xl">Team At A Glance</h2>
             <p className="text-xs text-muted-foreground mt-0.5">Department HODs who report directly to you</p>
           </div>
-          <TeamAtAGlanceSection teamMembers={allKnownMembers} viewerName={directorMeta.name} isHodViewer={true} />
+          <TeamAtAGlanceSection teamMembers={allKnownMembersWithHods} viewerName={directorMeta.name} isHodViewer={true} />
         </Card>
 
         {/* Development Roadmap — tailored from the director's own real designation/department (not

@@ -5,7 +5,7 @@ import { ownerNames } from "./utils";
 // set. Shared so every dept-name-keyed lookup (AdminSection's org-wide view, and the HOD/Director-
 // scoped views on Team OKRs / Skills Profile) agrees on the exact same strings.
 export const HCWM_DEPT_NAME = "Human Capital & Workplace Management";
-export const CREDIT_RISK_DEPT_NAME = "Credit Risk Management (F.K.A. Credit Admin)";
+export const CREDIT_RISK_DEPT_NAME = "Credit Risk Management";
 
 // ── Key Staff Challenges — keyword classifier ───────────────────────────────────
 // No live LLM call in this app (see AI_REC_RULES in MyGoalsSection.tsx) — every "AI" feature here is
@@ -121,8 +121,11 @@ export function computeChallengeThemes(
         if (!kr.challengeRemark) continue;
         if (!ownerNames(kr.owner).some(n => memberNames.has(n))) continue;
         entries.push({
+          // Only the owner who actually submitted this challenge — on a multi-owner Key Result,
+          // showing every co-owner's name here would misattribute the remark to people who never
+          // wrote it (no two people can submit the exact same feedback).
           theme: classifyChallengeThemeUngated(kr.challengeRemark.text),
-          memberName: kr.owner,
+          memberName: kr.challengeRemark.submittedBy,
           goalTitle: kr.title,
           remarkText: kr.challengeRemark.text,
           linkedDeptTitle: objective.title,
