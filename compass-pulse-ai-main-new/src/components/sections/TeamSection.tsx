@@ -2538,15 +2538,6 @@ export function TeamSection() {
     : isLeaveSupervisorViewer
     ? computeChallengeThemes(visibleMembers.filter(m => m.directManager === viewedUserName), { [HCWM_DEPT_NAME]: departmentGoals })
     : [];
-  // A Set, not a single value — expanding one theme used to collapse whatever else was open, which
-  // makes comparing 2+ challenge threads side by side impossible. Each theme now toggles independently.
-  const [expandedChallengeThemes, setExpandedChallengeThemes] = useState<Set<string>>(new Set());
-  const toggleChallengeTheme = (theme: string) => setExpandedChallengeThemes(prev => {
-    const next = new Set(prev);
-    if (next.has(theme)) next.delete(theme); else next.add(theme);
-    return next;
-  });
-
   // ── Cross-Department Appointment Consent — searches BOTH department goal sets regardless of
   // which one this page is currently showing, since the appointee's HOD/leave supervisor might
   // belong to the *other* department from the one the Key Result itself lives in (that's the whole
@@ -2891,73 +2882,20 @@ export function TeamSection() {
                 </span>
               )}
             </div>
-            <Card>
-              <p className="text-xs text-muted-foreground mb-2">
-                Distilled in real time from {isDirector ? "your departments'" : isHod ? "your team's" : "your direct reports'"} monthly confidence challenges and goal-progress remarks. Click a theme to see the full conversation.
-              </p>
-              {keyStaffChallenges.map(t => {
-                const isExpanded = expandedChallengeThemes.has(t.theme);
-                return (
-                <div key={t.theme} className="border-b border-border/60 last:border-0">
-                  <button
-                    onClick={() => toggleChallengeTheme(t.theme)}
-                    className="w-full flex items-center justify-between py-2.5 text-left gap-2"
-                  >
-                    <div className="text-sm flex items-center gap-1.5 min-w-0">
-                      {isExpanded ? <ChevronUp className="size-3 text-muted-foreground shrink-0" /> : <ChevronDown className="size-3 text-muted-foreground shrink-0" />}
-                      <span className="truncate">{t.theme}</span>
-                      {t.entries.some(e => e.response && !e.resolved) && (
-                        <ActionNeededIcon size={13} title="Has an unresolved response awaiting acknowledgement" />
-                      )}
-                    </div>
-                    <div className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">{t.count} mention{t.count !== 1 ? "s" : ""}</div>
-                  </button>
-                  {isExpanded && (
-                    <div className="pb-3 pl-4 space-y-2">
-                      {t.entries.map((e, i) => (
-                        <div key={i} className="rounded-lg border border-border/60 bg-muted/20 p-2.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs font-semibold">{e.memberName}</span>
-                            <span className="text-[10px] text-muted-foreground truncate">{e.date ?? ""}</span>
-                          </div>
-                          <div className="text-[10px] text-muted-foreground truncate">{e.goalTitle}</div>
-                          <p className="text-xs text-foreground/80 mt-1 leading-relaxed">&ldquo;{e.remarkText}&rdquo;</p>
-                          {e.response ? (
-                            <div className="mt-2 rounded-md border border-primary/25 bg-primary/5 p-2">
-                              <div className="text-[10px] font-semibold uppercase tracking-widest text-primary flex items-center gap-1">
-                                {e.response.respondedBy}'s response
-                                {e.response.isAI && <span className="normal-case font-medium text-muted-foreground">(Work Buddy AI-assisted)</span>}
-                                {e.resolved
-                                  ? <span className="ml-auto normal-case font-medium text-rag-green">✓ Acknowledged</span>
-                                  : <span className="ml-auto normal-case font-medium text-amber-700 dark:text-amber-400">Awaiting acknowledgement</span>}
-                              </div>
-                              <p className="text-xs text-foreground/80 mt-1 leading-relaxed">{e.response.text}</p>
-                            </div>
-                          ) : e.pendingResponseFor?.length ? (
-                            <div className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
-                              <ActionNeededIcon size={12} title="Awaiting a response" /> Awaiting response from <strong>{e.pendingResponseFor.join(", ")}</strong>
-                            </div>
-                          ) : e.date && (
-                            <div className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
-                              <ActionNeededIcon size={12} title="Awaiting a response" /> Awaiting a response
-                            </div>
-                          )}
-                          <div className="text-[10px] text-muted-foreground mt-1.5">
-                            Linked to: {e.linkedDeptTitle}
-                            {e.deptName && (
-                              <> · <span className="font-medium">{e.deptName}</span> · {e.objectiveLevel === "team" ? `${e.teamName ?? "Team"}-level OKR` : "Department-level OKR"}</>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                );
-              })}
-              {keyStaffChallenges.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">No staff challenges reported yet.</p>
-              )}
+            {/* Full theme-by-theme detail now lives in Feedback Corner & Insights, alongside Team
+                Pulse and the Manager Self-Improvement Survey — this used to be a third standalone
+                copy of the same data (Admin Console and Skills Profile each show their own too);
+                a slim summary + link keeps this page from carrying a full duplicate. */}
+            <Card
+              className="cursor-pointer hover:border-primary/40 transition-colors"
+              onClick={() => setSection("survey")}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  {keyStaffChallenges.reduce((n, t) => n + t.count, 0)} open theme{keyStaffChallenges.reduce((n, t) => n + t.count, 0) === 1 ? "" : "s"} distilled from {isDirector ? "your departments'" : isHod ? "your team's" : "your direct reports'"} confidence challenges and goal-progress remarks.
+                </p>
+                <span className="text-xs font-medium text-primary shrink-0">View in Feedback Corner →</span>
+              </div>
             </Card>
           </div>
         )}

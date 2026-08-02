@@ -205,7 +205,7 @@ function TeamMemberSkillCard({
 
 export function SkillsSection() {
   const {
-    skills, currentUser, addPendingSkill,
+    skills, currentUser, addPendingSkill, setSection,
     tier, teamMembers, focusedSkillsMemberId, setFocusedSkillsMemberId,
     staffMemberId, adminMemberId, allTeamMemberSkills, staffList, opsMeta, directorMeta,
     opsAllTeamMemberSkills, hcwmDepartmentGoals, opsDepartmentGoals, deptGoalSkills,
@@ -302,7 +302,6 @@ export function SkillsSection() {
     ? computeChallengeThemes(Object.values(ORG_MEMBERS_BY_DEPT).flat(), ORG_GOALS_BY_DEPT)
     : [];
   const [orgPanelOpen, setOrgPanelOpen] = useState(false);
-  const [expandedOrgTheme, setExpandedOrgTheme] = useState<string | null>(null);
 
   // Experience profile data — sourced from directorMeta for directors, opsMeta for ops tiers,
   // currentUser for manager, staffList for staff/admin
@@ -579,33 +578,21 @@ export function SkillsSection() {
                   </div>
                 )}
               </div>
+              {/* Full theme-by-theme detail now lives in Feedback Corner & Insights, alongside Team
+                  Pulse and the Manager Self-Improvement Survey — this used to be a third standalone
+                  copy of the same org-wide data (Admin Console and Team OKRs each show their own
+                  too); a slim summary + link keeps this panel from carrying a full duplicate. */}
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Key Staff Challenges — every department</div>
-                {orgWideChallengeThemes.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No staff challenges reported yet.</p>
-                ) : (
-                  orgWideChallengeThemes.map(t => (
-                    <div key={t.theme} className="border-b border-border/60 last:border-0">
-                      <button onClick={() => setExpandedOrgTheme(v => v === t.theme ? null : t.theme)} className="w-full flex items-center justify-between py-2 text-left gap-2">
-                        <span className="text-sm truncate">{t.theme}</span>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">{t.count} mention{t.count !== 1 ? "s" : ""}</span>
-                      </button>
-                      {expandedOrgTheme === t.theme && (
-                        <div className="pb-2.5 pl-3 space-y-1.5">
-                          {t.entries.map((e, i) => (
-                            <div key={i} className="rounded-lg border border-border/60 bg-muted/20 p-2">
-                              <div className="flex items-center justify-between gap-2 text-xs">
-                                <span className="font-semibold">{e.memberName}</span>
-                                {e.deptName && <span className="text-[10px] text-muted-foreground">{e.deptName}</span>}
-                              </div>
-                              <p className="text-xs text-foreground/80 mt-1 leading-relaxed">&ldquo;{e.remarkText}&rdquo;</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
+                <button
+                  onClick={() => setSection("survey")}
+                  className="w-full flex items-center justify-between gap-3 text-left rounded-lg border border-border/60 bg-background/60 px-3 py-2.5 hover:border-primary/40 transition-colors"
+                >
+                  <span className="text-xs text-muted-foreground">
+                    {orgWideChallengeThemes.reduce((n, t) => n + t.count, 0)} open theme{orgWideChallengeThemes.reduce((n, t) => n + t.count, 0) === 1 ? "" : "s"} across every department.
+                  </span>
+                  <span className="text-xs font-medium text-primary shrink-0">View in Feedback Corner →</span>
+                </button>
               </div>
             </div>
           )}

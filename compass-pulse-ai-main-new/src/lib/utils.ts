@@ -106,6 +106,25 @@ export function getCurrentQuarterStart(reference: Date = new Date()): Date {
   return d;
 }
 
+// Last WORKING day (Mon–Fri) of the current quarter — the Team Pulse submission window's close
+// date. Deliberately distinct from getGoalStatusDueDate above, which rolls FORWARD past quarter-end
+// for KR scoring grace; this rolls BACKWARD from the quarter's last calendar day so the window never
+// stays open into the next quarter.
+export function getCurrentQuarterEndWorkingDate(reference: Date = new Date()): Date {
+  const d = getCurrentQuarterEndDate(reference);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+  return d;
+}
+
+// True once a member is at least `months` calendar months past their join date — the eligibility
+// gate for Feedback Corner (Team Pulse, Manager Self-Improvement Survey), default 3 months.
+export function hasMinimumTenure(joinDate: string | undefined, months = 3): boolean {
+  if (!joinDate) return false;
+  const threshold = new Date(joinDate);
+  threshold.setMonth(threshold.getMonth() + months);
+  return new Date() >= threshold;
+}
+
 // A "Starting from when?" trigger is free text — nothing in this dashboard actually parses and
 // executes it (the real SLA sweep in appContext.tsx is hardcoded per real flow: daysSinceJoin for
 // join-date rules, workingDaysSince against specific stored dates like recommendedDate/

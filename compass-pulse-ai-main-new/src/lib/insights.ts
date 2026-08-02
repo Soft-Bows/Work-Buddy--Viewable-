@@ -192,3 +192,36 @@ export function getRelevantDeptsForViewer(
   if (hodReports.length === 0) return { depts: [ownDept], isDirector: false };
   return { depts: [...new Set(hodReports.map(s => s.dept))], isDirector: true };
 }
+
+// The exact "which scope does this viewer see" decision TeamSection.tsx's Key Staff Challenges
+// section has always made (HOD/Director -> getRelevantDeptsForViewer's department(s); a non-HOD
+// leave supervisor -> just their own direct reports), pulled out here so Feedback Corner's
+// consolidated card and TeamSection's slim summary can both call the same logic instead of two
+// copies silently drifting apart.
+export function resolveOwnScopeChallenges(params: {
+  viewerName: string;
+  isHod: boolean;
+  hasDirectorMeta: boolean;
+  isTeamLead: boolean;
+  canonicalOwnDept: string;
+  staffList: { name: string; dept: string; supervisor?: string; hod?: boolean }[];
+  membersByDept: Record<string, TeamMember[]>;
+  goalsByDept: Record<string, DeptGoal[]>;
+  visibleMembers: TeamMember[];
+  ownDeptGoals: DeptGoal[];
+}): { themes: ChallengeThemeGroup[]; canView: boolean; isDirector: boolean } {
+  const { viewerName, isHod, hasDirectorMeta, isTeamLead, canonicalOwnDept, staffList, membersByDept, goalsByDept, visibleMembers, ownDeptGoals } = params;
+  const isLeaveSupervisorViewer = !isHod && !hasDirectorMeta && isTeamLead;
+  const canView = isHod || isLeaveSupervisorViewer || hasDirectorMeta;
+  if (!canView) return { themes: [], canView: false, isDirector: false };
+  const { depts: relevantDepts, isDirector } = isHod || hasDirectorMeta
+    ? getRelevantDeptsForViewer(viewerName, canonicalOwnDept, staffList)
+    : { depts: [] as string[], isDirector: false };
+  const themes = isHod || hasDirectorMeta
+    ? computeChallengeThemes(
+        relevantDepts.flatMap(d => membersByDept[d] ?? []),
+        Object.fromEntries(relevantDepts.map(d => [d, goalsByDept[d] ?? []])),
+      )
+    : computeChallengeThemes(visibleMembers.filter(m => m.directManager === viewerName), { [HCWM_DEPT_NAME]: ownDeptGoals });
+  return { themes, canView, isDirector };
+}

@@ -1546,7 +1546,7 @@ export function HomeSection() {
             />
           </div>
 
-          <TeamHealthWidget mode="manager" viewerName={effectiveName} viewerDept={effectiveDept} />
+          <TeamHealthWidget viewerName={effectiveName} />
 
           {/* ── Team At A Glance + Roadmap ── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1820,14 +1820,7 @@ export function HomeSection() {
               />
             </div>
 
-            {staffMember && (
-              <TeamHealthWidget
-                mode="staff"
-                viewerName={staffMember.name}
-                viewerDept={effectiveDept}
-                managerName={staffMember.directManager}
-              />
-            )}
+            {staffMember && <TeamHealthWidget viewerName={staffMember.name} />}
 
             {/* ── Team At A Glance + Roadmap (side by side when staff manages a team) ── */}
             {staffMemberHasTeam ? (

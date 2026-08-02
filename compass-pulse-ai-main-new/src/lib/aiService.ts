@@ -24,6 +24,8 @@
 import type { KeyResult, PersonalDevGoal, TeamMember, RAG } from "./mockData";
 import { generatePrepTalkingPoints, generateAiMinutes, type CheckIn, type CheckInActionItem } from "./checkIns";
 import { mockWorkBuddyAiReply } from "./workBuddyAiReply";
+import { PULSE_QUESTIONS } from "./pulseSurvey";
+import { MANAGER_BEHAVIORS } from "./managerEffectiveness";
 
 export interface AiProvider {
   /** Conversation Prep Agent — top-5 talking points for an upcoming 1:1, from live KR/dev-goal state. */
@@ -36,6 +38,14 @@ export interface AiProvider {
   draftChallengeResponse(input: { remarkText: string; urgency: RAG; kind: "confidence" | "score"; score?: number }): Promise<string>;
   /** A manager's draft feedback/recommendation on a team member's development goal, from one of two guided prompts. */
   draftDevGoalFeedback(goalTitle: string, promptIndex: 0 | 1): Promise<string>;
+  /**
+   * Feedback Corner's action plan — reads the current quarter's Team Pulse aggregate and the
+   * current cycle's Manager Self-Improvement Survey aggregate (either may be absent) and produces
+   * recommendations informed by both. The two streams are read together for context but never
+   * blended into a single score — every item is labelled with which stream it came from, per the
+   * "complementary data, one view, clearly labelled" pattern renowned FI/HR platforms converge on.
+   */
+  synthesizeActionPlan(input: { pulseAvgs?: Record<string, number>; managerAvgs?: Record<string, number>; department: string }): Promise<{ title: string; desc: string; source: "Team Pulse" | "Manager Survey" }[]>;
 }
 
 // A small, fixed "thinking" delay on every rule-based call — not fake for its own sake, but because
@@ -70,6 +80,41 @@ const ruleBasedProvider: AiProvider = {
     return promptIndex === 0
       ? `Great initiative! To make this goal more impactful, consider adding a measurable milestone — e.g., "achieve IBF-certified proficiency by Q4 2026" or "apply this skill in at least 2 live projects this year." I'd suggest linking it to a specific department initiative so progress is visible to the team. Let's discuss the scope in our next 1:1 to agree on a realistic timeline.`
       : `For "${goalTitle}", here are 3 targeted resources: (1) IBF-accredited e-learning on the SkillsFuture portal — free for Singapore residents; (2) Request an internal mentor via the P&C coaching marketplace; (3) The L&D team's curated reading list is available on the intranet under P&C > Development Resources. I'm also happy to connect you with a colleague who has completed this pathway.`;
+  },
+  async synthesizeActionPlan({ pulseAvgs, managerAvgs, department }) {
+    await delay();
+    // "Needs attention" threshold — below the midpoint of the 1-5 scale's upper half, so a merely
+    // decent 3.5-4 score doesn't generate noise; only genuinely lagging items surface as action items.
+    const ATTENTION_THRESHOLD = 3.5;
+    const items: { title: string; desc: string; source: "Team Pulse" | "Manager Survey" }[] = [];
+
+    if (pulseAvgs) {
+      const lowest = PULSE_QUESTIONS
+        .map(q => ({ q, score: pulseAvgs[q.id] }))
+        .filter(x => x.score !== undefined)
+        .sort((a, b) => a.score - b.score)[0];
+      if (lowest && lowest.score < ATTENTION_THRESHOLD) {
+        items.push({
+          title: `Address "${lowest.q.text}" (${lowest.score.toFixed(1)}/5)`,
+          desc: `${department}'s lowest Team Pulse score this quarter. Suggest a short team discussion on what's driving this, and 1-2 concrete changes to try before next quarter's pulse.`,
+          source: "Team Pulse",
+        });
+      }
+    }
+    if (managerAvgs) {
+      const lowest = MANAGER_BEHAVIORS
+        .map(b => ({ b, score: managerAvgs[b.id] }))
+        .filter(x => x.score !== undefined)
+        .sort((a, b) => a.score - b.score)[0];
+      if (lowest && lowest.score < ATTENTION_THRESHOLD) {
+        items.push({
+          title: `Focus area: "${lowest.b.text}" (${lowest.score.toFixed(1)}/5)`,
+          desc: `The lowest-rated behaviour in this cycle's Manager Self-Improvement Survey. Consider raising it with your own leave supervisor as a coaching focus, and revisiting it at next cycle.`,
+          source: "Manager Survey",
+        });
+      }
+    }
+    return items;
   },
 };
 

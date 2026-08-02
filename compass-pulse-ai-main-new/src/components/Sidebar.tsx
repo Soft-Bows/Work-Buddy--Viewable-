@@ -51,7 +51,7 @@ const NAV = [
   { id: "mygoals", label: "My Goals", icon: TrendingUp, tiers: ["staff", "manager", "admin", "director1", "director2"] },
   { id: "skills", label: "Skills Profile", icon: Brain, tiers: ["staff", "manager", "admin", "director1", "director2"] },
   { id: "compliments", label: "Appreciation Corner", icon: Heart, tiers: ["staff", "manager", "admin", "director1", "director2"] },
-  { id: "survey", label: "Survey Insights", icon: BarChart3, tiers: ["manager", "director1", "director2"] },
+  { id: "survey", label: "Feedback Corner", icon: BarChart3, tiers: ["manager", "director1", "director2"] },
   { id: "admin", label: "Admin Console", icon: Settings, tiers: ["admin"] },
   { id: "rewards", label: "Rewards", icon: Trophy, tiers: ["staff", "manager", "admin", "director1", "director2"] },
 ] as const;
@@ -106,6 +106,7 @@ export function Sidebar({
     if (isOpsTier) return true;
     return n.tiers.includes(tier as never);
   });
+  const isHod = (tier === "manager" && currentUser.hod) || tier === "ops_hod";
   // Use first names for the tier switcher buttons.
   // Always look up from staffList (full user list) so that ops-tier teamMembers override doesn't
   // cause the HCWM buttons to fall back to generic labels like "Staff".
@@ -120,6 +121,9 @@ export function Sidebar({
     : isOpsTier
     ? (opsPersonaName ?? "Ops")
     : (viewMember?.name ?? viewStaffEntry?.name ?? currentUser.name);
+  // "Feedback Corner & Insights" for anyone who also gets an aggregate view there (HOD, any leave
+  // supervisor, or director) — plain "Feedback Corner" for staff who only ever submit.
+  const isFeedbackCornerManager = isHod || isDirectorTier || staffList.some(s => s.supervisor === viewName);
   const displayUser = {
     name: viewName,
     designation: isDirectorTier
@@ -197,7 +201,7 @@ export function Sidebar({
               <button
                 key={it.id}
                 onClick={() => navigate(it.id)}
-                title={collapsed ? it.label : undefined}
+                title={collapsed ? (it.id === "survey" ? (isFeedbackCornerManager ? "Feedback Corner & Insights" : "Feedback Corner") : it.label) : undefined}
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all",
                   collapsed && "md:justify-center md:px-0",
@@ -207,7 +211,9 @@ export function Sidebar({
                 )}
               >
                 <Icon className="size-4 shrink-0" />
-                <span className={cn(collapsed && "md:hidden")}>{it.label}</span>
+                <span className={cn(collapsed && "md:hidden")}>
+                  {it.id === "survey" ? (isFeedbackCornerManager ? "Feedback Corner & Insights" : "Feedback Corner") : it.label}
+                </span>
               </button>
             );
           })}

@@ -3,7 +3,7 @@
 // already-wired teams so both are visible without the user having to generate everything by hand
 // first. All in-memory only, same as deptGoalSkills — resets on reload, never CSV-persisted.
 import type { CheckIn } from "./checkIns";
-import type { PulseResponse } from "./pulseSurvey";
+import { currentQuarterLabel, type PulseResponse } from "./pulseSurvey";
 import type { ManagerEffectivenessRating } from "./managerEffectiveness";
 import type { AiActivityLogEntry } from "./aiActivity";
 
@@ -51,37 +51,47 @@ export const seedCheckIns: CheckIn[] = [
   },
 ];
 
-// "This month," computed at load time rather than hardcoded — a literal "2026-07" here silently
-// stops being "this month" the moment the calendar rolls over, which is exactly what happened once
-// this demo kept running past July: every seeded response quietly aged into "last month" and the
-// widget fell back to its empty "not enough responses yet" state despite the data still being
+// "This quarter," computed at load time rather than hardcoded — a literal "2026-Q3" here silently
+// stops being "this quarter" once the calendar rolls over, which is exactly what happened once this
+// demo kept running past July with a hardcoded month: every seeded response quietly aged out and
+// the widget fell back to its empty "not enough responses yet" state despite the data still being
 // right there. Computing it fresh means the seed data is always "current" whenever this is viewed.
-const CURRENT_MONTH = new Date().toISOString().slice(0, 7);
+const CURRENT_QUARTER = currentQuarterLabel();
+const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
 
-// Current month's pulse — 4 HCWM + 3 Credit Risk responses, both above the 3-response anonymity
-// threshold so both teams' aggregates are visible without the user submitting anything first.
+// Current quarter's pulse — 4 HCWM + 3 Credit Risk + 3 Marketing responses, all above the
+// 3-response anonymity threshold so every team's aggregate is visible without the user submitting
+// anything first. Submitted a few weeks back (not "just now") so the New Insights badge reads as
+// already-settled rather than perpetually fresh in the demo.
 export const seedPulseResponses: PulseResponse[] = [
-  { id: "pr-seed-1", respondentName: "Belle Lim", department: "Human Capital & Workplace Management", month: CURRENT_MONTH, ratings: { workload: 3, clarity: 4, support: 4, growth: 4 } },
-  { id: "pr-seed-2", respondentName: "Rhea Yee", department: "Human Capital & Workplace Management", month: CURRENT_MONTH, ratings: { workload: 3, clarity: 4, support: 5, growth: 3 } },
-  { id: "pr-seed-3", respondentName: "Bryan Goh", department: "Human Capital & Workplace Management", month: CURRENT_MONTH, ratings: { workload: 2, clarity: 3, support: 4, growth: 3 } },
-  { id: "pr-seed-4", respondentName: "Anabelle Tan", department: "Human Capital & Workplace Management", month: CURRENT_MONTH, ratings: { workload: 2, clarity: 4, support: 4, growth: 4 } },
-  { id: "pr-seed-5", respondentName: "Diana Chang", department: "Credit Risk Management (F.K.A. Credit Admin)", month: CURRENT_MONTH, ratings: { workload: 3, clarity: 4, support: 4, growth: 3 } },
-  { id: "pr-seed-6", respondentName: "Elton Phua", department: "Credit Risk Management (F.K.A. Credit Admin)", month: CURRENT_MONTH, ratings: { workload: 3, clarity: 4, support: 5, growth: 4 } },
-  { id: "pr-seed-7", respondentName: "Bella Lim", department: "Credit Risk Management (F.K.A. Credit Admin)", month: CURRENT_MONTH, ratings: { workload: 4, clarity: 4, support: 4, growth: 3 } },
-  { id: "pr-seed-8", respondentName: "Michelle Sylvia", department: "Marketing Communications", month: CURRENT_MONTH, ratings: { workload: 3, clarity: 4, support: 4, growth: 4 } },
-  { id: "pr-seed-9", respondentName: "Rave Tan", department: "Marketing Communications", month: CURRENT_MONTH, ratings: { workload: 3, clarity: 3, support: 4, growth: 3 } },
-  { id: "pr-seed-10", respondentName: "Christabel Lin", department: "Marketing Communications", month: CURRENT_MONTH, ratings: { workload: 4, clarity: 3, support: 5, growth: 5 } },
+  { id: "pr-seed-1", respondentName: "Belle Lim", department: "Human Capital & Workplace Management", quarter: CURRENT_QUARTER, submittedAt: daysAgo(25), ratings: { workload: 3, clarity: 4, support: 4, growth: 4 } },
+  { id: "pr-seed-2", respondentName: "Rhea Yee", department: "Human Capital & Workplace Management", quarter: CURRENT_QUARTER, submittedAt: daysAgo(24), ratings: { workload: 3, clarity: 4, support: 5, growth: 3 } },
+  { id: "pr-seed-3", respondentName: "Bryan Goh", department: "Human Capital & Workplace Management", quarter: CURRENT_QUARTER, submittedAt: daysAgo(23), ratings: { workload: 2, clarity: 3, support: 4, growth: 3 } },
+  { id: "pr-seed-4", respondentName: "Anabelle Tan", department: "Human Capital & Workplace Management", quarter: CURRENT_QUARTER, submittedAt: daysAgo(22), ratings: { workload: 2, clarity: 4, support: 4, growth: 4 } },
+  { id: "pr-seed-5", respondentName: "Diana Chang", department: "Credit Risk Management (F.K.A. Credit Admin)", quarter: CURRENT_QUARTER, submittedAt: daysAgo(21), ratings: { workload: 3, clarity: 4, support: 4, growth: 3 } },
+  { id: "pr-seed-6", respondentName: "Elton Phua", department: "Credit Risk Management (F.K.A. Credit Admin)", quarter: CURRENT_QUARTER, submittedAt: daysAgo(20), ratings: { workload: 3, clarity: 4, support: 5, growth: 4 } },
+  { id: "pr-seed-7", respondentName: "Bella Lim", department: "Credit Risk Management (F.K.A. Credit Admin)", quarter: CURRENT_QUARTER, submittedAt: daysAgo(19), ratings: { workload: 4, clarity: 4, support: 4, growth: 3 } },
+  { id: "pr-seed-8", respondentName: "Michelle Sylvia", department: "Marketing Communications", quarter: CURRENT_QUARTER, submittedAt: daysAgo(18), ratings: { workload: 3, clarity: 4, support: 4, growth: 4 } },
+  { id: "pr-seed-9", respondentName: "Rave Tan", department: "Marketing Communications", quarter: CURRENT_QUARTER, submittedAt: daysAgo(17), ratings: { workload: 3, clarity: 3, support: 4, growth: 3 } },
+  { id: "pr-seed-10", respondentName: "Christabel Lin", department: "Marketing Communications", quarter: CURRENT_QUARTER, submittedAt: daysAgo(16), ratings: { workload: 4, clarity: 3, support: 5, growth: 5 } },
 ];
 
+// Last completed annual cycle (Oct-Nov of the year before whichever year this demo happens to be
+// viewed in) — the 2026 Oct-Nov window hasn't opened yet as of any "today" before October, so
+// seeding a 2026-dated rating would describe a submission that couldn't have happened yet under the
+// window's own rules. Seeding last year's completed cycle lets insights (company average, and once
+// a second year exists, year-over-year trend) render immediately without that contradiction.
+const LAST_CYCLE_YEAR = new Date().getFullYear() - (new Date().getMonth() >= 9 ? 0 : 1);
+
 export const seedManagerRatings: ManagerEffectivenessRating[] = [
-  { id: "mr-seed-1", managerName: "Sarah Chen", raterName: "Anabelle Tan", month: CURRENT_MONTH, ratings: { coach: 5, empower: 4, wellbeing: 5, communicate: 4, career: 4, vision: 5 } },
-  { id: "mr-seed-2", managerName: "Sarah Chen", raterName: "Bryan Goh", month: CURRENT_MONTH, ratings: { coach: 4, empower: 4, wellbeing: 4, communicate: 5, career: 3, vision: 4 } },
-  { id: "mr-seed-3", managerName: "Sarah Chen", raterName: "Marcus Teo", month: CURRENT_MONTH, ratings: { coach: 4, empower: 5, wellbeing: 4, communicate: 4, career: 4, vision: 4 } },
-  { id: "mr-seed-4", managerName: "Nadia Yong", raterName: "Victor Lai", month: CURRENT_MONTH, ratings: { coach: 4, empower: 3, wellbeing: 4, communicate: 4, career: 3, vision: 4 } },
-  { id: "mr-seed-5", managerName: "Nadia Yong", raterName: "Diana Chang", month: CURRENT_MONTH, ratings: { coach: 3, empower: 3, wellbeing: 4, communicate: 3, career: 3, vision: 4 } },
-  { id: "mr-seed-6", managerName: "Nadia Yong", raterName: "Elton Phua", month: CURRENT_MONTH, ratings: { coach: 4, empower: 4, wellbeing: 4, communicate: 4, career: 4, vision: 3 } },
-  { id: "mr-seed-7", managerName: "Michelle Sylvia", raterName: "Rave Tan", month: CURRENT_MONTH, ratings: { coach: 4, empower: 4, wellbeing: 4, communicate: 4, career: 3, vision: 4 } },
-  { id: "mr-seed-8", managerName: "Michelle Sylvia", raterName: "Christabel Lin", month: CURRENT_MONTH, ratings: { coach: 5, empower: 4, wellbeing: 5, communicate: 5, career: 4, vision: 4 } },
+  { id: "mr-seed-1", managerName: "Sarah Chen", raterName: "Anabelle Tan", cycleYear: LAST_CYCLE_YEAR, submittedAt: `${LAST_CYCLE_YEAR}-10-14T09:00:00.000Z`, ratings: { coach: 5, empower: 4, wellbeing: 5, communicate: 4, career: 4, vision: 5 } },
+  { id: "mr-seed-2", managerName: "Sarah Chen", raterName: "Bryan Goh", cycleYear: LAST_CYCLE_YEAR, submittedAt: `${LAST_CYCLE_YEAR}-10-16T09:00:00.000Z`, ratings: { coach: 4, empower: 4, wellbeing: 4, communicate: 5, career: 3, vision: 4 } },
+  { id: "mr-seed-3", managerName: "Sarah Chen", raterName: "Marcus Teo", cycleYear: LAST_CYCLE_YEAR, submittedAt: `${LAST_CYCLE_YEAR}-10-18T09:00:00.000Z`, ratings: { coach: 4, empower: 5, wellbeing: 4, communicate: 4, career: 4, vision: 4 } },
+  { id: "mr-seed-4", managerName: "Nadia Yong", raterName: "Victor Lai", cycleYear: LAST_CYCLE_YEAR, submittedAt: `${LAST_CYCLE_YEAR}-10-20T09:00:00.000Z`, ratings: { coach: 4, empower: 3, wellbeing: 4, communicate: 4, career: 3, vision: 4 } },
+  { id: "mr-seed-5", managerName: "Nadia Yong", raterName: "Diana Chang", cycleYear: LAST_CYCLE_YEAR, submittedAt: `${LAST_CYCLE_YEAR}-10-22T09:00:00.000Z`, ratings: { coach: 3, empower: 3, wellbeing: 4, communicate: 3, career: 3, vision: 4 } },
+  { id: "mr-seed-6", managerName: "Nadia Yong", raterName: "Elton Phua", cycleYear: LAST_CYCLE_YEAR, submittedAt: `${LAST_CYCLE_YEAR}-10-24T09:00:00.000Z`, ratings: { coach: 4, empower: 4, wellbeing: 4, communicate: 4, career: 4, vision: 3 } },
+  { id: "mr-seed-7", managerName: "Michelle Sylvia", raterName: "Rave Tan", cycleYear: LAST_CYCLE_YEAR, submittedAt: `${LAST_CYCLE_YEAR}-10-26T09:00:00.000Z`, ratings: { coach: 4, empower: 4, wellbeing: 4, communicate: 4, career: 3, vision: 4 } },
+  { id: "mr-seed-8", managerName: "Michelle Sylvia", raterName: "Christabel Lin", cycleYear: LAST_CYCLE_YEAR, submittedAt: `${LAST_CYCLE_YEAR}-10-28T09:00:00.000Z`, ratings: { coach: 5, empower: 4, wellbeing: 5, communicate: 5, career: 4, vision: 4 } },
 ];
 
 export const seedAiActivityLog: AiActivityLogEntry[] = [

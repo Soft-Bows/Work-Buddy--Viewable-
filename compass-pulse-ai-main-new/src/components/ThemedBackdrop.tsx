@@ -244,47 +244,37 @@ function MalaysiaScene() {
 function SingaporeScene() {
   return (
     <Scene>
-      <SkyLayer sky="linear-gradient(180deg, #CBD6EF 0%, #B6A9DE 26%, #DDEDE6 62%, #EEF7F2 100%)" glow="#E8C9F5" />
-      {/* Marina Bay Sands, redrawn big and bold rather than as three thin sticks — the towers now
-          take up a third of the canvas width and nearly the full landmark height, and the SkyPark
-          is one continuous, unmistakably boat-hulled deck (flat middle, both ends sweeping sharply
-          upward) instead of a shallow wave, so it reads at a glance instead of needing a caption. */}
+      {/* "Arrived at Changi at night" — a deep indigo/navy night sky instead of a daytime wash, no
+          dawn pastels; SkyLayer's white cloud-cluster blurs and glow now read as moonlit haze rather
+          than daytime cloud, which is exactly the effect an evening arrival scene wants. */}
+      <SkyLayer sky="linear-gradient(180deg, #0B1230 0%, #16204A 32%, #223B72 66%, #2E4E86 100%)" glow="#9FC4FF" />
+      {/* Changi Airport at night — a long lit terminal building plus the airport's distinctive
+          control tower (tall shaft, wide disc-shaped cab), with warm lit windows and a runway-light
+          string along the ground, replacing the previous daytime Marina Bay Sands scene entirely. */}
       <svg className={`absolute bottom-0 inset-x-0 w-full h-[48vh] min-h-[270px] ${LANDMARK_OPACITY}`} viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
         <defs>
-          {/* A rich rose-gold-to-indigo glass-facade gradient instead of a single flat navy fill —
-              the towers were reading as plain black silhouettes at background opacity; a gradient
-              plus lit-window sparkle keeps them colourful even at the same opacity level. */}
-          <linearGradient id="mbsGlass" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#E8A87C" />
-            <stop offset="45%" stopColor="#8B6FA8" />
-            <stop offset="100%" stopColor="#2E3A66" />
+          <linearGradient id="changiFacade" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3E4E78" />
+            <stop offset="100%" stopColor="#1C2848" />
           </linearGradient>
         </defs>
-        <path d="M0 178 Q110 158 220 170 T400 160 V220 H0 Z" fill="#A9D6C9" />
-        {/* Three towers, each markedly wider, fanning outward from vertical at the base */}
-        <polygon points="146,172 180,172 158,46 128,46" fill="url(#mbsGlass)" />
-        <polygon points="184,172 218,172 214,34 188,34" fill="url(#mbsGlass)" />
-        <polygon points="222,172 256,172 272,46 242,46" fill="url(#mbsGlass)" />
-        {/* Lit windows — small warm-gold squares scattered across the glass, the detail that reads
-            as "illuminated tower at dusk" rather than a flat coloured block */}
-        {[
-          [136, 70], [148, 84], [160, 100], [140, 118], [155, 140], [168, 155],
-          [196, 50], [204, 64], [192, 82], [208, 100], [198, 122], [206, 148],
-          [234, 70], [248, 88], [238, 106], [252, 128], [240, 150], [230, 160],
-        ].map(([x, y], i) => (
-          <rect key={i} x={x} y={y} width="3.5" height="4" fill="#FCD98E" opacity={0.75} />
+        <path d="M0 178 Q110 158 220 170 T400 160 V220 H0 Z" fill="#141B36" />
+        {/* Terminal building — long, low, glass-fronted, glowing from within */}
+        <rect x="34" y="148" width="332" height="30" fill="url(#changiFacade)" />
+        <rect x="34" y="144" width="332" height="6" fill="#0F1730" />
+        {Array.from({ length: 24 }).map((_, i) => (
+          <rect key={i} x={42 + i * 13.5} y="154" width="8" height="18" fill={i % 3 === 0 ? "#FCD98E" : "#FFE9B0"} opacity={i % 4 === 1 ? 0.35 : 0.85} />
         ))}
-        {/* The SkyPark — one continuous hull-shaped deck resting across all three towers */}
-        <path d="M118 50 Q118 30 145 24 L279 24 Q306 30 306 50 L296 50 Q296 36 275 33 L149 33 Q128 36 128 50 Z" fill="#F3D26A" />
-        <path d="M128 50 L296 50 L296 40 L128 40 Z" fill="#2CA097" />
-        <ellipse cx="212" cy="51" rx="95" ry="6" fill="#237E76" opacity="0.55" />
-        {/* Reflection in the bay, faint */}
-        <g opacity="0.22" transform="translate(0,344) scale(1,-1)">
-          <polygon points="146,172 180,172 158,46 128,46" fill="url(#mbsGlass)" />
-          <polygon points="184,172 218,172 214,34 188,34" fill="url(#mbsGlass)" />
-          <polygon points="222,172 256,172 272,46 242,46" fill="url(#mbsGlass)" />
-        </g>
-        <path d="M0 195 Q120 180 240 190 T400 184 V220 H0 Z" fill="#CDE9DC" />
+        {/* Control tower — tall shaft with a wide disc cab, the airport's most recognisable shape */}
+        <rect x="227" y="62" width="10" height="88" fill="url(#changiFacade)" />
+        <ellipse cx="232" cy="58" rx="24" ry="13" fill="url(#changiFacade)" />
+        <ellipse cx="232" cy="54" rx="19" ry="7.5" fill="#FCD98E" opacity="0.6" />
+        <circle cx="232" cy="40" r="2" fill="#FF8A8A" opacity="0.9" />
+        {/* Runway lights, a string of small glowing dots along the tarmac */}
+        {[54, 82, 110, 138, 166, 194, 222, 250, 278, 306, 334].map(x => (
+          <circle key={x} cx={x} cy="181" r="1.8" fill="#8FD6FF" opacity="0.85" />
+        ))}
+        <path d="M0 195 Q120 180 240 190 T400 184 V220 H0 Z" fill="#0F1730" />
       </svg>
       {/* Vanda Miss Joaquim orchid, Singapore's national flower — bottom-right */}
       <svg className={`absolute bottom-8 right-[6%] ${FOREGROUND_OPACITY}`} width="64" height="76" viewBox="0 0 60 70" fill="none">
@@ -330,7 +320,10 @@ function ThailandScene() {
 function TurkeyScene() {
   return (
     <Scene>
-      <SkyLayer sky="linear-gradient(180deg, #F7CDB6 0%, #F3B79A 24%, #C9EAE7 62%, #E8F7F5 100%)" glow="#FFD9B0" />
+      {/* Brighter, more saturated than the original muted dawn wash — bold orange near the sun,
+          a real jewel-toned blue lower down, so "bright sun high in the sky" actually reads as
+          bright rather than pastel. */}
+      <SkyLayer sky="linear-gradient(180deg, #FFB877 0%, #FF9A56 22%, #6EC8DE 62%, #B8ECF2 100%)" glow="#FFC94A" />
       <svg className={`absolute bottom-0 inset-x-0 w-full h-[46vh] min-h-[260px] ${LANDMARK_OPACITY}`} viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
         {/* Cappadocia — a panoramic valley of jagged fairy-chimney rock cones */}
         <path d="M0 182 Q110 160 220 176 T400 164 V220 H0 Z" fill="#E3C7A6" />
@@ -482,11 +475,22 @@ function JapanScene() {
   return (
     <Scene>
       <SkyLayer sky="linear-gradient(180deg, #DCEEFB 0%, #EAF3FC 22%, #FBE7EF 55%, #FCEFE0 100%)" glow="#FFE8B8" />
-      {/* Mount Fuji — larger and in real colour, not a currentColor line silhouette */}
+      {/* Mount Fuji — the previous silhouette was a steep spike whose apex sat at y=40 of a 220-tall
+          viewBox; preserveAspectRatio="slice" crops overflow from the TOP on any wide/short-viewport
+          laptop, and y=40 sat squarely inside that crop zone, leaving only a truncated grey trapezoid
+          visible ("top half missing"). Redrawn wide and gently-sloped (Fuji's real profile is a broad
+          cone, not a spire) with its apex at y=115 — comfortably clear of the crop line — plus a
+          gradient fill instead of one flat colour for warmth/depth. */}
       <svg className={`absolute bottom-0 inset-x-0 w-full h-[46vh] min-h-[260px] ${LANDMARK_OPACITY}`} viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
+        <defs>
+          <linearGradient id="fujiSlope" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#9CB0CC" />
+            <stop offset="100%" stopColor="#5E7396" />
+          </linearGradient>
+        </defs>
         <path d="M0 170 Q90 140 180 160 T400 145 V220 H0 Z" fill="#BFE0D8" />
-        <path d="M130 190 L235 40 L340 190 Z" fill="#7C93B0" />
-        <path d="M197 92 L235 40 L273 92 L255 84 L235 100 L215 84 Z" fill="white" opacity="0.95" />
+        <path d="M75 192 L235 115 L395 192 Z" fill="url(#fujiSlope)" />
+        <path d="M185 142 L235 115 L285 142 L263 132 L235 138 L207 132 Z" fill="white" opacity="0.95" />
         <path d="M0 195 Q120 175 240 192 T400 180 V220 H0 Z" fill="#DCEEDB" />
       </svg>
       {/* Torii gate, bottom-left foreground */}

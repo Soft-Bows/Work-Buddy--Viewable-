@@ -5,7 +5,7 @@ import { AppProvider, useApp } from "@/lib/appContext";
 import { Sidebar, TopBar } from "@/components/Sidebar";
 import { HomeSection } from "@/components/sections/HomeSection";
 import { TeamSection } from "@/components/sections/TeamSection";
-import { SurveySection } from "@/components/sections/SurveySection";
+import { FeedbackCornerSection } from "@/components/sections/FeedbackCornerSection";
 import { RewardsSection } from "@/components/sections/RewardsSection";
 import { ComplimentsSection } from "@/components/sections/ComplimentsSection";
 import { MyGoalsSection } from "@/components/sections/MyGoalsSection";
@@ -157,7 +157,7 @@ function Content() {
     switch (section) {
       case "home": return <HomeSection />;
       case "team": return <TeamSection />;
-      case "survey": return <SurveySection />;
+      case "survey": return <FeedbackCornerSection />;
       case "rewards": return <RewardsSection />;
       case "compliments": return <ComplimentsSection />;
       case "mygoals": return <MyGoalsSection />;
