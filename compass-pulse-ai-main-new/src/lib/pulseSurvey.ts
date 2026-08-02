@@ -1,4 +1,8 @@
-import { getCurrentQuarterStart, getCurrentQuarterEndWorkingDate, workingDaysSince } from "./utils";
+import { getCurrentQuarterStart, getCurrentQuarterEndWorkingDate, workingDaysSince, currentQuarterLabel, previousQuarterLabel } from "./utils";
+
+// Re-exported for backward compatibility — the canonical definitions now live in utils.ts (needed
+// there for KeyResult quarter-tagging, which would otherwise create a circular import with this file).
+export { currentQuarterLabel, previousQuarterLabel };
 
 // A lightweight, recurring team-health pulse — the missing "listening instrument" every agentic
 // engagement platform (Viva Glint, Culture Amp) builds its insights on top of. Deliberately short
@@ -28,22 +32,6 @@ export interface PulseResponse {
 // surface an aggregate built from fewer than this many responses, so an individual's answer is
 // never identifiable from a small team's average.
 export const MIN_RESPONSES_FOR_AGGREGATE = 3;
-
-// "YYYY-Q#" label for whichever quarter `reference` falls in — the same quarter math
-// getCurrentQuarterStart/getCurrentQuarterEndDate already use, just formatted as a label.
-export function currentQuarterLabel(reference: Date = new Date()): string {
-  const y = reference.getFullYear();
-  const q = Math.floor(reference.getMonth() / 3) + 1;
-  return `${y}-Q${q}`;
-}
-
-// "YYYY-Q#" label for the quarter immediately before whichever quarter `reference` falls in — used
-// to compute the quarter-over-quarter trend shown alongside a department's current-quarter pulse.
-export function previousQuarterLabel(reference: Date = new Date()): string {
-  const y = reference.getFullYear();
-  const q = Math.floor(reference.getMonth() / 3) + 1;
-  return q === 1 ? `${y - 1}-Q4` : `${y}-Q${q - 1}`;
-}
 
 // Team Pulse is only open for submission from the first working day of a quarter through its last
 // working day — outside that window the form is closed, not just "quiet."

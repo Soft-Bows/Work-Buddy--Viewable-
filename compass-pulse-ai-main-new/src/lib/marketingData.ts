@@ -13,7 +13,7 @@ export const marketingDepartmentGoals: DeptGoal[] = [
   {
     id: "md1", title: "Elevate Group Brand Presence Across Digital & Earned Media", owner: "Michelle Sylvia", progress: 40,
     description: "Grow share of voice and campaign engagement across owned, earned, and paid channels ahead of the Q4 brand refresh.",
-    level: "department",
+    level: "department", linkedPhillyGoalId: "pg1", linkedPhillyKrId: "pg1kr1",
     keyResults: [
       {
         id: "mkr1", title: "Launch the refreshed corporate brand identity across all client-facing touchpoints", owner: "Michelle Sylvia",

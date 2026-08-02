@@ -6,6 +6,24 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// "YYYY-Q#" label for whichever quarter `reference` falls in — the same quarter math
+// getCurrentQuarterStart/getCurrentQuarterEndDate already use, just formatted as a label. Lives here
+// (not pulseSurvey.ts, which re-exports it for backward compatibility) because KeyResult
+// quarter-tagging below also needs it and pulseSurvey.ts itself imports from this file.
+export function currentQuarterLabel(reference: Date = new Date()): string {
+  const y = reference.getFullYear();
+  const q = Math.floor(reference.getMonth() / 3) + 1;
+  return `${y}-Q${q}`;
+}
+
+// "YYYY-Q#" label for the quarter immediately before whichever quarter `reference` falls in — used
+// to compute the quarter-over-quarter trend shown alongside a department's current-quarter pulse.
+export function previousQuarterLabel(reference: Date = new Date()): string {
+  const y = reference.getFullYear();
+  const q = Math.floor(reference.getMonth() / 3) + 1;
+  return q === 1 ? `${y - 1}-Q4` : `${y}-Q${q - 1}`;
+}
+
 // The single, canonical "Job Grade" display for a user's numeric grade (1–6, from users.csv's
 // `grade` column). Deliberately just "Grade N" — this used to be two separately-hand-maintained
 // functions (in csvData.server.ts and SkillsSection.tsx) that each invented a fictitious
@@ -272,6 +290,35 @@ export function objectiveScore(o: DeptGoal): number | undefined {
   const krs = o.keyResults ?? [];
   if (krs.length === 0 || krs.some(k => k.score === undefined)) return undefined;
   return krs.reduce((sum, k) => sum + k.score!, 0) / krs.length;
+}
+
+// A Key Result's `score` never auto-clears at quarter boundaries — it just sits there until someone
+// re-scores it (see mockData.ts's KeyResult comment). These two helpers are what let the UI be
+// honest about that: a score whose scoreQuarter isn't the current quarter is a *past* quarter's
+// result, not a stale current one, and should be labelled as such — UNLESS the KR's own definition
+// (title/dueDate/owner) has since been edited, in which case that old score no longer describes the
+// current KR and shouldn't be shown at all (per the "no longer relevant if modified" rule).
+export function isKrScoreFromPastQuarter(kr: KeyResult): boolean {
+  return kr.score !== undefined && kr.scoreQuarter !== undefined && kr.scoreQuarter !== currentQuarterLabel();
+}
+
+export function isKrScoreStaleForDisplay(kr: KeyResult): boolean {
+  if (!isKrScoreFromPastQuarter(kr)) return false;
+  if (!kr.definitionEditedDate || !kr.scoreSubmittedDate) return false;
+  return kr.definitionEditedDate > kr.scoreSubmittedDate;
+}
+
+// The Objective-level equivalent of the above, for the rolled-up objectiveScore() display: only
+// returns a quarter label when every contributing Key Result agrees on the same past quarter and
+// none of them are stale — anything messier (mixed quarters, a stale KR in the mix) falls back to no
+// label at all rather than guessing, since objectiveScore() itself keeps blending them regardless.
+export function objectiveScoreQuarterLabel(o: DeptGoal): string | null {
+  const krs = o.keyResults ?? [];
+  if (krs.length === 0 || krs.some(k => k.score === undefined || isKrScoreStaleForDisplay(k))) return null;
+  const quarters = new Set(krs.map(k => k.scoreQuarter).filter((q): q is string => q !== undefined));
+  if (quarters.size !== 1) return null;
+  const [quarter] = quarters;
+  return quarter !== currentQuarterLabel() ? quarter : null;
 }
 
 // An Objective's displayed monthly confidence — an equal (unweighted) average of its Key Results'

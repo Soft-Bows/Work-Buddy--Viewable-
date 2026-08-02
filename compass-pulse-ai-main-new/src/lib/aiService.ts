@@ -47,7 +47,10 @@ export interface AiProvider {
    * Beyond the single lowest-scoring item per stream, also flags a manager-survey item that's
    * meaningfully below company average and one that's regressed vs the manager's own last cycle —
    * item-level, not category-level, per 360-feedback research (specific behaviours are more
-   * actionable than broad competency labels) — each tagged with which rule triggered it.
+   * actionable than broad competency labels) — each tagged with which rule triggered it. Also
+   * surfaces 1-2 "reinforce this strength" items for the manager's own top-scoring behaviours —
+   * several renowned FIs (DBS's Gallup-based follow-up practice among them) pair "fix the gaps" action
+   * plans with "double down on what's already working," not weaknesses alone.
    */
   synthesizeActionPlan(input: {
     pulseAvgs?: Record<string, number>;
@@ -55,7 +58,7 @@ export interface AiProvider {
     managerCompanyAvgs?: Record<string, number>;
     managerLastYearAvgs?: Record<string, number>;
     department: string;
-  }): Promise<{ title: string; desc: string; source: "Team Pulse" | "Manager Survey"; trigger: "lowest score" | "below company average" | "below last year" }[]>;
+  }): Promise<{ title: string; desc: string; source: "Team Pulse" | "Manager Survey"; trigger: "lowest score" | "below company average" | "below last year" | "reinforce strength" }[]>;
   /**
    * Sentiment on a batch of free-text responses (e.g. the Manager Survey's 2 open questions) — a
    * keyword-scored classifier, same no-live-LLM convention as everything else here. Returns counts
@@ -105,7 +108,10 @@ const ruleBasedProvider: AiProvider = {
     // Minimum gap before a comparison (vs company, vs last year) counts as "meaningfully" behind —
     // a 0.1 wobble shouldn't generate an action item, only a real gap should.
     const GAP_THRESHOLD = 0.3;
-    type Item = { title: string; desc: string; source: "Team Pulse" | "Manager Survey"; trigger: "lowest score" | "below company average" | "below last year" };
+    type Item = { title: string; desc: string; source: "Team Pulse" | "Manager Survey"; trigger: "lowest score" | "below company average" | "below last year" | "reinforce strength" };
+    // A "proven strength" per DBS-style reinforcement — meaningfully above the general 4.0/5 bar, not
+    // just this manager's own best-of-a-mediocre-bunch item.
+    const STRENGTH_THRESHOLD = 4.2;
     const items: Item[] = [];
     const usedManagerItemIds = new Set<string>();
 
@@ -166,6 +172,22 @@ const ruleBasedProvider: AiProvider = {
           });
         }
       }
+      // DBS-style strength reinforcement — the manager's own top 1-2 behaviours, provided they
+      // clear a genuine "proven strength" bar (not just this cycle's relative best). Deliberately
+      // capped at 2 so the plan doesn't read as "everything's an action item."
+      const strengths = MANAGER_BEHAVIORS
+        .filter(b => !usedManagerItemIds.has(b.id))
+        .map(b => ({ b, score: managerAvgs[b.id] }))
+        .filter((x): x is { b: typeof MANAGER_BEHAVIORS[number]; score: number } => x.score !== undefined && x.score >= STRENGTH_THRESHOLD)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 2);
+      for (const { b, score } of strengths) {
+        items.push({
+          title: `Keep leaning on: "${b.text}" (${score.toFixed(1)}/5)`,
+          desc: `${b.leadershipArea} — a proven strength this cycle. Worth naming explicitly with your team and finding one more place to apply it, not just protecting it.`,
+          source: "Manager Survey", trigger: "reinforce strength",
+        });
+      }
     }
     return items;
   },
@@ -188,11 +210,27 @@ const ruleBasedProvider: AiProvider = {
       else neutral++;
     }
     const total = clean.length;
-    const summary = positive >= negative && positive > 0
-      ? `Leans positive — ${positive} of ${total} responses read favourably.`
-      : negative > positive
-      ? `Leans mixed-to-negative — ${negative} of ${total} responses flag a concern.`
-      : `Mixed/neutral — no strong lean across ${total} responses.`;
+    // A plain "positive >= negative → leans positive" rule is genuinely too coarse — e.g. 1 positive
+    // out of 2 responses is a 50/50 split, not a "lean." This buckets on the actual share of
+    // favourable-vs-unfavourable responses (ignoring neutral, which by definition doesn't lean either
+    // way) and is explicit about small samples, where a single response can swing the whole picture.
+    // Genuinely nuanced sentiment (sarcasm, negation, mixed sentiment within one sentence) is exactly
+    // the kind of judgement call a real LLM would do better than keyword-matching — this stays behind
+    // the AiProvider seam specifically so a live model can be dropped in later without touching any
+    // caller.
+    const leaning = positive + negative;
+    let summary: string;
+    if (leaning === 0) {
+      summary = `No clear lean — ${total} response${total === 1 ? "" : "s"}, none read strongly positive or negative.`;
+    } else {
+      const positiveShare = positive / leaning;
+      const sampleCaveat = total < 5 ? ` (small sample — ${total} response${total === 1 ? "" : "s"})` : "";
+      if (positiveShare >= 0.7) summary = `Predominantly positive — ${positive} of ${total} responses read favourably${sampleCaveat}.`;
+      else if (positiveShare >= 0.55) summary = `Leans positive, with notable dissent — ${positive} of ${total} favourable, ${negative} flag a concern${sampleCaveat}.`;
+      else if (positiveShare > 0.45) summary = `Mixed views — roughly split between ${positive} favourable and ${negative} concerned out of ${total}${sampleCaveat}.`;
+      else if (positiveShare > 0.3) summary = `Leans negative, with some positives — ${negative} of ${total} flag a concern, ${positive} favourable${sampleCaveat}.`;
+      else summary = `Predominantly negative — ${negative} of ${total} responses flag a concern${sampleCaveat}.`;
+    }
     return { positive, neutral, negative, summary };
   },
 };

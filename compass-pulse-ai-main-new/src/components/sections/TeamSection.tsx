@@ -5,7 +5,7 @@ import { useApp } from "@/lib/appContext";
 import type { DevGoalRecommendation, PerfGoalRecommendation } from "@/lib/appContext";
 import { getAiProvider } from "@/lib/aiService";
 import type { TeamMember, PersonalDevGoal, RAG, DeptGoal, KeyResult } from "@/lib/mockData";
-import { Sparkles, X, ChevronRight, ChevronDown, ChevronUp, Flag, AlertCircle, Check, Pencil, CheckCircle2, Loader2, Clock, TriangleAlert, Users, ExternalLink, Plus, MessageSquareHeart, GraduationCap, ThumbsDown, Info, Target, Trash2, UserPlus, UserCircle2, ListChecks, Building2 } from "lucide-react";
+import { Sparkles, X, ChevronRight, ChevronDown, ChevronUp, Flag, AlertCircle, Check, Pencil, CheckCircle2, Loader2, Clock, TriangleAlert, Users, ExternalLink, Plus, MessageSquareHeart, GraduationCap, ThumbsDown, Info, Target, Trash2, UserPlus, UserCircle2, ListChecks, Building2, Globe2 } from "lucide-react";
 import { CheckInSection } from "./CheckInSection";
 
 function TeamSVG() {
@@ -28,8 +28,10 @@ function TeamSVG() {
 
 import { toast } from "sonner";
 import { pointsToast } from "@/lib/pointsToast";
-import { cn, workingDaysSince, formatGoalStatusDueDate, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, flattenOkrOptions, objectiveScore, objectiveConfidence, objectiveConfidenceValue, ragConfidenceValue, scoreToRag, keyResultsOwnedBy, formatMonthlyConfidenceDueDate, isAmongOwners, ownerNames, isPendingAckFor, hasPendingAck, isKrOverdue, formatEffectiveKrScoreDueDate, isConfidenceStale, krOwnerCounts, MAX_KRS_PER_OWNER } from "@/lib/utils";
+import { cn, workingDaysSince, formatGoalStatusDueDate, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, flattenOkrOptions, objectiveScore, objectiveConfidence, objectiveConfidenceValue, ragConfidenceValue, scoreToRag, keyResultsOwnedBy, formatMonthlyConfidenceDueDate, isAmongOwners, ownerNames, isPendingAckFor, hasPendingAck, isKrOverdue, formatEffectiveKrScoreDueDate, isConfidenceStale, krOwnerCounts, MAX_KRS_PER_OWNER, isKrScoreFromPastQuarter, isKrScoreStaleForDisplay, objectiveScoreQuarterLabel } from "@/lib/utils";
 import { computeChallengeThemes, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
+import { phillyGroupGoals, findPhillyGoal, findPhillyKr } from "@/lib/phillyGroupOkrs";
+import { PhillyGroupOkrsDialog } from "@/components/PhillyGroupOkrsDialog";
 import { MARKETING_DEPT_NAME, marketingTeamMembers, marketingDepartmentGoals } from "@/lib/marketingData";
 
 // ── Owner picker — a search combobox over staffList (already active-only). Default (empty query)
@@ -475,12 +477,15 @@ function KeyResultRow({
                   <RagPill rag={kr.ragConfidence} value={ragConfidenceValue(kr.ragConfidence)} />
                 </div>
               </div>
-              {kr.score !== undefined && (
+              {kr.score !== undefined && !isKrScoreStaleForDisplay(kr) && (
                 <div className="flex flex-col items-end gap-0.5">
                   <FieldBadge kind="score" className="text-[9px]">Score</FieldBadge>
                   <div className={cn("rounded-full", scoreHighlighted && "ring-2 ring-amber-400")}>
                     <RagPill rag={scoreToRag(kr.score)} value={kr.score} />
                   </div>
+                  {isKrScoreFromPastQuarter(kr) && (
+                    <span className="text-[8px] font-medium text-muted-foreground whitespace-nowrap">{kr.scoreQuarter} (past quarter)</span>
+                  )}
                 </div>
               )}
             </>
@@ -1122,7 +1127,13 @@ function ObjectiveCard({
   const [proposedTitle, setProposedTitle] = useState("");
   const [proposedDueDate, setProposedDueDate] = useState("");
   const [editing, setEditing] = useState(false);
-  const [editDraft, setEditDraft] = useState({ title: deptGoal.title, description: deptGoal.description ?? "", owner: deptGoal.owner, dueDate: deptGoal.dueDate ?? "" });
+  const [editDraft, setEditDraft] = useState({
+    title: deptGoal.title, description: deptGoal.description ?? "", owner: deptGoal.owner, dueDate: deptGoal.dueDate ?? "",
+    linkedPhillyGoalId: deptGoal.linkedPhillyGoalId ?? "", linkedPhillyKrId: deptGoal.linkedPhillyKrId ?? "",
+  });
+  const [showPhillyDialog, setShowPhillyDialog] = useState(false);
+  const linkedPhillyKr = findPhillyKr(deptGoal.linkedPhillyGoalId, deptGoal.linkedPhillyKrId);
+  const linkedPhillyGoal = findPhillyGoal(deptGoal.linkedPhillyGoalId);
   const [rejectingCounter, setRejectingCounter] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [modifyingCounter, setModifyingCounter] = useState(false);
@@ -1222,7 +1233,7 @@ function ObjectiveCard({
               )}
               {canEdit && !editing && (
                 <button
-                  onClick={() => { setEditDraft({ title: deptGoal.title, description: deptGoal.description ?? "", owner: deptGoal.owner, dueDate: deptGoal.dueDate ?? "" }); setEditing(true); }}
+                  onClick={() => { setEditDraft({ title: deptGoal.title, description: deptGoal.description ?? "", owner: deptGoal.owner, dueDate: deptGoal.dueDate ?? "", linkedPhillyGoalId: deptGoal.linkedPhillyGoalId ?? "", linkedPhillyKrId: deptGoal.linkedPhillyKrId ?? "" }); setEditing(true); }}
                   className="size-5 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
                   title="Edit objective"
                 >
@@ -1240,6 +1251,18 @@ function ObjectiveCard({
                 🔗 Contributes to: {linkedToLabel}
               </div>
             )}
+            {linkedPhillyGoal && linkedPhillyKr && (
+              <button
+                onClick={() => setShowPhillyDialog(true)}
+                className="inline-flex items-center gap-1.5 mt-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700/40 hover:brightness-95 transition-[filter]"
+                title={linkedPhillyKr.title}
+              >
+                🌐 Linked to Philly Group OKR: {linkedPhillyGoal.title}
+              </button>
+            )}
+            {showPhillyDialog && (
+              <PhillyGroupOkrsDialog onClose={() => setShowPhillyDialog(false)} highlightGoalId={deptGoal.linkedPhillyGoalId} highlightKrId={deptGoal.linkedPhillyKrId} />
+            )}
             {editing ? (
               <div className="space-y-1.5 mt-1.5">
                 <input value={editDraft.title} onChange={e => setEditDraft(d => ({ ...d, title: e.target.value }))} className="w-full text-sm rounded-md border border-input bg-background px-2.5 py-1.5" placeholder="Objective title" />
@@ -1248,11 +1271,34 @@ function ObjectiveCard({
                   <MultiOwnerSelect value={editDraft.owner} onChange={v => setEditDraft(d => ({ ...d, owner: v }))} dept={dept} staffList={staffList} teamLeadsOnly={level === "team"} />
                   <input type="date" value={editDraft.dueDate} onChange={e => setEditDraft(d => ({ ...d, dueDate: e.target.value }))} className="text-sm rounded-md border border-input bg-background px-2.5 py-1.5" />
                 </div>
+                {level === "department" && (
+                  <select
+                    value={editDraft.linkedPhillyGoalId && editDraft.linkedPhillyKrId ? `${editDraft.linkedPhillyGoalId}:${editDraft.linkedPhillyKrId}` : ""}
+                    onChange={e => {
+                      const [goalId, krId] = e.target.value ? e.target.value.split(":") : ["", ""];
+                      setEditDraft(d => ({ ...d, linkedPhillyGoalId: goalId, linkedPhillyKrId: krId }));
+                    }}
+                    className="w-full text-xs rounded-md border border-input bg-background px-2.5 py-1.5"
+                  >
+                    <option value="">Not linked to a 2026 Philly Group OKR</option>
+                    {phillyGroupGoals.map(pg => (
+                      <optgroup key={pg.id} label={pg.title}>
+                        {pg.keyResults.map(kr => (
+                          <option key={kr.id} value={`${pg.id}:${kr.id}`}>{kr.title}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                )}
                 <div className="flex gap-1.5">
                   <button
                     onClick={() => {
                       if (!editDraft.title.trim() || !editDraft.owner) { toast.error("Title and owner are required"); return; }
-                      updateObjective(deptGoal.id, editDraft, isOps, viewedUserName);
+                      updateObjective(deptGoal.id, {
+                        ...editDraft,
+                        linkedPhillyGoalId: editDraft.linkedPhillyGoalId || undefined,
+                        linkedPhillyKrId: editDraft.linkedPhillyKrId || undefined,
+                      }, isOps, viewedUserName);
                       setEditing(false);
                       toast.success("Objective updated — owner will be notified to re-acknowledge");
                     }}
@@ -1336,6 +1382,9 @@ function ObjectiveCard({
                   </span>
                 )}
               </div>
+              {score !== undefined && objectiveScoreQuarterLabel(deptGoal) && (
+                <div className="text-[9px] font-medium text-muted-foreground mt-0.5">{objectiveScoreQuarterLabel(deptGoal)} (past quarter)</div>
+              )}
             </div>
             {deptGoal.dueDate && <div className="text-[10px] text-muted-foreground mt-1">Due {formatDueDate(deptGoal.dueDate)}</div>}
             <div className="text-[10px] text-muted-foreground mt-1">{keyResults.length} key result{keyResults.length === 1 ? "" : "s"}</div>
@@ -2355,6 +2404,52 @@ const TEAM_MASCOT_TINTS = [
   "hue-rotate(210deg) saturate(1.2)",
 ];
 
+// A single Philly Group Key Result row in the director's own "2026 Philly Group OKRs" section —
+// read-only display plus an inline "reassign owner" affordance (any staff name, not gated to a
+// single department's roster, since group-level ownership deliberately isn't dept-scoped).
+function PhillyKrOwnerRow({ goalId, kr }: { goalId: string; kr: KeyResult }) {
+  const { reassignPhillyKrOwner } = useApp();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(kr.owner);
+  return (
+    <div className="flex items-center justify-between gap-2 text-xs border-t border-border/40 pt-1.5 first:border-0 first:pt-0">
+      <span className="flex-1 min-w-0 truncate">{kr.title}</span>
+      {editing ? (
+        <div className="flex items-center gap-1 shrink-0">
+          <input
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            className="w-32 text-xs rounded-md border border-input bg-background px-1.5 py-0.5"
+          />
+          <button
+            onClick={() => {
+              if (!draft.trim()) { toast.error("Owner is required"); return; }
+              reassignPhillyKrOwner(goalId, kr.id, draft.trim());
+              setEditing(false);
+              toast.success("Owner reassigned");
+            }}
+            className="size-5 rounded grid place-items-center text-rag-green hover:bg-muted transition-colors"
+            title="Save"
+          >
+            <Check className="size-3" />
+          </button>
+          <button onClick={() => { setDraft(kr.owner); setEditing(false); }} className="size-5 rounded grid place-items-center text-muted-foreground hover:bg-muted transition-colors" title="Cancel">
+            <X className="size-3" />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-muted-foreground">{kr.owner}</span>
+          <RagPill rag={kr.ragConfidence} value={ragConfidenceValue(kr.ragConfidence)} />
+          <button onClick={() => setEditing(true)} className="size-5 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Reassign owner">
+            <Pencil className="size-3" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TeamSection() {
   const {
     teamMembers, tier, currentUser, focusedTeamMemberId, setFocusedTeamMemberId, departmentGoals,
@@ -2363,6 +2458,7 @@ export function TeamSection() {
     opsTeamMembersAll, opsDepartmentGoals, hcwmTeamMembers, hcwmDepartmentGoals,
     teamMemberDrawerReturnHome, setTeamMemberDrawerReturnHome, setSection,
     respondToCrossDeptAppointment,
+    phillyGroupGoals, reassignPhillyKrOwner,
   } = useApp();
   const [active, setActive] = useState<TeamMember | null>(null);
   const [showRagInfo, setShowRagInfo] = useState(false);
@@ -2548,6 +2644,7 @@ export function TeamSection() {
     );
   const [rejectingCrossDeptFor, setRejectingCrossDeptFor] = useState<string | null>(null);
   const [crossDeptRejectReason, setCrossDeptRejectReason] = useState("");
+  const [showPhillyGroupDialog, setShowPhillyGroupDialog] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -2563,20 +2660,30 @@ export function TeamSection() {
               <h2 className="font-display text-2xl text-white">Team OKRs</h2>
             </div>
           </div>
-          <button
-            onClick={() => setShowRagInfo(v => !v)}
-            className={cn(
-              "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border transition-colors shrink-0",
-              showRagInfo ? "bg-white/20 border-white/40 text-white" : "border-white/30 hover:bg-white/10 text-white/80"
-            )}
-          >
-            <Info className="size-3.5" /> Confidence &amp; Scoring Guide
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setShowPhillyGroupDialog(true)}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-white/30 hover:bg-white/10 text-white/80 transition-colors"
+            >
+              <Globe2 className="size-3.5" /> 2026 Philly Group OKRs
+            </button>
+            <button
+              onClick={() => setShowRagInfo(v => !v)}
+              className={cn(
+                "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border transition-colors",
+                showRagInfo ? "bg-white/20 border-white/40 text-white" : "border-white/30 hover:bg-white/10 text-white/80"
+              )}
+            >
+              <Info className="size-3.5" /> Confidence &amp; Scoring Guide
+            </button>
+          </div>
         </div>
       </div>
       {showRagInfo && <RAGInfoPanel onClose={() => setShowRagInfo(false)} />}
+      {showPhillyGroupDialog && <PhillyGroupOkrsDialog onClose={() => setShowPhillyGroupDialog(false)} />}
 
       {directorMeta && (
+        <div className="space-y-6">
         <div className="space-y-3">
           <h2 className="font-display text-2xl">Departments You Oversee</h2>
           {directorDeptList.length === 0 ? (
@@ -2649,6 +2756,33 @@ export function TeamSection() {
             })
           )}
         </div>
+
+        {/* ── 2026 Philly Group OKRs — the group-level layer above every department's own
+            Objectives (see src/lib/phillyGroupOkrs.ts). Directors get a dedicated, editable view
+            here (reassigning a Key Result's owner) on top of the read-only popup any user can open
+            from the header button above. ── */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-2xl">2026 Philly Group OKRs</h2>
+            <span className="text-[11px] text-muted-foreground">Owners can be any staff member, not only HODs</span>
+          </div>
+          <div className="space-y-3">
+            {phillyGroupGoals.map(pg => (
+              <Card key={pg.id} className="space-y-2.5">
+                <div>
+                  <div className="font-semibold text-sm">{pg.title}</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">{pg.description}</div>
+                </div>
+                <div className="space-y-1.5">
+                  {pg.keyResults.map(kr => (
+                    <PhillyKrOwnerRow key={kr.id} goalId={pg.id} kr={kr} />
+                  ))}
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
       )}
 
       {/* ── Department OKRs subheader — mascot always on the left, no other symbol ── */}

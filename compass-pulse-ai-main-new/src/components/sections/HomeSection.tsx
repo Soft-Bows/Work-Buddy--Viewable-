@@ -5,7 +5,7 @@ import { CheckCircle2, Circle, Clock, X, Pencil, Trash2, Plus, Gift, Laptop, Tar
 import { TeamDrawer } from "@/components/sections/TeamSection";
 import { toast } from "sonner";
 import { pointsToast } from "@/lib/pointsToast";
-import { cn, isAmongOwners, keyResultsOwnedBy, objectivesOwnedBy, isPendingAckFor, objectiveConfidence, objectiveConfidenceValue, objectiveScore, scoreToRag, isConfidenceStale } from "@/lib/utils";
+import { cn, isAmongOwners, keyResultsOwnedBy, objectivesOwnedBy, isPendingAckFor, objectiveConfidence, objectiveConfidenceValue, objectiveScore, scoreToRag, isConfidenceStale, objectiveScoreQuarterLabel } from "@/lib/utils";
 import { daysSinceLastCheckIn, CHECK_IN_CADENCE_DAYS } from "@/lib/checkIns";
 import { TeamHealthWidget } from "@/components/sections/TeamHealthWidget";
 import type { TeamMember, RAG, SkillAttachment, DeptGoal, PersonalDevGoal } from "@/lib/mockData";
@@ -262,6 +262,9 @@ function DeptTeamOkrSection({
                         {score.toFixed(1)}
                       </span>
                     </div>
+                    {objectiveScoreQuarterLabel(g) && (
+                      <span className="text-[7px] font-medium text-muted-foreground/70 whitespace-nowrap">{objectiveScoreQuarterLabel(g)} (past quarter)</span>
+                    )}
                   </div>
                 );
               })()}
@@ -1422,9 +1425,15 @@ export function HomeSection() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {directorDepts.map(dept => {
                 const goals = DIR_GOALS_BY_DEPT[dept] ?? [];
-                const allKrs = goals.flatMap(g => g.keyResults ?? []);
-                const scored = allKrs.filter(k => k.score !== undefined);
-                const avgScore = scored.length > 0 ? scored.reduce((s, k) => s + (k.score ?? 0), 0) / scored.length : null;
+                const allKrs = goals.flatMap(g => (g.keyResults ?? []).map(kr => ({ kr, objectiveTitle: g.title })));
+                // Flag on this month's confidence (the forward-looking leading indicator), not
+                // quarter-end score — a blended average score isn't meaningful for a holding-level
+                // view and, per Google's OKR practice, confidence is the earlier, more actionable
+                // signal a director can actually act on before quarter-end. Red first, then amber.
+                const flagged = allKrs
+                  .filter(({ kr }) => kr.ragConfidence === "red" || kr.ragConfidence === "amber")
+                  .sort((a, b) => (a.kr.ragConfidence === b.kr.ragConfidence ? 0 : a.kr.ragConfidence === "red" ? -1 : 1));
+                const shownFlags = flagged.slice(0, 3);
                 return (
                   <Card key={dept} className="space-y-2">
                     <div className="flex items-center gap-1.5 text-sm font-semibold">
@@ -1433,8 +1442,29 @@ export function HomeSection() {
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span>{goals.length} objective{goals.length === 1 ? "" : "s"}</span>
                       <span>{allKrs.length} key result{allKrs.length === 1 ? "" : "s"}</span>
-                      {avgScore !== null && <span className="font-medium text-foreground">Avg score {avgScore.toFixed(1)}</span>}
                     </div>
+                    {shownFlags.length > 0 && (
+                      <div className="pt-1 border-t border-border/60 space-y-1">
+                        <div className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground/70">Needs your attention</div>
+                        {shownFlags.map(({ kr, objectiveTitle }) => (
+                          <div key={kr.id} className={cn(
+                            "flex items-start gap-1.5 text-[11px] rounded px-1.5 py-1 border",
+                            kr.ragConfidence === "red" ? "bg-rag-red/10 border-rag-red/30" : "bg-rag-amber/10 border-rag-amber/30",
+                          )}>
+                            <AlertCircle className={cn("size-3 shrink-0 mt-0.5", kr.ragConfidence === "red" ? "text-rag-red" : "text-amber-foreground")} />
+                            <div className="min-w-0">
+                              <div className="font-medium text-foreground truncate">{kr.title}</div>
+                              <div className="text-muted-foreground truncate">{objectiveTitle}</div>
+                            </div>
+                          </div>
+                        ))}
+                        {flagged.length > shownFlags.length && (
+                          <button onClick={() => setSection("team")} className="text-[10px] text-primary font-medium hover:underline">
+                            +{flagged.length - shownFlags.length} more — view in Team OKRs
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </Card>
                 );
               })}

@@ -45,7 +45,7 @@ export const opsCurrentUser = {
 export const opsDepartmentGoals: DeptGoal[] = [
   {
     id: "ad1", title: "Strengthen Portfolio Credit Quality", owner: "Nadia Yong", progress: 45,
-    level: "department",
+    level: "department", linkedPhillyGoalId: "pg2", linkedPhillyKrId: "pg2kr1",
     keyResults: [
       { id: "akr1", title: "Cut the non-performing loan (NPL) ratio from 3.2% to under 2.5%", owner: "Nadia Yong, Diana Chang", dueDate: "2026-12-15", ragConfidence: "amber", ragConfidenceUpdatedDate: "2026-06-20",
         challengeRemark: { text: "Recovery team is stretched thin covering both the legacy NPL book and the new enhanced due-diligence reviews — could use additional headcount to hit the December target.", date: "2026-06-20", rag: "amber" } },
@@ -68,7 +68,7 @@ export const opsDepartmentGoals: DeptGoal[] = [
   },
   {
     id: "ad3", title: "Strengthen Regulatory Compliance & Governance", owner: "Nadia Yong", progress: 60,
-    level: "department",
+    level: "department", linkedPhillyGoalId: "pg2", linkedPhillyKrId: "pg2kr2",
     keyResults: [
       { id: "akr5", title: "Pass the annual MAS/Basel III credit risk compliance audit with zero major findings", owner: "Marcus Ko", dueDate: "2026-11-15", ragConfidence: "green", ragConfidenceUpdatedDate: "2026-06-10" },
       { id: "akr15", title: "Complete first-line compliance checklist review for 100% of new credit applications", owner: "Farah Ang", dueDate: "2026-11-30", ragConfidence: "green", ragConfidenceUpdatedDate: "2026-07-26" },

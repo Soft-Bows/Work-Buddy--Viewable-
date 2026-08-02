@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { workingDaysSince, effectiveKrScoreDueDate, newJoinerGoalDeadlinePassed, keyResultsOwnedBy, getJanuaryDeadline, ownerNames, isAmongOwners, hasPendingAck } from "./utils";
+import { workingDaysSince, effectiveKrScoreDueDate, newJoinerGoalDeadlinePassed, keyResultsOwnedBy, getJanuaryDeadline, ownerNames, isAmongOwners, hasPendingAck, currentQuarterLabel } from "./utils";
 import type { Tier, TeamMember, RAG, PersonalDevGoal, Activity, Goal, SkillAttachment, GoalEditProposal, DeptGoal, KeyResult } from "./mockData";
 import {
   currentUser as _currentUser,
@@ -39,6 +39,7 @@ import {
 } from "./opsData";
 import { DIRECTOR_PERSONAS } from "./directorData";
 import { marketingGoalSkills } from "./marketingData";
+import { phillyGroupGoals as _phillyGroupGoals, type PhillyGroupGoal } from "./phillyGroupOkrs";
 import type { CheckIn } from "./checkIns";
 import type { PulseResponse } from "./pulseSurvey";
 import type { ManagerEffectivenessRating } from "./managerEffectiveness";
@@ -251,6 +252,10 @@ interface AppCtx {
   hcwmTeamMembers: TeamMember[];
   hcwmDepartmentGoals: DeptGoal[];
   hcwmAllTeamMemberSkills: { memberId: string; memberName: string; verified: string[]; pending: string[] }[];
+  // The 2026 Philly Group OKRs (src/lib/phillyGroupOkrs.ts) — live-editable so a director can
+  // reassign a group Key Result's owner from Team OKRs.
+  phillyGroupGoals: PhillyGroupGoal[];
+  reassignPhillyKrOwner: (goalId: string, krId: string, newOwner: string) => void;
   // mutations
   resolveRemark: (remarkId: string) => Promise<void>;
   addPendingSkill: (skill: string, attachment?: SkillAttachment) => Promise<void>;
@@ -440,7 +445,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
   // change (new/edited Objectives or Key Results), so browsers with an older cached copy pick up the
   // fresh seed instead of silently keeping stale content forever (this is exactly the bug where
   // HCWM's OKR refresh wasn't showing up — the localStorage copy predated the content change).
-  const SEED_VERSION = "2026-08-30-crm-insufficient-goals-fix";
+  const SEED_VERSION = "2026-09-01-philly-group-okrs";
   // Department-level Objective count is capped 3-5 everywhere a HOD can create one (see
   // MAX_OBJECTIVES_PER_SET in TeamSection.tsx's CreateObjectivePanel) — but that cap only guards
   // the *creation* UI, not whatever's sitting in localStorage. A cached copy that predates this
@@ -496,6 +501,31 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
       window.localStorage.setItem(OPS_DEPT_GOALS_VERSION_KEY, SEED_VERSION);
     } catch { /* storage unavailable (e.g. private browsing) — session-only fallback */ }
   }, [liveOpsDepartmentGoals]);
+
+  // Same live-editable treatment for the 2026 Philly Group OKRs (src/lib/phillyGroupOkrs.ts) — a
+  // director can reassign a group Key Result's owner from Team OKRs, same persistence pattern as
+  // liveDepartmentGoals above.
+  const PHILLY_GOALS_STORAGE_KEY = "compassPulse.livePhillyGroupGoals";
+  const PHILLY_GOALS_VERSION_KEY = "compassPulse.livePhillyGroupGoals.seedVersion";
+  const [livePhillyGroupGoals, setLivePhillyGroupGoals] = useState<PhillyGroupGoal[]>(() => {
+    try {
+      if (typeof window === "undefined") return _phillyGroupGoals;
+      if (window.localStorage.getItem(PHILLY_GOALS_VERSION_KEY) !== SEED_VERSION) return _phillyGroupGoals;
+      const raw = window.localStorage.getItem(PHILLY_GOALS_STORAGE_KEY);
+      if (raw) return JSON.parse(raw) as PhillyGroupGoal[];
+    } catch { /* fall through to the seed */ }
+    return _phillyGroupGoals;
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PHILLY_GOALS_STORAGE_KEY, JSON.stringify(livePhillyGroupGoals));
+      window.localStorage.setItem(PHILLY_GOALS_VERSION_KEY, SEED_VERSION);
+    } catch { /* storage unavailable (e.g. private browsing) — session-only fallback */ }
+  }, [livePhillyGroupGoals]);
+  const reassignPhillyKrOwner = (goalId: string, krId: string, newOwner: string) =>
+    setLivePhillyGroupGoals(prev => prev.map(g => (g.id !== goalId ? g : {
+      ...g, keyResults: g.keyResults.map(k => (k.id === krId ? { ...k, owner: newOwner } : k)),
+    })));
 
   // Delegated "team-OKR editor" — one leave supervisor per department the HOD can grant direct edit
   // rights to for *team-level* Objectives/KRs only (department-level stays HOD-only) — this is also
@@ -1663,6 +1693,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
           assignedDate: pendingFor.length > 0 ? new Date().toISOString().slice(0, 10) : k.assignedDate,
           ackPenaltyApplied: pendingFor.length > 0 ? false : k.ackPenaltyApplied,
           crossDeptApproval,
+          definitionEditedDate: new Date().toISOString().slice(0, 10),
         };
       }),
     })));
@@ -1771,6 +1802,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
               pendingChangeType: pendingFor.length > 0 ? "hodEdit" : k.pendingChangeType,
               assignedDate: pendingFor.length > 0 ? new Date().toISOString().slice(0, 10) : k.assignedDate,
               ackPenaltyApplied: pendingFor.length > 0 ? false : k.ackPenaltyApplied,
+              definitionEditedDate: new Date().toISOString().slice(0, 10),
             };
           }),
         })));
@@ -1833,6 +1865,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
             counterProposal: undefined, lastCounterRejection: undefined,
             pendingAcknowledgementFor: pendingFor,
             pendingChangeType: pendingFor.length > 0 ? "hodEdit" : k.pendingChangeType,
+            definitionEditedDate: new Date().toISOString().slice(0, 10),
           };
         }),
       };
@@ -1923,7 +1956,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
               }
             : {};
         if (ownerNames(k.owner).length <= 1) {
-          return { ...k, score, scoreSubmittedDate: new Date().toISOString().slice(0, 10), pendingCoOwnerScore: undefined, ...scoreRemarkFields };
+          return { ...k, score, scoreSubmittedDate: new Date().toISOString().slice(0, 10), scoreQuarter: currentQuarterLabel(), pendingCoOwnerScore: undefined, ...scoreRemarkFields };
         }
         return { ...k, pendingCoOwnerScore: { score, proposedBy, proposedDate: new Date().toISOString().slice(0, 10) }, ...scoreRemarkFields };
       }),
@@ -1961,7 +1994,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
     deptGoalSetter(isOps)(prev => prev.map(g => (g.id !== objectiveId ? g : {
       ...g,
       keyResults: (g.keyResults ?? []).map(k => (k.id === krId && k.pendingCoOwnerScore
-        ? { ...k, score: k.pendingCoOwnerScore.score, scoreSubmittedDate: new Date().toISOString().slice(0, 10), pendingCoOwnerScore: undefined, alignedScoreThisQuarter: true }
+        ? { ...k, score: k.pendingCoOwnerScore.score, scoreSubmittedDate: new Date().toISOString().slice(0, 10), scoreQuarter: currentQuarterLabel(), pendingCoOwnerScore: undefined, alignedScoreThisQuarter: true }
         : k)),
     })));
 
@@ -1979,7 +2012,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
       ...g,
       keyResults: (g.keyResults ?? []).map(k => (k.id === krId
         ? {
-            ...k, score, scoreSubmittedDate: new Date().toISOString().slice(0, 10),
+            ...k, score, scoreSubmittedDate: new Date().toISOString().slice(0, 10), scoreQuarter: currentQuarterLabel(),
             scoreRemark: score >= 0.7 ? undefined : scoreRemarkText ? { text: scoreRemarkText, date: new Date().toISOString().slice(0, 10), score } : k.scoreRemark,
             pendingAcknowledgementFor: ownerNames(k.owner), pendingChangeType: "hodScore", assignedDate: new Date().toISOString().slice(0, 10), ackPenaltyApplied: false,
           }
@@ -2131,6 +2164,8 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
       hcwmTeamMembers: liveTeamMembers,
       hcwmDepartmentGoals: liveDepartmentGoals,
       hcwmAllTeamMemberSkills: d?.allTeamMemberSkills ?? [],
+      phillyGroupGoals: livePhillyGroupGoals,
+      reassignPhillyKrOwner,
       myGoals: (d?.myGoals ?? _myGoals) as unknown as AppData["myGoals"],
       skills: d?.skills ?? _skills,
       jobMatches: d?.jobMatches ?? _jobMatches,

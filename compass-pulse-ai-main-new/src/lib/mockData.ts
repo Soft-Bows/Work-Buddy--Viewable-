@@ -122,6 +122,15 @@ export interface KeyResult {
   ragPenaltyMonth?: string;
   score?: number; // 0.0–1.0; undefined = not yet scored
   scoreSubmittedDate?: string;
+  // "YYYY-Q#" — which quarter `score` was submitted for. Since score never auto-clears at a quarter
+  // boundary (see above), this is what lets the UI tell "this is a past quarter's result, label it as
+  // such" apart from "this is current" — see isKrScoreFromPastQuarter/isKrScoreStaleForDisplay in
+  // utils.ts.
+  scoreQuarter?: string;
+  // Stamped whenever this KR's own title/dueDate/owner is edited (updateKeyResult, resolveOkrCounter)
+  // — compared against scoreSubmittedDate so a past-quarter score is hidden entirely once it no longer
+  // describes the current KR, per the "no longer relevant if modified" display rule.
+  definitionEditedDate?: string;
   assignedDate?: string;
   // Owner names still owing an acknowledgement — e.g. appointing one new co-owner on an
   // already-multi-owner KR only puts *that* name here, not every existing owner. Undefined/empty =
@@ -216,6 +225,11 @@ export interface DeptGoal {
   level?: "department" | "team"; // undefined treated as "department" (pre-OKR seed data)
   teamName?: string; // team-level only
   linkedTo?: string; // team-level only — id of a department-level DeptGoal or KeyResult
+  // Optional link up to a 2026 Philly Group OKR (src/lib/phillyGroupOkrs.ts) — any department's
+  // Objective can point at one Philly Group Key Result to show how its work ladders up to the
+  // group level. linkedPhillyKrId is only meaningful alongside linkedPhillyGoalId.
+  linkedPhillyGoalId?: string;
+  linkedPhillyKrId?: string;
   keyResults?: KeyResult[];
   assignedDate?: string;
   // See KeyResult.pendingAcknowledgementFor — same meaning, at the Objective level.
@@ -246,7 +260,7 @@ export const departmentGoals: DeptGoal[] = [
   {
     id: "d1", title: "Build an AI-ready workforce that embraces innovation and continuous learning", owner: "Sarah Chen", progress: 18,
     description: "Give every business function — not just HC — the AI skills and confidence to adopt new tools fast.",
-    level: "department",
+    level: "department", linkedPhillyGoalId: "pg3", linkedPhillyKrId: "pg3kr1",
     keyResults: [
       { id: "kr20", title: "Certify 50% of dealing, trading, and relationship-manager staff on AI-assisted client-suitability and trade-surveillance tools", owner: "Bryan Goh, Marcus Teo", dueDate: "2026-11-15", ragConfidence: "amber", ragConfidenceUpdatedDate: "2026-07-21" },
       { id: "kr21", title: "Roll out an AI-assisted onboarding and HR-helpdesk chatbot resolving 70% of new-hire queries without escalation", owner: "Diana Eng, Rhea Yee", dueDate: "2026-12-15", ragConfidence: "green", ragConfidenceUpdatedDate: "2026-07-18" },
@@ -256,7 +270,7 @@ export const departmentGoals: DeptGoal[] = [
   },
   {
     id: "d2", title: "Build a strong global talent pipeline to support regional growth and succession", owner: "Marcus Teo", progress: 25,
-    level: "department",
+    level: "department", linkedPhillyGoalId: "pg3", linkedPhillyKrId: "pg3kr2",
     keyResults: [
       { id: "kr4", title: "Complete critical-role documentation (SOPs + handover notes) for 100% of Grade 3+ HC roles", owner: "Rhea Yee", dueDate: "2026-11-30", ragConfidence: "green", ragConfidenceUpdatedDate: "2026-07-19" },
       { id: "kr5", title: "Digitise and standardise the internal document-routing and onboarding-logistics process across 2 additional network offices", owner: "Marcus Teo", dueDate: "2026-11-15", ragConfidence: "green", ragConfidenceUpdatedDate: "2026-07-16" },
@@ -266,7 +280,7 @@ export const departmentGoals: DeptGoal[] = [
   },
   {
     id: "d3", title: "Strengthen One Phillip culture through greater global collaboration and employee connectedness", owner: "Sarah Chen", progress: 12,
-    level: "department",
+    level: "department", linkedPhillyGoalId: "pg4", linkedPhillyKrId: "pg4kr1",
     keyResults: [
       { id: "kr27", title: "Launch a cross-office \"One Phillip\" engagement series, reaching 3 network offices with a shared employee-connectedness pulse score", owner: "Belle Lim", dueDate: "2026-12-15", ragConfidence: "amber", ragConfidenceUpdatedDate: "2026-07-25" },
       { id: "kr25", title: "Pilot an AI-powered internal culture and sentiment-pulse assistant across 100% of HC and Workplace Management staff", owner: "Diana Eng, Caleb Ong", dueDate: "2026-11-30", ragConfidence: "green", ragConfidenceUpdatedDate: "2026-07-23" },

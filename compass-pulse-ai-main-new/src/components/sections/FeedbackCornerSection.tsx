@@ -13,6 +13,7 @@ import {
   isManagerSurveyWindowOpen, hasManagerSurveyWindowClosedThisYear, currentManagerSurveyCycleYear, peerP75,
 } from "@/lib/managerEffectiveness";
 import { resolveOwnScopeChallenges, computeChallengeThemes, computeCompetencyGapRow, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
+import { findPhillyGoal } from "@/lib/phillyGroupOkrs";
 import { MARKETING_DEPT_NAME, marketingTeamMembers, marketingDepartmentGoals } from "@/lib/marketingData";
 import { hasMinimumTenure, cn } from "@/lib/utils";
 import { pointsToast } from "@/lib/pointsToast";
@@ -61,12 +62,14 @@ function AverageBar({ label, value, benchmark }: { label: string; value: number;
 // A compact +/- tag for a single delta — used inline in MetricRow's caption line rather than a
 // full TrendBadge sentence each time, since a category/question list showing 4 metrics per row
 // already has plenty to read; a one-glyph +/-0.3 reads faster than "0.3 above company average."
-function DeltaTag({ label, delta }: { label: string; delta: number }) {
-  if (Math.abs(delta) < 0.05) return <span className="text-muted-foreground">{label} flat</span>;
+// Always shows the absolute benchmark value too — "vs company avg flat" on its own doesn't say
+// whether "flat" means both are at 4.5 or both are at 2.0, which reads very differently.
+function DeltaTag({ label, delta, value }: { label: string; delta: number; value: number }) {
+  if (Math.abs(delta) < 0.05) return <span className="text-muted-foreground">{label} flat ({value.toFixed(1)})</span>;
   const up = delta > 0;
   return (
     <span className={cn("font-medium", up ? "text-rag-green" : "text-rag-red")}>
-      {label} {up ? "+" : ""}{delta.toFixed(1)}
+      {label} {up ? "+" : ""}{delta.toFixed(1)} ({value.toFixed(1)})
     </span>
   );
 }
@@ -94,8 +97,8 @@ function MetricRow({
         )}
       </div>
       <div className="flex items-center gap-2.5 flex-wrap text-[10px]">
-        {companyAvg !== undefined && <DeltaTag label="vs company avg" delta={score - companyAvg} />}
-        {lastYear !== undefined && <DeltaTag label="vs last year" delta={score - lastYear} />}
+        {companyAvg !== undefined && <DeltaTag label="vs company avg" delta={score - companyAvg} value={companyAvg} />}
+        {lastYear !== undefined && <DeltaTag label="vs last year" delta={score - lastYear} value={lastYear} />}
         {p75 !== undefined && <span className="text-muted-foreground">Top 25%: {p75.toFixed(1)}</span>}
       </div>
     </div>
@@ -414,6 +417,15 @@ function ManagerSurveyCard({
                   </div>
                   <p className="text-[10px] text-muted-foreground mb-3">Based on {myRatings.length} anonymous ratings this cycle.</p>
 
+                  {/* One legend for every bar below — the tick marks on each bar otherwise have no
+                      visible key of their own (only a hover tooltip), so it's not obvious at a
+                      glance which coloured line means what. */}
+                  <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground mb-2">
+                    <span className="flex items-center gap-1"><span className="inline-block size-2 rounded-full bg-primary" /> Your score (bar)</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-0.5 h-2.5 bg-foreground/40" /> Company average</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-0.5 h-2.5 bg-amber-500" /> Top quartile (P75)</span>
+                  </div>
+
                   {/* Per-category benchmarking — 3 numbers per row (your avg, vs company avg, vs
                       last year) plus a P75 tick on the bar; click through for the same 4 metrics
                       per individual question. Progressive disclosure, not a wall of numbers. */}
@@ -654,13 +666,33 @@ function KeyStaffChallengesCard({
                     <span className="text-[10px] text-muted-foreground">{t.count}</span>
                   </button>
                   {expandedThemes.has(t.theme) && (
-                    <ul className="px-3 pb-2.5 space-y-1.5">
-                      {t.entries.map((e, i) => (
-                        <li key={i} className="text-[11px] text-foreground/80">
-                          <span className="font-medium">{e.memberName}</span> — {e.remarkText}
-                          <span className="text-muted-foreground"> ({e.linkedDeptTitle})</span>
-                        </li>
-                      ))}
+                    <ul className="px-3 pb-2.5 space-y-2.5">
+                      {t.entries.map((e, i) => {
+                        const phillyGoal = findPhillyGoal(e.linkedPhillyGoalId);
+                        return (
+                          <li key={i} className="text-[11px] text-foreground/80 border-l-2 border-border/60 pl-2">
+                            {/* Who submitted this and where they're from — a theme can group entries from
+                                several different people/departments, and no two entries are the same
+                                submission, so both must always be visible per-entry, not implied by the
+                                theme header alone. */}
+                            <div className="flex items-center flex-wrap gap-x-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              <span className="text-foreground">{e.memberName}</span>
+                              {e.deptName && <span>· {e.deptName}</span>}
+                            </div>
+                            <div className="mt-0.5">{e.remarkText}</div>
+                            {/* Which Key Result/Objective this is on, and what it ladders up to — the KR
+                                owner and the person who wrote the remark are always the same person here
+                                (self-reported on their own monthly confidence update), called out
+                                explicitly so it's never mistaken for third-party feedback. */}
+                            <div className="mt-1 text-muted-foreground">
+                              <span className="font-medium text-foreground/80">{e.goalTitle}</span>
+                              {" → "}{e.linkedDeptTitle}
+                              {phillyGoal && <span> {"→ 🌐 "}{phillyGoal.title}</span>}
+                            </div>
+                            <div className="mt-0.5 text-[9px] text-muted-foreground/70 italic">Self-reported by the Key Result owner</div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </div>
@@ -734,15 +766,21 @@ function ActionPlanCard({
           {items.map((it, i) => {
             const key = `${it.source}:${it.title}`;
             const done = doneKeys.has(key);
+            const isStrength = it.trigger === "reinforce strength";
             return (
-              <li key={i} className={cn("text-xs bg-background rounded-lg border p-2.5 flex items-start gap-2", done ? "border-rag-green/40 bg-rag-green/5" : "border-border")}>
+              <li key={i} className={cn(
+                "text-xs bg-background rounded-lg border p-2.5 flex items-start gap-2",
+                done ? "border-rag-green/40 bg-rag-green/5" : isStrength ? "border-rag-green/30 bg-rag-green/5" : "border-border",
+              )}>
                 <button onClick={() => toggleDone(key)} className={cn("size-4 rounded border shrink-0 grid place-items-center mt-0.5", done ? "bg-rag-green border-rag-green text-white" : "border-border")}>
                   {done && <Check className="size-2.5" />}
                 </button>
                 <div className="flex-1">
                   <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                     <span className={cn("text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full", it.source === "Team Pulse" ? "bg-rose-500/15 text-rose-600" : "bg-violet-500/15 text-violet-600")}>{it.source}</span>
-                    <span className="text-[9px] text-muted-foreground uppercase tracking-widest">{it.trigger}</span>
+                    <span className={cn("text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full font-semibold", isStrength ? "bg-rag-green/15 text-rag-green" : "text-muted-foreground")}>
+                      {isStrength ? "✓ Strength to reinforce" : it.trigger}
+                    </span>
                   </div>
                   <span className={cn("font-medium", done && "line-through text-muted-foreground")}>{it.title}</span>
                   <p className="text-muted-foreground">{it.desc}</p>
@@ -865,7 +903,10 @@ export function FeedbackCornerSection() {
         <p className="text-sm text-muted-foreground mt-1">Team Pulse, the Manager Self-Improvement Survey, and Key Staff Challenges — all in one place.</p>
       </div>
 
-      <TeamPulseCard viewerName={viewerName} viewerDept={viewerDept} isHod={isHod} canViewAggregate={canViewManagerAggregate} />
+      {/* isHod here doubles as "exempt from submitting Team Pulse yourself" inside TeamPulseCard —
+          directors are also exempt, since their own "Management" designation is a holding department
+          for overseeing HODs, not a real team with its own pulse to submit. */}
+      <TeamPulseCard viewerName={viewerName} viewerDept={viewerDept} isHod={isHod || isDirectorTier} canViewAggregate={canViewManagerAggregate} />
       <ManagerSurveyCard viewerName={viewerName} mySupervisorName={mySupervisorName} canViewAggregate={canViewManagerAggregate} tenureOk={tenureOk} />
       {canViewManagerAggregate && <YtdStackedCard viewerName={viewerName} viewerDept={viewerDept} canViewAggregate={canViewManagerAggregate} />}
       <KeyStaffChallengesCard viewerName={viewerName} isHod={isHod} hasDirectorMeta={!!directorMeta} isTeamLead={isTeamLead} isDirectorDesignation={isDirectorDesignation} />

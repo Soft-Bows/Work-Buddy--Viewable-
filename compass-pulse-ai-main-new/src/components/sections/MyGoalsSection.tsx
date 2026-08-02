@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { pointsToast } from "@/lib/pointsToast";
-import { cn, workingDaysSince, formatGoalStatusDueDate, daysSinceJoin, flattenOkrOptions, keyResultsOwnedBy, objectivesOwnedBy, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, formatMonthlyConfidenceDueDate, objectiveScore, objectiveConfidence, scoreToRag, isPendingAckFor, ownerNames, isKrOverdue, formatEffectiveKrScoreDueDate } from "@/lib/utils";
+import { cn, workingDaysSince, formatGoalStatusDueDate, daysSinceJoin, flattenOkrOptions, keyResultsOwnedBy, objectivesOwnedBy, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, formatMonthlyConfidenceDueDate, objectiveScore, objectiveConfidence, scoreToRag, isPendingAckFor, ownerNames, isKrOverdue, formatEffectiveKrScoreDueDate, isKrScoreFromPastQuarter, isKrScoreStaleForDisplay } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -1674,12 +1674,15 @@ function MyKeyResultCard({ kr, objective, isOps, viewerName }: { kr: KeyResult; 
             <span className="text-[9px] uppercase tracking-wide text-muted-foreground">Confidence</span>
             <RagPill rag={kr.ragConfidence} />
           </div>
-          {kr.score !== undefined && (
+          {kr.score !== undefined && !isKrScoreStaleForDisplay(kr) && (
             <div className="flex flex-col items-end gap-0.5">
               <span className="text-[9px] uppercase tracking-wide text-muted-foreground">Score</span>
-              <span className={cn("text-xs font-semibold text-primary rounded px-1", isPendingForViewer && kr.pendingChangeType === "hodScore" && "ring-2 ring-amber-400 bg-amber-50 dark:bg-amber-900/20")}>
+              <span className={cn("text-xs font-semibold text-foreground rounded px-1", isPendingForViewer && kr.pendingChangeType === "hodScore" && "ring-2 ring-amber-400 bg-amber-50 dark:bg-amber-900/20")}>
                 {kr.score.toFixed(1)}
               </span>
+              {isKrScoreFromPastQuarter(kr) && (
+                <span className="text-[8px] font-medium text-muted-foreground whitespace-nowrap">{kr.scoreQuarter} (past quarter)</span>
+              )}
             </div>
           )}
         </div>

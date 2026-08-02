@@ -244,6 +244,12 @@ export function RewardsSection() {
   const [display, setDisplay] = useState(0);
   const [editingRewardId, setEditingRewardId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<{ name: string; points: number }>({ name: "", points: 0 });
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (key: string) => setExpandedGroups(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
 
   const viewedUserId = tier === "admin" ? adminMemberId : tier === "staff" ? staffMemberId : "u0";
   const displayPoints = tier === "staff" ? staffPoints : tier === "admin" ? adminPoints : points;
@@ -251,6 +257,17 @@ export function RewardsSection() {
   // "Recent Activity" — up to 10 most recent, newest first (pointsLog is already sorted newest-first
   // server-side; no reversal needed here).
   const recentLog = viewedLog.slice(0, 10);
+  // Group consecutive entries that share the exact same text (e.g. redeeming the same reward twice,
+  // or repeated quarterly Team Pulse submissions) — pointsLog carries no category field to group on
+  // more broadly, and grouping non-adjacent entries would jumble the newest-first timeline, so exact
+  // adjacent-text repeats is the one honest signal available. A "group" of 1 renders exactly like an
+  // ungrouped row always has.
+  const groupedRecentLog: { text: string; entries: typeof recentLog }[] = [];
+  for (const p of recentLog) {
+    const last = groupedRecentLog[groupedRecentLog.length - 1];
+    if (last && last.text === p.text) last.entries.push(p);
+    else groupedRecentLog.push({ text: p.text, entries: [p] });
+  }
 
   // Rewards already redeemed this quarter, by name — resets automatically once
   // getCurrentQuarterStart() rolls forward, since this is recomputed on every render rather than
@@ -421,19 +438,58 @@ export function RewardsSection() {
         <Card>
           <SectionTitle sub="Your 10 most recent updates">Recent Activity</SectionTitle>
           <div className="space-y-3">
-            {recentLog.length === 0 ? (
+            {groupedRecentLog.length === 0 ? (
               <div className="text-sm text-muted-foreground py-2">No activity recorded yet.</div>
-            ) : recentLog.map((p) => (
-              <div key={p.id} className="flex items-center justify-between text-sm py-2 border-b border-border/60 last:border-0">
-                <div>
-                  <div>{p.text}</div>
-                  <div className="text-xs text-muted-foreground">{p.date}</div>
+            ) : groupedRecentLog.map(g => {
+              const groupKey = g.entries[0].id;
+              const totalPts = g.entries.reduce((sum, e) => sum + e.pts, 0);
+              if (g.entries.length === 1) {
+                const p = g.entries[0];
+                return (
+                  <div key={p.id} className="flex items-center justify-between text-sm py-2 border-b border-border/60 last:border-0">
+                    <div>
+                      <div>{p.text}</div>
+                      <div className="text-xs text-muted-foreground">{p.date}</div>
+                    </div>
+                    <div className={cn("font-medium", p.pts < 0 ? "text-rag-red/80" : "text-amber-foreground")}>
+                      {p.pts < 0 ? String(p.pts) : `+${p.pts}`}
+                    </div>
+                  </div>
+                );
+              }
+              const isExpanded = expandedGroups.has(groupKey);
+              return (
+                <div key={groupKey} className="py-2 border-b border-border/60 last:border-0">
+                  <button onClick={() => toggleGroup(groupKey)} className="w-full flex items-center justify-between text-sm text-left">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span>{g.text}</span>
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">×{g.entries.length}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">{g.entries[0].date} – {g.entries[g.entries.length - 1].date}</div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn("font-medium", totalPts < 0 ? "text-rag-red/80" : "text-amber-foreground")}>
+                        {totalPts < 0 ? String(totalPts) : `+${totalPts}`}
+                      </span>
+                      {isExpanded ? <ChevronUp className="size-3.5 text-muted-foreground" /> : <ChevronDown className="size-3.5 text-muted-foreground" />}
+                    </div>
+                  </button>
+                  {isExpanded && (
+                    <div className="mt-1.5 ml-2 pl-2 border-l border-border/60 space-y-1">
+                      {g.entries.map(p => (
+                        <div key={p.id} className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>{p.date}</span>
+                          <span className={cn("font-medium", p.pts < 0 ? "text-rag-red/80" : "text-amber-foreground")}>
+                            {p.pts < 0 ? String(p.pts) : `+${p.pts}`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className={cn("font-medium", p.pts < 0 ? "text-rag-red/80" : "text-amber-foreground")}>
-                  {p.pts < 0 ? String(p.pts) : `+${p.pts}`}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       </div>

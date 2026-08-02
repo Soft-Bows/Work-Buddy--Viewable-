@@ -63,6 +63,11 @@ export interface ChallengeEntry {
   deptName?: string;
   objectiveLevel?: "department" | "team";
   teamName?: string;
+  // The parent Objective's own link up to a 2026 Philly Group OKR (mockData.ts DeptGoal), if any —
+  // lets the UI show the group-level objective this challenge ultimately ladders up to, not just its
+  // immediate department Objective. Undefined for the legacy goal-remark path (no such field there).
+  linkedPhillyGoalId?: string;
+  linkedPhillyKrId?: string;
   // Who owes the next action — the HOD (+ any secondary owner) if nobody's responded yet, or the
   // other owner(s) if a response is awaiting the owner's acknowledgement. Mirrors the individual
   // Key Result card's own "Awaiting response from…" label on Team OKRs so both surfaces agree.
@@ -127,6 +132,8 @@ export function computeChallengeThemes(
           deptName,
           objectiveLevel: objective.level === "team" ? "team" : "department",
           teamName: objective.teamName,
+          linkedPhillyGoalId: objective.linkedPhillyGoalId,
+          linkedPhillyKrId: objective.linkedPhillyKrId,
           pendingResponseFor: kr.pendingChallengeResponseFor?.length
             ? kr.pendingChallengeResponseFor
             : kr.pendingChallengeAckByOwner
