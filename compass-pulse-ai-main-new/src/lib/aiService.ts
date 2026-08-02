@@ -50,7 +50,11 @@ export interface AiProvider {
    * actionable than broad competency labels) — each tagged with which rule triggered it. Also
    * surfaces 1-2 "reinforce this strength" items for the manager's own top-scoring behaviours —
    * several renowned FIs (DBS's Gallup-based follow-up practice among them) pair "fix the gaps" action
-   * plans with "double down on what's already working," not weaknesses alone.
+   * plans with "double down on what's already working," not weaknesses alone. If challengeThemes/
+   * deptObjectiveTitles are supplied, also checks each proven strength for a real keyword overlap
+   * against open Key Staff Challenge themes or department Objective titles in the manager's own/
+   * overseen scope, surfacing a separate "apply this strength to X" suggestion only when a genuine
+   * match exists — never a generic "apply your strengths" item with nothing concrete behind it.
    */
   synthesizeActionPlan(input: {
     pulseAvgs?: Record<string, number>;
@@ -58,7 +62,9 @@ export interface AiProvider {
     managerCompanyAvgs?: Record<string, number>;
     managerLastYearAvgs?: Record<string, number>;
     department: string;
-  }): Promise<{ title: string; desc: string; source: "Team Pulse" | "Manager Survey"; trigger: "lowest score" | "below company average" | "below last year" | "reinforce strength" }[]>;
+    challengeThemes?: string[];
+    deptObjectiveTitles?: string[];
+  }): Promise<{ title: string; desc: string; source: "Team Pulse" | "Manager Survey"; trigger: "lowest score" | "below company average" | "below last year" | "reinforce strength" | "apply strength" }[]>;
   /**
    * Sentiment on a batch of free-text responses (e.g. the Manager Survey's 2 open questions) — a
    * keyword-scored classifier, same no-live-LLM convention as everything else here. Returns counts
@@ -66,6 +72,21 @@ export interface AiProvider {
    */
   analyzeSentiment(texts: string[]): Promise<{ positive: number; neutral: number; negative: number; summary: string }>;
 }
+
+// Which real-world keywords a manager-survey leadership area is genuinely relevant to — the basis
+// for "apply this strength to X" matching in synthesizeActionPlan below. Deliberately narrow and
+// literal (substring match against a Key Staff Challenge theme name or a department Objective
+// title) rather than a broad "everything could relate to leadership" mapping — a false match here
+// would suggest applying a strength somewhere it doesn't genuinely fit, which is exactly what the
+// "don't force-feed if not applicable" requirement rules out.
+const LEADERSHIP_AREA_KEYWORDS: Record<string, string[]> = {
+  "Leadership": ["align", "strategy", "decision", "stakeholder", "change"],
+  "Coaching, Mentoring and Development": ["career", "growth", "mentor", "development", "coach", "promot", "succession", "bench"],
+  "Communication": ["align", "stakeholder", "comms", "clarity", "communicat", "engagement series"],
+  "Team Engagement and Collaboration": ["resourc", "capacity", "bandwidth", "collaborat", "cross-office", "connectedness", "culture"],
+  "Work Performance": ["tool", "infra", "deploy", "platform", "system", "automat", "ai-assisted", "ai-powered"],
+  "Ethics / Integrity and Trust": ["trust", "compliance", "governance", "integrity", "regulator"],
+};
 
 // A small, fixed "thinking" delay on every rule-based call — not fake for its own sake, but because
 // removing it entirely made the UI feel like nothing happened, and a real LLM call wouldn't be
@@ -100,7 +121,7 @@ const ruleBasedProvider: AiProvider = {
       ? `Great initiative! To make this goal more impactful, consider adding a measurable milestone — e.g., "achieve IBF-certified proficiency by Q4 2026" or "apply this skill in at least 2 live projects this year." I'd suggest linking it to a specific department initiative so progress is visible to the team. Let's discuss the scope in our next 1:1 to agree on a realistic timeline.`
       : `For "${goalTitle}", here are 3 targeted resources: (1) IBF-accredited e-learning on the SkillsFuture portal — free for Singapore residents; (2) Request an internal mentor via the P&C coaching marketplace; (3) The L&D team's curated reading list is available on the intranet under P&C > Development Resources. I'm also happy to connect you with a colleague who has completed this pathway.`;
   },
-  async synthesizeActionPlan({ pulseAvgs, managerAvgs, managerCompanyAvgs, managerLastYearAvgs, department }) {
+  async synthesizeActionPlan({ pulseAvgs, managerAvgs, managerCompanyAvgs, managerLastYearAvgs, department, challengeThemes, deptObjectiveTitles }) {
     await delay();
     // "Needs attention" threshold — below the midpoint of the 1-5 scale's upper half, so a merely
     // decent 3.5-4 score doesn't generate noise; only genuinely lagging items surface as action items.
@@ -108,7 +129,7 @@ const ruleBasedProvider: AiProvider = {
     // Minimum gap before a comparison (vs company, vs last year) counts as "meaningfully" behind —
     // a 0.1 wobble shouldn't generate an action item, only a real gap should.
     const GAP_THRESHOLD = 0.3;
-    type Item = { title: string; desc: string; source: "Team Pulse" | "Manager Survey"; trigger: "lowest score" | "below company average" | "below last year" | "reinforce strength" };
+    type Item = { title: string; desc: string; source: "Team Pulse" | "Manager Survey"; trigger: "lowest score" | "below company average" | "below last year" | "reinforce strength" | "apply strength" };
     // A "proven strength" per DBS-style reinforcement — meaningfully above the general 4.0/5 bar, not
     // just this manager's own best-of-a-mediocre-bunch item.
     const STRENGTH_THRESHOLD = 4.2;
@@ -187,6 +208,35 @@ const ruleBasedProvider: AiProvider = {
           desc: `${b.leadershipArea} — a proven strength this cycle. Worth naming explicitly with your team and finding one more place to apply it, not just protecting it.`,
           source: "Manager Survey", trigger: "reinforce strength",
         });
+      }
+      // "Apply this strength to X" — a separate suggestion from reinforcement above, only emitted
+      // when a proven strength's leadership area genuinely overlaps (by keyword) with an open Key
+      // Staff Challenge theme or a department Objective title in scope. Capped at 1 of each so this
+      // never dominates the plan, and silently emits nothing when there's no real match — per the
+      // requirement to never force-feed an inapplicable suggestion.
+      for (const { b, score } of strengths) {
+        const keywords = LEADERSHIP_AREA_KEYWORDS[b.leadershipArea] ?? [];
+        const matchedChallenge = challengeThemes?.find(t => keywords.some(kw => t.toLowerCase().includes(kw)));
+        if (matchedChallenge) {
+          items.push({
+            title: `Apply "${b.text}" to: ${matchedChallenge}`,
+            desc: `${b.leadershipArea} is a proven strength (${score.toFixed(1)}/5) this cycle, and it genuinely bears on this open Key Staff Challenge theme — worth bringing this specific strength to that conversation.`,
+            source: "Manager Survey", trigger: "apply strength",
+          });
+          break; // at most one challenge-application item
+        }
+      }
+      for (const { b, score } of strengths) {
+        const keywords = LEADERSHIP_AREA_KEYWORDS[b.leadershipArea] ?? [];
+        const matchedObjective = deptObjectiveTitles?.find(t => keywords.some(kw => t.toLowerCase().includes(kw)));
+        if (matchedObjective) {
+          items.push({
+            title: `Apply "${b.text}" to: ${matchedObjective}`,
+            desc: `${b.leadershipArea} is a proven strength (${score.toFixed(1)}/5) this cycle, and it genuinely bears on this Objective — worth leaning on it explicitly while driving this one forward.`,
+            source: "Manager Survey", trigger: "apply strength",
+          });
+          break; // at most one Objective-application item
+        }
       }
     }
     return items;

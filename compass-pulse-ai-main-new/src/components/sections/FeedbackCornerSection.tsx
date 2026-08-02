@@ -709,10 +709,12 @@ function KeyStaffChallengesCard({
 
 function ActionPlanCard({
   pulseAvgs, managerAvgs, managerCompanyAvgs, managerLastYearAvgs, department, openChallengeCount, competencyGapPct,
+  challengeThemes, deptObjectiveTitles,
 }: {
   pulseAvgs?: Record<string, number> | null; managerAvgs?: Record<string, number> | null;
   managerCompanyAvgs?: Record<string, number> | null; managerLastYearAvgs?: Record<string, number> | null;
   department: string; openChallengeCount: number; competencyGapPct: number | null;
+  challengeThemes?: string[]; deptObjectiveTitles?: string[];
 }) {
   const [items, setItems] = useState<{ title: string; desc: string; source: "Team Pulse" | "Manager Survey"; trigger: string }[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -736,8 +738,9 @@ function ActionPlanCard({
     getAiProvider().synthesizeActionPlan({
       pulseAvgs: pulseAvgs ?? undefined, managerAvgs: managerAvgs ?? undefined,
       managerCompanyAvgs: managerCompanyAvgs ?? undefined, managerLastYearAvgs: managerLastYearAvgs ?? undefined, department,
+      challengeThemes, deptObjectiveTitles,
     }).then(result => { setItems(result); setLoading(false); });
-  }, [pulseAvgs, managerAvgs, managerCompanyAvgs, managerLastYearAvgs, department]);
+  }, [pulseAvgs, managerAvgs, managerCompanyAvgs, managerLastYearAvgs, department, challengeThemes, deptObjectiveTitles]);
 
   if (!pulseAvgs && !managerAvgs) return null;
 
@@ -767,10 +770,14 @@ function ActionPlanCard({
             const key = `${it.source}:${it.title}`;
             const done = doneKeys.has(key);
             const isStrength = it.trigger === "reinforce strength";
+            const isApplyStrength = it.trigger === "apply strength";
             return (
               <li key={i} className={cn(
                 "text-xs bg-background rounded-lg border p-2.5 flex items-start gap-2",
-                done ? "border-rag-green/40 bg-rag-green/5" : isStrength ? "border-rag-green/30 bg-rag-green/5" : "border-border",
+                done ? "border-rag-green/40 bg-rag-green/5"
+                  : isStrength ? "border-rag-green/30 bg-rag-green/5"
+                  : isApplyStrength ? "border-teal/30 bg-teal/5"
+                  : "border-border",
               )}>
                 <button onClick={() => toggleDone(key)} className={cn("size-4 rounded border shrink-0 grid place-items-center mt-0.5", done ? "bg-rag-green border-rag-green text-white" : "border-border")}>
                   {done && <Check className="size-2.5" />}
@@ -778,8 +785,11 @@ function ActionPlanCard({
                 <div className="flex-1">
                   <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                     <span className={cn("text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full", it.source === "Team Pulse" ? "bg-rose-500/15 text-rose-600" : "bg-violet-500/15 text-violet-600")}>{it.source}</span>
-                    <span className={cn("text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full font-semibold", isStrength ? "bg-rag-green/15 text-rag-green" : "text-muted-foreground")}>
-                      {isStrength ? "✓ Strength to reinforce" : it.trigger}
+                    <span className={cn(
+                      "text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded-full font-semibold",
+                      isStrength ? "bg-rag-green/15 text-rag-green" : isApplyStrength ? "bg-teal/15 text-teal" : "text-muted-foreground",
+                    )}>
+                      {isStrength ? "✓ Strength to reinforce" : isApplyStrength ? "→ Apply strength" : it.trigger}
                     </span>
                   </div>
                   <span className={cn("font-medium", done && "line-through text-muted-foreground")}>{it.title}</span>
@@ -1087,6 +1097,8 @@ export function FeedbackCornerSection() {
           pulseAvgs={deptPulseAvgs} managerAvgs={myManagerAvgs}
           managerCompanyAvgs={companyManagerAvgs} managerLastYearAvgs={lastYearManagerAvgs}
           department={viewerDept} openChallengeCount={openChallengeCount} competencyGapPct={competencyGap?.gapPct ?? null}
+          challengeThemes={challengeSummary?.themes.map(t => t.theme)}
+          deptObjectiveTitles={goalsByDeptForChallenges[viewerDept]?.map(g => g.title)}
         />
       )}
     </div>
