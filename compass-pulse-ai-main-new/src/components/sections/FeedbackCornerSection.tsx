@@ -12,7 +12,7 @@ import {
   averageManagerScores, averageManagerScoresByArea, collectTextResponses, MIN_RATERS_FOR_AGGREGATE,
   isManagerSurveyWindowOpen, hasManagerSurveyWindowClosedThisYear, currentManagerSurveyCycleYear, peerP75,
 } from "@/lib/managerEffectiveness";
-import { resolveOwnScopeChallenges, computeChallengeThemes, computeCompetencyGapRow, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
+import { resolveOwnScopeChallenges, computeChallengeThemes, computeCompetencyGapRow, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
 import { findPhillyGoal } from "@/lib/phillyGroupOkrs";
 import { MARKETING_DEPT_NAME, marketingTeamMembers, marketingDepartmentGoals } from "@/lib/marketingData";
 import { hasMinimumTenure, cn } from "@/lib/utils";
@@ -802,6 +802,172 @@ function ActionPlanCard({
   );
 }
 
+// ── Director Feedback Corner ─────────────────────────────────────────────────────
+//
+// A director's own staffList row genuinely has dept: "Management" (a real holding designation for
+// overseeing HODs, not a team with its own pulse/survey data) — so the normal per-department
+// TeamPulseCard/ManagerSurveyCard would have computed a meaningless "Management" aggregate. This
+// replaces that for directors with an org-wide view: Team Pulse and Manager Survey each groupable
+// by department or job family (Manager Survey adds a third "by manager" lens, since pulse responses
+// aren't tied to a rated manager the way survey ratings are). Department grouping defaults to "the
+// departments whose HODs report to me" (getRelevantDeptsForViewer) with a one-tap switch to every
+// live department org-wide. Per the research on integrated pulse+survey platforms (Leapsome, Workday
+// Peakon) — shared filters driving both panels, never a single blended score — the department/
+// job-family selector is shared state, not two independently-set filters.
+const ALL_LIVE_DEPTS = [HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME, MARKETING_DEPT_NAME];
+
+function DirectorFeedbackCorner({ viewerName }: { viewerName: string }) {
+  const { pulseResponses, managerEffectivenessRatings, staffList } = useApp();
+  const [groupBy, setGroupBy] = useState<"department" | "jobFamily">("department");
+  const [deptScope, setDeptScope] = useState<"mine" | "all">("mine");
+  const [surveyLens, setSurveyLens] = useState<"manager" | "department" | "jobFamily">("manager");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (key: string) => setExpandedGroups(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+
+  const quarter = currentQuarterLabel();
+  const prevQuarter = previousQuarterLabel();
+  const cycleYear = currentManagerSurveyCycleYear();
+  const { depts: myDepts } = getRelevantDeptsForViewer(viewerName, "Management", staffList);
+  const pulseDeptList = deptScope === "mine" && myDepts.length > 0 ? myDepts : ALL_LIVE_DEPTS;
+  const jobFamilies = [...new Set(staffList.map(s => s.jobFamily).filter(f => f && f !== "—"))].sort();
+
+  // ── Team Pulse groups ──
+  const companyPulseAvgs = averagePulseScores(pulseResponses.filter(r => r.quarter === quarter));
+  const pulseGroups = (groupBy === "department" ? pulseDeptList : jobFamilies).map(key => {
+    const responses = groupBy === "department"
+      ? pulseResponses.filter(r => r.department === key && r.quarter === quarter)
+      : pulseResponses.filter(r => r.quarter === quarter && staffList.find(s => s.name === r.respondentName)?.jobFamily === key);
+    const prevResponses = groupBy === "department"
+      ? pulseResponses.filter(r => r.department === key && r.quarter === prevQuarter)
+      : pulseResponses.filter(r => r.quarter === prevQuarter && staffList.find(s => s.name === r.respondentName)?.jobFamily === key);
+    return { key, avgs: averagePulseScores(responses), prevAvgs: averagePulseScores(prevResponses), count: responses.length };
+  }).filter(g => g.count > 0);
+
+  // ── Manager Survey groups ──
+  const thisCycleRatings = managerEffectivenessRatings.filter(r => r.cycleYear === cycleYear);
+  const companyManagerAvgs = averageManagerScores(thisCycleRatings);
+  const managerDeptOf = (managerName: string) => staffList.find(s => s.name === managerName)?.dept;
+  const managerJobFamilyOf = (managerName: string) => staffList.find(s => s.name === managerName)?.jobFamily;
+  const surveyGroups = (() => {
+    if (surveyLens === "manager") {
+      const names = [...new Set(thisCycleRatings.map(r => r.managerName))];
+      return names.map(name => ({
+        key: name, avgs: averageManagerScores(thisCycleRatings.filter(r => r.managerName === name)),
+        raterCount: thisCycleRatings.filter(r => r.managerName === name).length,
+      })).filter(g => g.avgs !== null);
+    }
+    const keys = surveyLens === "department" ? (deptScope === "mine" && myDepts.length > 0 ? myDepts : ALL_LIVE_DEPTS) : jobFamilies;
+    return keys.map(key => {
+      const ratings = thisCycleRatings.filter(r => surveyLens === "department" ? managerDeptOf(r.managerName) === key : managerJobFamilyOf(r.managerName) === key);
+      return { key, avgs: averageManagerScores(ratings), raterCount: ratings.length };
+    }).filter(g => g.avgs !== null);
+  })();
+
+  return (
+    <div className="space-y-4">
+      {/* Shared department/job-family filter — drives both panels below together */}
+      <div className="rounded-xl border border-border/70 bg-card p-3 flex items-center flex-wrap gap-3">
+        <div className="flex items-center gap-1.5 text-xs">
+          <span className="text-muted-foreground font-medium">Group by</span>
+          {(["department", "jobFamily"] as const).map(g => (
+            <button key={g} onClick={() => setGroupBy(g)} className={cn("px-2.5 py-1 rounded-full border", groupBy === g ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground")}>
+              {g === "department" ? "Department" : "Job Family"}
+            </button>
+          ))}
+        </div>
+        {groupBy === "department" && (
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-muted-foreground font-medium">Show</span>
+            <button onClick={() => setDeptScope("mine")} className={cn("px-2.5 py-1 rounded-full border", deptScope === "mine" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground")} title="Departments whose HODs report to me">
+              My departments
+            </button>
+            <button onClick={() => setDeptScope("all")} className={cn("px-2.5 py-1 rounded-full border", deptScope === "all" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground")} title="Every department org-wide">
+              All departments
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Team Pulse */}
+      <div className="rounded-xl border border-border/70 bg-card overflow-hidden">
+        <div className="px-4 py-3 flex items-center gap-2 border-b border-border/60">
+          <HeartPulse className="size-4 text-rose-500 shrink-0" />
+          <span className="text-sm font-semibold">Team Pulse</span>
+          <span className="text-[10px] text-muted-foreground">{quarter}</span>
+        </div>
+        <div className="p-4 space-y-3">
+          {pulseGroups.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No group has enough anonymous responses yet this quarter (minimum {MIN_RESPONSES_FOR_AGGREGATE}).</p>
+          ) : pulseGroups.map(g => (
+            <div key={g.key} className="rounded-lg border border-border/60 bg-background/70">
+              <button onClick={() => toggleGroup(`pulse:${g.key}`)} className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left">
+                <span className="text-xs font-medium">{g.key}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground">{g.count} response{g.count === 1 ? "" : "s"}</span>
+                  {g.avgs && g.prevAvgs && <TrendBadge delta={(Object.values(g.avgs).reduce((a, b) => a + b, 0) / Object.values(g.avgs).length) - (Object.values(g.prevAvgs).reduce((a, b) => a + b, 0) / Object.values(g.prevAvgs).length)} />}
+                  {expandedGroups.has(`pulse:${g.key}`) ? <ChevronUp className="size-3.5 text-muted-foreground" /> : <ChevronDown className="size-3.5 text-muted-foreground" />}
+                </div>
+              </button>
+              {expandedGroups.has(`pulse:${g.key}`) && g.avgs && (
+                <div className="px-3 pb-3 space-y-1.5">
+                  {PULSE_QUESTIONS.map(q => <AverageBar key={q.id} label={q.text} value={g.avgs![q.id] ?? 0} benchmark={companyPulseAvgs?.[q.id]} />)}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Manager Survey */}
+      <div className="rounded-xl border border-border/70 bg-card overflow-hidden">
+        <div className="px-4 py-3 flex items-center justify-between gap-2 border-b border-border/60 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Star className="size-4 text-amber-500 shrink-0" />
+            <span className="text-sm font-semibold">Manager Self-Improvement Survey</span>
+            <span className="text-[10px] text-muted-foreground">{cycleYear}</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs">
+            {(["manager", "department", "jobFamily"] as const).map(l => (
+              <button key={l} onClick={() => setSurveyLens(l)} className={cn("px-2.5 py-1 rounded-full border", surveyLens === l ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground")}>
+                {l === "manager" ? "By manager" : l === "department" ? "By department" : "By job family"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="p-4 space-y-3">
+          {surveyGroups.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No group has enough ratings yet this cycle (minimum {MIN_RATERS_FOR_AGGREGATE} raters).</p>
+          ) : surveyGroups.map(g => {
+            const areaAvgs = averageManagerScoresByArea(g.avgs);
+            return (
+              <div key={g.key} className="rounded-lg border border-border/60 bg-background/70">
+                <button onClick={() => toggleGroup(`survey:${g.key}`)} className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left">
+                  <span className="text-xs font-medium">{g.key}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground">{g.raterCount} rater{g.raterCount === 1 ? "" : "s"}</span>
+                    {expandedGroups.has(`survey:${g.key}`) ? <ChevronUp className="size-3.5 text-muted-foreground" /> : <ChevronDown className="size-3.5 text-muted-foreground" />}
+                  </div>
+                </button>
+                {expandedGroups.has(`survey:${g.key}`) && areaAvgs && (
+                  <div className="px-3 pb-3 space-y-1.5">
+                    {LEADERSHIP_AREAS.map(area => (
+                      <AverageBar key={area} label={area} value={areaAvgs[area] ?? 0} benchmark={averageManagerScoresByArea(companyManagerAvgs)?.[area]} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main section ─────────────────────────────────────────────────────────────────
 
 export function FeedbackCornerSection() {
@@ -903,14 +1069,20 @@ export function FeedbackCornerSection() {
         <p className="text-sm text-muted-foreground mt-1">Team Pulse, the Manager Self-Improvement Survey, and Key Staff Challenges — all in one place.</p>
       </div>
 
-      {/* isHod here doubles as "exempt from submitting Team Pulse yourself" inside TeamPulseCard —
-          directors are also exempt, since their own "Management" designation is a holding department
-          for overseeing HODs, not a real team with its own pulse to submit. */}
-      <TeamPulseCard viewerName={viewerName} viewerDept={viewerDept} isHod={isHod || isDirectorTier} canViewAggregate={canViewManagerAggregate} />
-      <ManagerSurveyCard viewerName={viewerName} mySupervisorName={mySupervisorName} canViewAggregate={canViewManagerAggregate} tenureOk={tenureOk} />
-      {canViewManagerAggregate && <YtdStackedCard viewerName={viewerName} viewerDept={viewerDept} canViewAggregate={canViewManagerAggregate} />}
+      {/* Directors get an org-wide, dept/job-family-groupable view instead — their own staffList
+          dept ("Management") is a holding designation, not a real team with its own pulse/survey
+          to aggregate. See DirectorFeedbackCorner above. */}
+      {isDirectorTier ? (
+        <DirectorFeedbackCorner viewerName={viewerName} />
+      ) : (
+        <>
+          <TeamPulseCard viewerName={viewerName} viewerDept={viewerDept} isHod={isHod} canViewAggregate={canViewManagerAggregate} />
+          <ManagerSurveyCard viewerName={viewerName} mySupervisorName={mySupervisorName} canViewAggregate={canViewManagerAggregate} tenureOk={tenureOk} />
+          {canViewManagerAggregate && <YtdStackedCard viewerName={viewerName} viewerDept={viewerDept} canViewAggregate={canViewManagerAggregate} />}
+        </>
+      )}
       <KeyStaffChallengesCard viewerName={viewerName} isHod={isHod} hasDirectorMeta={!!directorMeta} isTeamLead={isTeamLead} isDirectorDesignation={isDirectorDesignation} />
-      {canViewManagerAggregate && (
+      {canViewManagerAggregate && !isDirectorTier && (
         <ActionPlanCard
           pulseAvgs={deptPulseAvgs} managerAvgs={myManagerAvgs}
           managerCompanyAvgs={companyManagerAvgs} managerLastYearAvgs={lastYearManagerAvgs}
