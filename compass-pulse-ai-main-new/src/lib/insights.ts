@@ -198,7 +198,11 @@ export function computeCompetencyGapRow(
 // for this dashboard — excluded here defensively so a director whose real HOD reports happen to
 // include either can never have it surface in their oversight view, even though today's two wired
 // director personas don't actually hit this case (their real reports are in other departments).
-const EXCLUDED_DEPT_NAMES = new Set(["Compliance", "Group Compliance"]);
+// "Management" excluded too — it's the directors'/Managing Director's own holding designation
+// (see mockData.ts/HomeSection.tsx comments), never a real operating department with OKRs of its
+// own, so it should never surface as something a viewer (e.g. the Managing Director, whose direct
+// reports are other directors) "oversees."
+const EXCLUDED_DEPT_NAMES = new Set(["Compliance", "Group Compliance", "Management"]);
 
 export function getRelevantDeptsForViewer(
   viewerName: string,

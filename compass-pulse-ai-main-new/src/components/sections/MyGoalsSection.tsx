@@ -2884,6 +2884,6 @@ function DirectorGoalsView() {
 export function MyGoalsSection() {
   const { tier } = useApp();
   if (tier === "manager" || tier === "ops_hod") return <ManagerGoalsView />;
-  if (tier === "director1" || tier === "director2") return <DirectorGoalsView />;
+  if (tier === "director1" || tier === "director2" || tier === "director0") return <DirectorGoalsView />;
   return <StaffGoalsView />;
 }

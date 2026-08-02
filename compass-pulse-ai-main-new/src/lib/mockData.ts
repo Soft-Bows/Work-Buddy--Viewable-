@@ -4,7 +4,7 @@
 // skills content of their own — their real multi-department oversight is embedded into Team OKRs'
 // Key Staff Challenges and Admin Console's Departmental Competency Gaps (see getRelevantDeptsForViewer
 // in insights.ts), not a dedicated page.
-export type Tier = "staff" | "manager" | "admin" | "ops_hod" | "ops_mgr1" | "ops_mgr2" | "director1" | "director2";
+export type Tier = "staff" | "manager" | "admin" | "ops_hod" | "ops_mgr1" | "ops_mgr2" | "director1" | "director2" | "director0";
 export type RAG = "red" | "amber" | "green";
 
 export interface PersonalDevGoal {
@@ -191,6 +191,15 @@ export interface KeyResult {
   // Key Staff Challenges must attribute the remark to just this one person, never imply every
   // co-owner submitted the same challenge (no two people can submit the exact same feedback).
   challengeRemark?: { text: string; date: string; rag: "red" | "amber"; submittedBy: string };
+  // Philly Group OKRs only (src/lib/phillyGroupOkrs.ts) — a non-Managing-Director director's
+  // proposed change to a group Key Result. Wider than counterProposal above (which has no owner/
+  // score fields) since a group-level proposal explicitly needs to cover reassigning ownership
+  // (incl. multiple owners, same comma-joined convention as elsewhere) and re-proposing the
+  // quarterly score, not just title/date changes — no `description` field here since KeyResult
+  // itself has none anywhere in this app (only the parent Objective/PhillyGroupGoal does). The
+  // Managing Director accepts/rejects via resolvePhillyKrProposal in appContext.tsx; only the MD
+  // can edit a group Key Result directly.
+  phillyProposal?: { title?: string; dueDate?: string; owner?: string; score?: number; proposedDate: string; proposedBy: string };
   // Names still owing a response to the open challengeRemark — the Objective's own owner(s) plus the
   // department's HOD, minus the KR owner themselves (no point routing feedback to yourself) and
   // minus whoever has already responded. Cleared once challengeResponse is set.

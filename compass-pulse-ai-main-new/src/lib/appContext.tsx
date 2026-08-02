@@ -126,6 +126,7 @@ export interface DirectorViewMeta {
   department: string;
   designation: string;
   avatar: string;
+  isManagingDirector?: boolean;
 }
 
 interface AppCtx {
@@ -259,6 +260,9 @@ interface AppCtx {
   // reassign a group Key Result's owner from Team OKRs.
   phillyGroupGoals: PhillyGroupGoal[];
   reassignPhillyKrOwner: (goalId: string, krId: string, newOwner: string) => void;
+  updatePhillyKr: (goalId: string, krId: string, changes: Partial<KeyResult>) => void;
+  proposePhillyKrChange: (goalId: string, krId: string, proposal: { title?: string; dueDate?: string; owner?: string; score?: number }, proposedBy: string) => void;
+  resolvePhillyKrProposal: (goalId: string, krId: string, decision: "accept" | "reject") => void;
   // mutations
   resolveRemark: (remarkId: string) => Promise<void>;
   addPendingSkill: (skill: string, attachment?: SkillAttachment) => Promise<void>;
@@ -543,7 +547,47 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
   }, [livePhillyGroupGoals]);
   const reassignPhillyKrOwner = (goalId: string, krId: string, newOwner: string) =>
     setLivePhillyGroupGoals(prev => prev.map(g => (g.id !== goalId ? g : {
-      ...g, keyResults: g.keyResults.map(k => (k.id === krId ? { ...k, owner: newOwner } : k)),
+      ...g, keyResults: g.keyResults.map(k => (k.id === krId ? { ...k, owner: newOwner, lastTouchedDate: new Date().toISOString().slice(0, 10) } : k)),
+    })));
+  // Managing-Director-only direct edit — title/description/dueDate/owner/score/confidence, no
+  // proposal cycle (mirrors how a HOD directly edits a regular department Key Result). UI-gated to
+  // isManagingDirector; the mutation itself doesn't re-check, matching this app's standing
+  // convention of gating permissions at the call site, not inside every setter.
+  const updatePhillyKr = (goalId: string, krId: string, changes: Partial<KeyResult>) =>
+    setLivePhillyGroupGoals(prev => prev.map(g => (g.id !== goalId ? g : {
+      ...g, keyResults: g.keyResults.map(k => (k.id === krId ? { ...k, ...changes, lastTouchedDate: new Date().toISOString().slice(0, 10) } : k)),
+    })));
+  // Any non-MD director proposes a change (owner, due date, title, description, or a re-proposed
+  // quarterly score) — held on phillyProposal until the Managing Director accepts or rejects it.
+  const proposePhillyKrChange = (
+    goalId: string, krId: string,
+    proposal: { title?: string; dueDate?: string; owner?: string; score?: number },
+    proposedBy: string,
+  ) =>
+    setLivePhillyGroupGoals(prev => prev.map(g => (g.id !== goalId ? g : {
+      ...g, keyResults: g.keyResults.map(k => (k.id === krId
+        ? { ...k, phillyProposal: { ...proposal, proposedDate: new Date().toISOString().slice(0, 10), proposedBy } }
+        : k)),
+    })));
+  // Managing-Director-only accept/reject of an open phillyProposal — accepting applies exactly the
+  // proposed fields (score included, since re-proposing the quarterly score is an explicit part of
+  // this workflow) and stamps lastTouchedDate so the "recently updated" highlight picks it up.
+  const resolvePhillyKrProposal = (goalId: string, krId: string, decision: "accept" | "reject") =>
+    setLivePhillyGroupGoals(prev => prev.map(g => (g.id !== goalId ? g : {
+      ...g, keyResults: g.keyResults.map(k => {
+        if (k.id !== krId || !k.phillyProposal) return k;
+        if (decision === "reject") return { ...k, phillyProposal: undefined };
+        const { title, dueDate, owner, score } = k.phillyProposal;
+        return {
+          ...k,
+          title: title ?? k.title, dueDate: dueDate ?? k.dueDate,
+          owner: owner ?? k.owner, score: score ?? k.score,
+          scoreQuarter: score !== undefined ? currentQuarterLabel() : k.scoreQuarter,
+          scoreSubmittedDate: score !== undefined ? new Date().toISOString().slice(0, 10) : k.scoreSubmittedDate,
+          phillyProposal: undefined,
+          lastTouchedDate: new Date().toISOString().slice(0, 10),
+        };
+      }),
     })));
 
   // Delegated "team-OKR editor" — one leave supervisor per department the HOD can grant direct edit
@@ -2125,6 +2169,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
       department: row?.dept ?? "Executive Office",
       designation: row?.role ?? persona.designation,
       avatar: persona.avatar,
+      isManagingDirector: persona.isManagingDirector,
     };
   }, [tier, data]);
 
@@ -2205,6 +2250,9 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
       hcwmAllTeamMemberSkills: d?.allTeamMemberSkills ?? [],
       phillyGroupGoals: livePhillyGroupGoals,
       reassignPhillyKrOwner,
+      updatePhillyKr,
+      proposePhillyKrChange,
+      resolvePhillyKrProposal,
       myGoals: (d?.myGoals ?? _myGoals) as unknown as AppData["myGoals"],
       skills: d?.skills ?? _skills,
       jobMatches: d?.jobMatches ?? _jobMatches,

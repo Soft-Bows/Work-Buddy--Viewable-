@@ -46,14 +46,14 @@ function PaletteMascotSVG({ className }: { className?: string }) {
 // Challenges (org-wide — every department, not just the ones reporting to them, matching an actual
 // admin's view) via getRelevantDeptsForViewer — see src/lib/insights.ts.
 const NAV = [
-  { id: "home", label: "Home", icon: Home, tiers: ["staff", "manager", "admin", "director1", "director2"] },
-  { id: "team", label: "Team OKRs", icon: Target, tiers: ["staff", "manager", "admin", "director1", "director2"] },
-  { id: "mygoals", label: "My Goals", icon: TrendingUp, tiers: ["staff", "manager", "admin", "director1", "director2"] },
-  { id: "skills", label: "Skills Profile", icon: Brain, tiers: ["staff", "manager", "admin", "director1", "director2"] },
-  { id: "compliments", label: "Appreciation Corner", icon: Heart, tiers: ["staff", "manager", "admin", "director1", "director2"] },
-  { id: "survey", label: "Feedback Corner", icon: BarChart3, tiers: ["manager", "director1", "director2"] },
+  { id: "home", label: "Home", icon: Home, tiers: ["staff", "manager", "admin", "director0", "director1", "director2"] },
+  { id: "team", label: "Team OKRs", icon: Target, tiers: ["staff", "manager", "admin", "director0", "director1", "director2"] },
+  { id: "mygoals", label: "My Goals", icon: TrendingUp, tiers: ["staff", "manager", "admin", "director0", "director1", "director2"] },
+  { id: "skills", label: "Skills Profile", icon: Brain, tiers: ["staff", "manager", "admin", "director0", "director1", "director2"] },
+  { id: "compliments", label: "Appreciation Corner", icon: Heart, tiers: ["staff", "manager", "admin", "director0", "director1", "director2"] },
+  { id: "survey", label: "Feedback Corner", icon: BarChart3, tiers: ["manager", "director0", "director1", "director2"] },
   { id: "admin", label: "Admin Console", icon: Settings, tiers: ["admin"] },
-  { id: "rewards", label: "Rewards", icon: Trophy, tiers: ["staff", "manager", "admin", "director1", "director2"] },
+  { id: "rewards", label: "Rewards", icon: Trophy, tiers: ["staff", "manager", "admin", "director0", "director1", "director2"] },
 ] as const;
 
 const OPS_PERSONAS = [
@@ -62,7 +62,7 @@ const OPS_PERSONAS = [
   { id: "u23", firstName: "Marcus", tier: "ops_mgr2" as const },
 ] as const;
 
-const DIRECTOR_TIER_IDS = ["director1", "director2"] as const;
+const DIRECTOR_TIER_IDS = ["director0", "director1", "director2"] as const;
 
 const OPS_TIER_IDS = ["ops_hod", "ops_mgr1", "ops_mgr2"] as const;
 

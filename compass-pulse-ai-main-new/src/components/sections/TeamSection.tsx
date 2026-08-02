@@ -28,7 +28,7 @@ function TeamSVG() {
 
 import { toast } from "sonner";
 import { pointsToast } from "@/lib/pointsToast";
-import { cn, workingDaysSince, formatGoalStatusDueDate, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, flattenOkrOptions, objectiveScore, objectiveConfidence, objectiveConfidenceValue, ragConfidenceValue, scoreToRag, keyResultsOwnedBy, formatMonthlyConfidenceDueDate, isAmongOwners, ownerNames, isPendingAckFor, hasPendingAck, isKrOverdue, formatEffectiveKrScoreDueDate, isConfidenceStale, krOwnerCounts, MAX_KRS_PER_OWNER, isKrScoreFromPastQuarter, isKrScoreStaleForDisplay, objectiveScoreQuarterLabel, isRecentlyUpdated } from "@/lib/utils";
+import { cn, workingDaysSince, formatGoalStatusDueDate, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, flattenOkrOptions, objectiveScore, objectiveConfidence, objectiveConfidenceValue, ragConfidenceValue, scoreToRag, keyResultsOwnedBy, formatMonthlyConfidenceDueDate, isAmongOwners, ownerNames, isPendingAckFor, hasPendingAck, isKrOverdue, formatEffectiveKrScoreDueDate, isConfidenceStale, krOwnerCounts, MAX_KRS_PER_OWNER, isKrScoreFromPastQuarter, isKrScoreStaleForDisplay, objectiveScoreQuarterLabel, isRecentlyUpdated, currentQuarterLabel } from "@/lib/utils";
 import { AttentionHighlight } from "@/components/AttentionHighlight";
 import { computeChallengeThemes, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
 import { phillyGroupGoals, findPhillyGoal, findPhillyKr } from "@/lib/phillyGroupOkrs";
@@ -2418,46 +2418,98 @@ const TEAM_MASCOT_TINTS = [
 // A single Philly Group Key Result row in the director's own "2026 Philly Group OKRs" section —
 // read-only display plus an inline "reassign owner" affordance (any staff name, not gated to a
 // single department's roster, since group-level ownership deliberately isn't dept-scoped).
-function PhillyKrOwnerRow({ goalId, kr }: { goalId: string; kr: KeyResult }) {
-  const { reassignPhillyKrOwner } = useApp();
+// A single Philly Group Key Result row — the Managing Director can edit it directly (owner,
+// title, due date, quarterly score, monthly confidence); every other director can only propose a
+// change (owner, title, due date, quarterly score — the Managing Director accepts/rejects it via
+// resolvePhillyKrProposal). Wrapped in AttentionHighlight so red/amber confidence and any recent
+// change (including a just-accepted proposal) read consistently with every other OKR surface.
+function PhillyKrOwnerRow({ goalId, kr, viewerName, isManagingDirector }: { goalId: string; kr: KeyResult; viewerName: string; isManagingDirector: boolean }) {
+  const { updatePhillyKr, proposePhillyKrChange, resolvePhillyKrProposal } = useApp();
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(kr.owner);
+  const [draft, setDraft] = useState({ title: kr.title, owner: kr.owner, dueDate: kr.dueDate, score: kr.score?.toString() ?? "", confidence: kr.ragConfidence });
+  const needsAttention = kr.ragConfidence === "red" || kr.ragConfidence === "amber" || (kr.score !== undefined && scoreToRag(kr.score) !== "green");
+  const rag: "red" | "amber" = kr.ragConfidence === "red" || (kr.score !== undefined && scoreToRag(kr.score) === "red") ? "red" : "amber";
+
   return (
-    <div className="flex items-center justify-between gap-2 text-xs border-t border-border/40 pt-1.5 first:border-0 first:pt-0">
-      <span className="flex-1 min-w-0 truncate">{kr.title}</span>
-      {editing ? (
-        <div className="flex items-center gap-1 shrink-0">
-          <input
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            className="w-32 text-xs rounded-md border border-input bg-background px-1.5 py-0.5"
-          />
-          <button
-            onClick={() => {
-              if (!draft.trim()) { toast.error("Owner is required"); return; }
-              reassignPhillyKrOwner(goalId, kr.id, draft.trim());
-              setEditing(false);
-              toast.success("Owner reassigned");
-            }}
-            className="size-5 rounded grid place-items-center text-rag-green hover:bg-muted transition-colors"
-            title="Save"
-          >
-            <Check className="size-3" />
-          </button>
-          <button onClick={() => { setDraft(kr.owner); setEditing(false); }} className="size-5 rounded grid place-items-center text-muted-foreground hover:bg-muted transition-colors" title="Cancel">
-            <X className="size-3" />
-          </button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className="text-muted-foreground">{kr.owner}</span>
-          <RagPill rag={kr.ragConfidence} value={ragConfidenceValue(kr.ragConfidence)} />
-          <button onClick={() => setEditing(true)} className="size-5 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title="Reassign owner">
-            <Pencil className="size-3" />
-          </button>
+    <AttentionHighlight needsAttention={needsAttention} rag={rag} recentlyUpdated={isRecentlyUpdated(kr)} className="border-t border-border/40 first:border-0">
+    <div className="pt-1.5 first:pt-0 space-y-1.5">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="flex-1 min-w-0 truncate">{kr.title}</span>
+        {editing ? (
+          <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+            <input value={draft.title} onChange={e => setDraft(d => ({ ...d, title: e.target.value }))} placeholder="Title" className="w-28 text-xs rounded-md border border-input bg-background px-1.5 py-0.5" />
+            <input value={draft.owner} onChange={e => setDraft(d => ({ ...d, owner: e.target.value }))} placeholder="Owner(s)" className="w-24 text-xs rounded-md border border-input bg-background px-1.5 py-0.5" />
+            <input type="date" value={draft.dueDate} onChange={e => setDraft(d => ({ ...d, dueDate: e.target.value }))} className="text-xs rounded-md border border-input bg-background px-1.5 py-0.5" />
+            <input value={draft.score} onChange={e => setDraft(d => ({ ...d, score: e.target.value }))} placeholder="Score" className="w-14 text-xs rounded-md border border-input bg-background px-1.5 py-0.5" />
+            {isManagingDirector && (
+              <select value={draft.confidence} onChange={e => setDraft(d => ({ ...d, confidence: e.target.value as RAG }))} className="text-xs rounded-md border border-input bg-background px-1.5 py-0.5">
+                <option value="green">Green</option>
+                <option value="amber">Amber</option>
+                <option value="red">Red</option>
+              </select>
+            )}
+            <button
+              onClick={() => {
+                if (!draft.title.trim() || !draft.owner.trim() || !draft.dueDate) { toast.error("Title, owner, and due date are required"); return; }
+                const score = draft.score.trim() ? Math.max(0, Math.min(1, roundToOneDecimal(Number(draft.score)))) : undefined;
+                if (isManagingDirector) {
+                  updatePhillyKr(goalId, kr.id, {
+                    title: draft.title.trim(), owner: draft.owner.trim(), dueDate: draft.dueDate,
+                    ...(score !== undefined ? { score, scoreQuarter: currentQuarterLabel(), scoreSubmittedDate: new Date().toISOString().slice(0, 10) } : {}),
+                    ragConfidence: draft.confidence, ragConfidenceUpdatedDate: new Date().toISOString().slice(0, 10),
+                  });
+                  toast.success("Updated");
+                } else {
+                  proposePhillyKrChange(goalId, kr.id, {
+                    title: draft.title.trim() !== kr.title ? draft.title.trim() : undefined,
+                    owner: draft.owner.trim() !== kr.owner ? draft.owner.trim() : undefined,
+                    dueDate: draft.dueDate !== kr.dueDate ? draft.dueDate : undefined,
+                    score,
+                  }, viewerName);
+                  toast.success("Proposed — awaiting the Managing Director");
+                }
+                setEditing(false);
+              }}
+              className="size-5 rounded grid place-items-center text-rag-green hover:bg-muted transition-colors"
+              title="Save"
+            >
+              <Check className="size-3" />
+            </button>
+            <button onClick={() => { setDraft({ title: kr.title, owner: kr.owner, dueDate: kr.dueDate, score: kr.score?.toString() ?? "", confidence: kr.ragConfidence }); setEditing(false); }} className="size-5 rounded grid place-items-center text-muted-foreground hover:bg-muted transition-colors" title="Cancel">
+              <X className="size-3" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-muted-foreground">{kr.owner}</span>
+            <RagPill rag={kr.ragConfidence} value={ragConfidenceValue(kr.ragConfidence)} />
+            {kr.score !== undefined && <RagPill rag={scoreToRag(kr.score)} value={kr.score} />}
+            <button onClick={() => setEditing(true)} className="size-5 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-muted transition-colors" title={isManagingDirector ? "Edit directly" : "Propose a change"}>
+              <Pencil className="size-3" />
+            </button>
+          </div>
+        )}
+      </div>
+      {kr.phillyProposal && (
+        <div className="flex items-center justify-between gap-2 text-[10px] bg-violet-50 dark:bg-violet-900/15 border border-violet-200 dark:border-violet-700/40 rounded-md px-2 py-1">
+          <span className="text-violet-700 dark:text-violet-300">
+            Proposed by <span className="font-medium">{kr.phillyProposal.proposedBy}</span>: {[
+              kr.phillyProposal.title && `title → "${kr.phillyProposal.title}"`,
+              kr.phillyProposal.owner && `owner → ${kr.phillyProposal.owner}`,
+              kr.phillyProposal.dueDate && `due date → ${kr.phillyProposal.dueDate}`,
+              kr.phillyProposal.score !== undefined && `score → ${kr.phillyProposal.score.toFixed(1)}`,
+            ].filter(Boolean).join(", ")}
+          </span>
+          {isManagingDirector && (
+            <div className="flex items-center gap-1 shrink-0">
+              <button onClick={() => { resolvePhillyKrProposal(goalId, kr.id, "accept"); toast.success("Accepted"); }} className="px-1.5 py-0.5 rounded bg-rag-green text-white font-medium">Accept</button>
+              <button onClick={() => { resolvePhillyKrProposal(goalId, kr.id, "reject"); toast("Rejected"); }} className="px-1.5 py-0.5 rounded border border-border text-muted-foreground font-medium">Reject</button>
+            </div>
+          )}
         </div>
       )}
     </div>
+    </AttentionHighlight>
   );
 }
 
@@ -2469,7 +2521,7 @@ export function TeamSection() {
     opsTeamMembersAll, opsDepartmentGoals, hcwmTeamMembers, hcwmDepartmentGoals,
     teamMemberDrawerReturnHome, setTeamMemberDrawerReturnHome, setSection,
     respondToCrossDeptAppointment,
-    phillyGroupGoals, reassignPhillyKrOwner,
+    phillyGroupGoals,
   } = useApp();
   const [active, setActive] = useState<TeamMember | null>(null);
   const [showRagInfo, setShowRagInfo] = useState(false);
@@ -2773,13 +2825,16 @@ export function TeamSection() {
         </div>
 
         {/* ── 2026 Philly Group OKRs — the group-level layer above every department's own
-            Objectives (see src/lib/phillyGroupOkrs.ts). Directors get a dedicated, editable view
-            here (reassigning a Key Result's owner) on top of the read-only popup any user can open
-            from the header button above. ── */}
+            Objectives (see src/lib/phillyGroupOkrs.ts). The Managing Director can edit directly;
+            every other director can only propose a change (owner/title/due date/quarterly score),
+            which the Managing Director then accepts or rejects — on top of the read-only popup any
+            user can open from the header button above. ── */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-2xl">2026 Philly Group OKRs</h2>
-            <span className="text-[11px] text-muted-foreground">Owners can be any staff member, not only HODs</span>
+            <span className="text-[11px] text-muted-foreground">
+              {directorMeta.isManagingDirector ? "Owners can be any staff member, not only HODs" : "Propose a change — the Managing Director will accept or reject it"}
+            </span>
           </div>
           <div className="space-y-3">
             {phillyGroupGoals.map(pg => (
@@ -2790,7 +2845,7 @@ export function TeamSection() {
                 </div>
                 <div className="space-y-1.5">
                   {pg.keyResults.map(kr => (
-                    <PhillyKrOwnerRow key={kr.id} goalId={pg.id} kr={kr} />
+                    <PhillyKrOwnerRow key={kr.id} goalId={pg.id} kr={kr} viewerName={directorMeta.name} isManagingDirector={!!directorMeta.isManagingDirector} />
                   ))}
                 </div>
               </Card>

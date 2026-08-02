@@ -211,7 +211,7 @@ export function SkillsSection() {
     managerDevGoals, staffDevGoals, adminDevGoals,
     opsTeamMembersAll,
   } = useApp();
-  const isDirectorTier = tier === "director1" || tier === "director2";
+  const isDirectorTier = tier === "director1" || tier === "director2" || tier === "director0";
   const [pending, setPending] = useState(skills.pending);
   const [optimisticPending, setOptimisticPending] = useState<string[]>([]);
   const [query, setQuery] = useState("");

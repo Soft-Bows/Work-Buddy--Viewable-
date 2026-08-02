@@ -988,7 +988,7 @@ export function FeedbackCornerSection() {
   } = useApp();
 
   const isHod = (tier === "manager" && currentUser.hod) || tier === "ops_hod";
-  const isDirectorTier = tier === "director1" || tier === "director2";
+  const isDirectorTier = tier === "director1" || tier === "director2" || tier === "director0";
   const isDirectorDesignation = isDirectorTier && !!directorMeta?.designation.toLowerCase().includes("director");
 
   const viewerName = directorMeta

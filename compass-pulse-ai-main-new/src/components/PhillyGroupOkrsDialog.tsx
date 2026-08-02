@@ -92,6 +92,11 @@ export function PhillyGroupOkrsDialog({
                           ) : (
                             <div className="mt-1.5 text-[10px] text-muted-foreground/70 italic">No department Objective linked to this yet</div>
                           )}
+                          {kr.phillyProposal && (
+                            <div className="mt-1.5 text-[10px] text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/15 border border-violet-200 dark:border-violet-700/40 rounded-md px-2 py-1">
+                              A change is proposed by <span className="font-medium">{kr.phillyProposal.proposedBy}</span> — awaiting the Managing Director.
+                            </div>
+                          )}
                         </div>
                       </AttentionHighlight>
                     </div>
