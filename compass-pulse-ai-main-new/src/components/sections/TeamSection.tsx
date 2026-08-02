@@ -30,7 +30,6 @@ import { toast } from "sonner";
 import { pointsToast } from "@/lib/pointsToast";
 import { cn, workingDaysSince, formatGoalStatusDueDate, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, flattenOkrOptions, objectiveScore, objectiveConfidence, objectiveConfidenceValue, ragConfidenceValue, scoreToRag, keyResultsOwnedBy, formatMonthlyConfidenceDueDate, isAmongOwners, ownerNames, isPendingAckFor, hasPendingAck, isKrOverdue, formatEffectiveKrScoreDueDate, isConfidenceStale, krOwnerCounts, MAX_KRS_PER_OWNER } from "@/lib/utils";
 import { computeChallengeThemes, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
-import { COMPLIANCE_DEPT_NAME, complianceTeamMembers, complianceDepartmentGoals } from "@/lib/complianceData";
 import { MARKETING_DEPT_NAME, marketingTeamMembers, marketingDepartmentGoals } from "@/lib/marketingData";
 
 // ── Owner picker — a search combobox over staffList (already active-only). Default (empty query)
@@ -2426,7 +2425,7 @@ export function TeamSection() {
   // Searching every known roster fixes that; permission is still gated separately by canOpenOwner
   // below. The HOD can always open anyone; for team-level items, the clicked member's own direct
   // supervisor can too (mirrors the existing directManager convention used everywhere else here).
-  const ALL_KNOWN_MEMBERS = [...teamMembers, ...opsTeamMembersAll, ...complianceTeamMembers, ...marketingTeamMembers];
+  const ALL_KNOWN_MEMBERS = [...teamMembers, ...opsTeamMembersAll, ...marketingTeamMembers];
   const resolveMemberByName = (name: string) => ALL_KNOWN_MEMBERS.find(m => m.name === name);
   const canOpenOwner = (ownerName: string, level: "department" | "team"): boolean => {
     if (isHod) return true;
@@ -2457,7 +2456,7 @@ export function TeamSection() {
   const directorDeptHod = (dept: string) => staffList.find(s => s.dept === dept && s.hod)?.name;
   const DIRECTOR_GOALS_BY_DEPT: Record<string, DeptGoal[]> = {
     [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
-    [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals, [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
+    [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
   };
   const LIVE_DEPT_NAMES = new Set([HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME]);
 
@@ -2512,11 +2511,11 @@ export function TeamSection() {
   // they're routed a challenge response whenever they happen to be a Key Result's Objective owner,
   // but they should see their team's open challenges either way, not just the ones addressed to them.
   const MEMBERS_BY_DEPT: Record<string, TeamMember[]> = {
-    [HCWM_DEPT_NAME]: hcwmTeamMembers, [CREDIT_RISK_DEPT_NAME]: opsTeamMembersAll, [COMPLIANCE_DEPT_NAME]: complianceTeamMembers,
+    [HCWM_DEPT_NAME]: hcwmTeamMembers, [CREDIT_RISK_DEPT_NAME]: opsTeamMembersAll,
     [MARKETING_DEPT_NAME]: marketingTeamMembers,
   };
   const GOALS_BY_DEPT: Record<string, DeptGoal[]> = {
-    [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals, [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals,
+    [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
     [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
   };
   const canonicalOwnDept = staffList.find(s => s.name === viewedUserName)?.dept ?? resolvedDept ?? "";
@@ -3394,10 +3393,11 @@ export function TeamDrawer({ member, onClose }: { member: TeamMember; onClose: (
 
   // Performance goals are now Key Results owned by this member (by name), pulled straight from the
   // live Objectives — not the old individually-created Goal list. Each entry carries its parent
-  // Objective so the supervisor sees the linkage at a glance. Includes Compliance/Marketing
-  // Communications goals too — omitting them meant a Compliance or Marketing team member's own
-  // owned Key Results silently never appeared in their own drawer.
-  const memberKeyResults = keyResultsOwnedBy(member.name, departmentGoals, opsDepartmentGoals, complianceDepartmentGoals, marketingDepartmentGoals);
+  // Objective so the supervisor sees the linkage at a glance. Includes Marketing Communications
+  // goals too — omitting them meant a Marketing team member's own owned Key Results silently never
+  // appeared in their own drawer. Compliance is deliberately excluded (out of scope for this
+  // dashboard).
+  const memberKeyResults = keyResultsOwnedBy(member.name, departmentGoals, opsDepartmentGoals, marketingDepartmentGoals);
   // Which real department an Objective's Key Results live under — resolved by array membership
   // rather than trusting anything on the Objective itself, so cross-department ownership (a person
   // co-owning a KR on another department's Objective) is always labelled with the *real* department,
@@ -3405,7 +3405,6 @@ export function TeamDrawer({ member, onClose }: { member: TeamMember; onClose: (
   const deptNameForObjective = (objective: DeptGoal): string => {
     if (departmentGoals.includes(objective)) return HCWM_DEPT_NAME;
     if (opsDepartmentGoals.includes(objective)) return CREDIT_RISK_DEPT_NAME;
-    if (complianceDepartmentGoals.includes(objective)) return COMPLIANCE_DEPT_NAME;
     if (marketingDepartmentGoals.includes(objective)) return MARKETING_DEPT_NAME;
     return "Unknown Department";
   };

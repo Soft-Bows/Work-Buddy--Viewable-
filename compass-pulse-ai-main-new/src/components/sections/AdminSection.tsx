@@ -9,7 +9,6 @@ import { CATEGORY_LABELS, AUDIENCE_LABELS } from "@/lib/mockData";
 import { getRedeemedRewardsFn, disableStaffFn, enableStaffFn, getStaffPointsLogFn, getOrgNetPointsFn } from "@/lib/api/data.functions";
 import { exportActivitiesToExcel, parseActivityImportFile, validateImportRows, type ImportValidationResult } from "@/lib/activityImportExport";
 import { computeChallengeThemes, computeCompetencyGapRow, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
-import { COMPLIANCE_DEPT_NAME, complianceTeamMembers, complianceDepartmentGoals } from "@/lib/complianceData";
 import { MARKETING_DEPT_NAME, marketingTeamMembers, marketingDepartmentGoals } from "@/lib/marketingData";
 import { AiGovernancePanel } from "@/components/sections/AiGovernancePanel";
 
@@ -17,6 +16,9 @@ import { AiGovernancePanel } from "@/components/sections/AiGovernancePanel";
 // Matches the 9 real department values found in Staff Listing 2 — keep this in sync
 // with scripts/sync-users-from-staff-listing.mjs's source data, otherwise imported
 // staff in an unlisted department silently disappear from these grouped views.
+// "Group Compliance" (the real department, per Staff Listing 2) and "Compliance" (an earlier,
+// unrelated synthetic seed department that never matched any real Staff Listing 2 roster) are both
+// deliberately excluded from this list — out of scope for this dashboard's grouped views.
 const PC_DEPARTMENTS = [
   "Human Capital & Workplace Management",
   "Affluent Markets",
@@ -24,10 +26,8 @@ const PC_DEPARTMENTS = [
   "Operations - Unit Trust",
   "Partnership",
   "CFD Market Making",
-  "Group Compliance",
   "Credit Risk Management (F.K.A. Credit Admin)",
   "Accounts Processing Unit",
-  "Compliance",
   "Marketing Communications",
 ];
 
@@ -1230,7 +1230,6 @@ export function AdminSection() {
   const GOALS_BY_DEPT: Record<string, { id: string }[]> = {
     [HCWM_DEPT_NAME]: departmentGoals,
     [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
-    [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals,
     [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
   };
   const allMemberSkills = useMemo(
@@ -1373,11 +1372,11 @@ export function AdminSection() {
   // (src/lib/insights.ts — shared with the HOD/Director-scoped section on the Team OKRs page).
   // Org-wide for a true admin; scoped to just the departments a director oversees otherwise.
   const CHALLENGE_MEMBERS_BY_DEPT: Record<string, typeof teamMembers> = {
-    [HCWM_DEPT_NAME]: teamMembers, [CREDIT_RISK_DEPT_NAME]: opsTeamMembersAll, [COMPLIANCE_DEPT_NAME]: complianceTeamMembers,
+    [HCWM_DEPT_NAME]: teamMembers, [CREDIT_RISK_DEPT_NAME]: opsTeamMembersAll,
     [MARKETING_DEPT_NAME]: marketingTeamMembers,
   };
   const CHALLENGE_GOALS_BY_DEPT: Record<string, DeptGoal[]> = {
-    [HCWM_DEPT_NAME]: departmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals, [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals,
+    [HCWM_DEPT_NAME]: departmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
     [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
   };
   const challengeThemes = useMemo(() => {
@@ -1388,7 +1387,7 @@ export function AdminSection() {
       );
     }
     return computeChallengeThemes(
-      [...teamMembers, ...opsTeamMembersAll, ...complianceTeamMembers, ...marketingTeamMembers],
+      [...teamMembers, ...opsTeamMembersAll, ...marketingTeamMembers],
       CHALLENGE_GOALS_BY_DEPT,
     );
   }, [teamMembers, opsTeamMembersAll, departmentGoals, opsDepartmentGoals, directorScope]);

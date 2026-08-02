@@ -13,7 +13,6 @@ import {
   isManagerSurveyWindowOpen, hasManagerSurveyWindowClosedThisYear, currentManagerSurveyCycleYear, peerP75,
 } from "@/lib/managerEffectiveness";
 import { resolveOwnScopeChallenges, computeChallengeThemes, computeCompetencyGapRow, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
-import { COMPLIANCE_DEPT_NAME, complianceTeamMembers, complianceDepartmentGoals } from "@/lib/complianceData";
 import { MARKETING_DEPT_NAME, marketingTeamMembers, marketingDepartmentGoals } from "@/lib/marketingData";
 import { hasMinimumTenure, cn } from "@/lib/utils";
 import { pointsToast } from "@/lib/pointsToast";
@@ -606,11 +605,11 @@ function KeyStaffChallengesCard({
   const canonicalOwnDept = staffList.find(s => s.name === viewerName)?.dept ?? "";
   const membersByDept: Record<string, TeamMember[]> = {
     [HCWM_DEPT_NAME]: hcwmTeamMembers, [CREDIT_RISK_DEPT_NAME]: opsTeamMembersAll,
-    [COMPLIANCE_DEPT_NAME]: complianceTeamMembers, [MARKETING_DEPT_NAME]: marketingTeamMembers,
+    [MARKETING_DEPT_NAME]: marketingTeamMembers,
   };
   const goalsByDept: Record<string, DeptGoal[]> = {
     [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
-    [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals, [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
+    [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
   };
 
   const own = resolveOwnScopeChallenges({
@@ -799,7 +798,7 @@ export function FeedbackCornerSection() {
   // Tenure gate — resolve the real ISO joinDate for whichever persona is active. Directors don't
   // carry a joinDate in this data model at all (no leaver/joiner concept exists for them), so
   // they're treated as already-tenured rather than locked out of a page they clearly should see.
-  const ALL_KNOWN_MEMBERS = [...teamMembers, ...opsTeamMembersAll, ...complianceTeamMembers, ...marketingTeamMembers];
+  const ALL_KNOWN_MEMBERS = [...teamMembers, ...opsTeamMembersAll, ...marketingTeamMembers];
   const viewerJoinDate = opsMeta
     ? opsMeta.user.joinDate
     : tier === "staff" || tier === "admin"
@@ -842,11 +841,11 @@ export function FeedbackCornerSection() {
   const canonicalOwnDept = staffList.find(s => s.name === viewerName)?.dept ?? viewerDept;
   const membersByDeptForChallenges: Record<string, TeamMember[]> = {
     [HCWM_DEPT_NAME]: hcwmTeamMembers, [CREDIT_RISK_DEPT_NAME]: opsTeamMembersAll,
-    [COMPLIANCE_DEPT_NAME]: complianceTeamMembers, [MARKETING_DEPT_NAME]: marketingTeamMembers,
+    [MARKETING_DEPT_NAME]: marketingTeamMembers,
   };
   const goalsByDeptForChallenges: Record<string, DeptGoal[]> = {
     [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
-    [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals, [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
+    [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
   };
   const challengeSummary = canViewManagerAggregate
     ? resolveOwnScopeChallenges({

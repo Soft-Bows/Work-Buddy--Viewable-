@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useApp } from "@/lib/appContext";
 import { AI_ACTIVITY_KIND_LABEL, type AiActivityKind } from "@/lib/aiActivity";
-import { complianceDepartmentGoals, COMPLIANCE_DEPT_NAME } from "@/lib/complianceData";
 import { HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
 import { ChevronDown, ChevronUp, ShieldCheck, Scale, Sparkles, Bell, FileText, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -25,7 +24,6 @@ export function AiGovernancePanel() {
   const deptGoalLists: Record<string, typeof hcwmDepartmentGoals> = {
     [HCWM_DEPT_NAME]: hcwmDepartmentGoals,
     [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
-    [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals,
   };
   const deptAverages = Object.entries(deptGoalLists)
     .map(([dept, goals]) => {

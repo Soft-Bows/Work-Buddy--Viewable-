@@ -154,15 +154,13 @@ export const seedManagerRatings: ManagerEffectivenessRating[] = [
   { id: "mr-2026-10", managerName: "Caleb Ong", raterName: "Diana Eng", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-09T11:00:00.000Z`, ratings: fullRatings(4) },
   { id: "mr-2026-11", managerName: "Caleb Ong", raterName: "Ethan Lam", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-17T11:00:00.000Z`, ratings: fullRatings(4, { b6: 3 }) },
 
-  // ── Directors — Elsa Ling has 3 real HOD reports per users.csv (Sarah Chen/HCWM, Michelle
-  // Sylvia/Marketing, Reuben Tan/Compliance), so with all 3 rating her she genuinely clears the
-  // anonymity threshold. Ethan Lim has only 1 real HOD report (Nadia Yong), so he honestly stays
-  // below it — the same small-span-of-control demonstration as Caleb Ong above, not withheld data.
+  // ── Directors — the Compliance department (and its HOD, Reuben Tan) is out of scope for this
+  // dashboard, so Elsa Ling's real HOD reports here are just Sarah Chen (HCWM) and Michelle Sylvia
+  // (Marketing) — 2 raters, honestly below the anonymity threshold. Ethan Lim has only 1 real HOD
+  // report (Nadia Yong), also below it — the same small-span-of-control demonstration as Caleb Ong
+  // above, not withheld data.
   { id: "mr-2026-12", managerName: "Elsa Ling", raterName: "Sarah Chen", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-25T12:00:00.000Z`, ratings: fullRatings(4) },
   { id: "mr-2026-13", managerName: "Elsa Ling", raterName: "Michelle Sylvia", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-26T12:00:00.000Z`, ratings: fullRatings(4, { b3: 3 }) },
-  { id: "mr-2026-17", managerName: "Elsa Ling", raterName: "Reuben Tan", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-27T12:00:00.000Z`,
-    ratings: fullRatings(4, { b17: 3 }),
-    textResponses: { t1: "Gives departments genuine autonomy while staying available when escalation is actually needed.", t2: "Inter-departmental alignment on shared initiatives could be tighter — Compliance often hears about changes late." } },
   { id: "mr-2026-14", managerName: "Ethan Lim", raterName: "Nadia Yong", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-25T12:30:00.000Z`, ratings: fullRatings(4) },
 ];
 

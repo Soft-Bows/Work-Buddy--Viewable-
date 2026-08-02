@@ -39,13 +39,6 @@ import {
 } from "./opsData";
 import { DIRECTOR_PERSONAS } from "./directorData";
 import { marketingGoalSkills } from "./marketingData";
-import {
-  COMPLIANCE_DEPT_NAME,
-  complianceDepartmentGoals,
-  complianceTeamMembers,
-  complianceAllMemberSkills,
-  complianceGoalSkills,
-} from "./complianceData";
 import type { CheckIn } from "./checkIns";
 import type { PulseResponse } from "./pulseSurvey";
 import type { ManagerEffectivenessRating } from "./managerEffectiveness";
@@ -1293,15 +1286,14 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
 
   // HOD-tagged "skills needed" per team/department goal — keyed by goal id (unique across every
   // department's goal set, whether an Objective or one of its Key Results). Kept independent of the
-  // CSV-backed department-goals save pipeline. Seeded with a few real tags on HCWM/Credit
-  // Risk/Compliance's own Objectives so the Departmental Competency Gap and Director Insights views
-  // have real data to show immediately rather than an empty "nothing tagged yet" state.
+  // CSV-backed department-goals save pipeline. Seeded with a few real tags on HCWM/Credit Risk's own
+  // Objectives so the Departmental Competency Gap and Director Insights views have real data to show
+  // immediately rather than an empty "nothing tagged yet" state.
   const [deptGoalSkills, setDeptGoalSkills] = useState<Record<string, string[]>>({
     d1: ["HR Technology & AI Fluency", "Data-Driven Decision Making"],
     d6: ["People Analytics", "HR Technology & AI Fluency"],
     ad1: ["Credit Risk Assessment", "Financial Analysis"],
     ad2: ["AI/ML in Credit Scoring", "Credit Risk Assessment"],
-    ...complianceGoalSkills,
     ...marketingGoalSkills,
   });
   const updateGoalSkills = (goalId: string, skills: string[]) => {

@@ -183,12 +183,19 @@ export function computeCompetencyGapRow(
 // department those HOD reports themselves head. Resolved generically from staffList (the full,
 // real org roster) rather than hardcoded to today's two wired personas, so it's correct for any
 // future HOD/Director without further code changes.
+// "Compliance" (an early synthetic seed department that never matched any real Staff Listing 2
+// roster) and "Group Compliance" (the real department, per Staff Listing 2) are both out of scope
+// for this dashboard — excluded here defensively so a director whose real HOD reports happen to
+// include either can never have it surface in their oversight view, even though today's two wired
+// director personas don't actually hit this case (their real reports are in other departments).
+const EXCLUDED_DEPT_NAMES = new Set(["Compliance", "Group Compliance"]);
+
 export function getRelevantDeptsForViewer(
   viewerName: string,
   ownDept: string,
   staffList: { name: string; dept: string; supervisor?: string; hod?: boolean }[],
 ): { depts: string[]; isDirector: boolean } {
-  const hodReports = staffList.filter(s => s.supervisor === viewerName && s.hod);
+  const hodReports = staffList.filter(s => s.supervisor === viewerName && s.hod && !EXCLUDED_DEPT_NAMES.has(s.dept));
   if (hodReports.length === 0) return { depts: [ownDept], isDirector: false };
   return { depts: [...new Set(hodReports.map(s => s.dept))], isDirector: true };
 }

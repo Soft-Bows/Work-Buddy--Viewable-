@@ -12,7 +12,6 @@ import type { TeamMember, RAG, SkillAttachment, DeptGoal, PersonalDevGoal } from
 import { getDefaultSkillsForRole, getRegulatorExamsForRole, classifySkill, getSSGJobFunctionUrl, isHCWMDept, getIHRPBadgesForRole, ALL_SKILLS, IHRP_SKILLS_CATALOG } from "@/lib/skillsCatalog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
-import { COMPLIANCE_DEPT_NAME, complianceTeamMembers, complianceDepartmentGoals } from "@/lib/complianceData";
 import { MARKETING_DEPT_NAME, marketingTeamMembers, marketingDepartmentGoals } from "@/lib/marketingData";
 
 // A category-grouped rendering for the "What Needs Your Attention" popups (both the manager/HOD and
@@ -1386,12 +1385,12 @@ export function HomeSection() {
     const { depts: directorDepts } = getRelevantDeptsForViewer(directorMeta.name, directorMeta.department, staffList);
     const DIR_GOALS_BY_DEPT: Record<string, DeptGoal[]> = {
       [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
-      [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals, [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
+      [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
     };
     // Every department's own full roster, combined — Team-at-a-Glance needs the WHOLE set (not
     // just the director's immediate HOD reports) so expanding a supervisor's row can still find
     // *their* reports within the same department, exactly like the normal HOD flow does.
-    const allKnownMembers = [...hcwmTeamMembers, ...opsTeamMembersAll, ...complianceTeamMembers, ...marketingTeamMembers];
+    const allKnownMembers = [...hcwmTeamMembers, ...opsTeamMembersAll, ...marketingTeamMembers];
 
     return (
       <div className="space-y-6">

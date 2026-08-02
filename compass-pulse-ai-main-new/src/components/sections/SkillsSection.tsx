@@ -10,7 +10,6 @@ import { cn, formatJobGrade } from "@/lib/utils";
 import { fetchPhillipJobsFn } from "@/lib/api/data.functions";
 import { SKILLS_BY_CATEGORY, getDefaultSkillsForRole, getRegulatorExamsForRole, getSkillCategoriesForRole, classifySkill, getSSGJobFunctionUrl, IHRP_SKILLS_CATALOG, isHCWMDept, getIHRPBadgesForRole, classifyIHRPBadge } from "@/lib/skillsCatalog";
 import { computeCompetencyGapRow, computeChallengeThemes, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
-import { COMPLIANCE_DEPT_NAME, complianceDepartmentGoals, complianceTeamMembers } from "@/lib/complianceData";
 import { MARKETING_DEPT_NAME, marketingDepartmentGoals, marketingTeamMembers } from "@/lib/marketingData";
 
 // ── Job function picker data ───────────────────────────────────────────────────
@@ -265,7 +264,7 @@ export function SkillsSection() {
   const isHodViewer = (tier === "manager" && currentUser.hod) || tier === "ops_hod" || isDirectorTier;
   const GOALS_BY_DEPT: Record<string, { id: string }[]> = {
     [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
-    [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals, [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
+    [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
   };
   const allMemberSkillsForGap = [...allTeamMemberSkills, ...opsAllTeamMemberSkills];
   const canonicalOwnDept = staffList.find(s => s.name === effectiveViewerName)?.dept ?? (opsMeta ? opsMeta.user.department : currentUser.department);
@@ -287,11 +286,11 @@ export function SkillsSection() {
   const isDirectorDesignation = isDirectorTier && !!directorMeta?.designation.toLowerCase().includes("director");
   const ORG_MEMBERS_BY_DEPT: Record<string, typeof teamMembers> = {
     [HCWM_DEPT_NAME]: teamMembers, [CREDIT_RISK_DEPT_NAME]: opsTeamMembersAll,
-    [COMPLIANCE_DEPT_NAME]: complianceTeamMembers, [MARKETING_DEPT_NAME]: marketingTeamMembers,
+    [MARKETING_DEPT_NAME]: marketingTeamMembers,
   };
   const ORG_GOALS_BY_DEPT: Record<string, DeptGoal[]> = {
     [HCWM_DEPT_NAME]: hcwmDepartmentGoals, [CREDIT_RISK_DEPT_NAME]: opsDepartmentGoals,
-    [COMPLIANCE_DEPT_NAME]: complianceDepartmentGoals, [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
+    [MARKETING_DEPT_NAME]: marketingDepartmentGoals,
   };
   const orgWideCompetencyGaps = isDirectorDesignation
     ? Object.keys(ORG_GOALS_BY_DEPT)
