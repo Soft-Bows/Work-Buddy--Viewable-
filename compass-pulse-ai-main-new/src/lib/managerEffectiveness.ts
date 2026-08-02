@@ -138,3 +138,48 @@ export function averageManagerScoresByArea(avgs: Record<string, number> | null):
 export function collectTextResponses(ratings: ManagerEffectivenessRating[], questionId: string): string[] {
   return ratings.map(r => r.textResponses?.[questionId]).filter((t): t is string => !!t?.trim());
 }
+
+// Nearest-rank percentile — deliberately simple and small-sample-honest: with only 3 data points,
+// P75 lands on the highest of the 3. That's an accurate reflection of how few managers in a roster
+// this size actually clear the anonymity threshold in any one cycle, not something to paper over
+// with a fancier interpolation that would imply a bigger benchmark population than really exists.
+export function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const rank = Math.ceil((p / 100) * sorted.length) - 1;
+  return sorted[Math.max(0, Math.min(rank, sorted.length - 1))];
+}
+
+// The top-quartile (P75) benchmark for every item and leadership area, computed across every
+// manager in the given cycle whose own rater count clears MIN_RATERS_FOR_AGGREGATE — the same
+// anonymity gate a single manager's own aggregate uses, applied at the peer-comparison level too,
+// so the benchmark itself can never leak a thinly-rated manager's score. Scales automatically as
+// more managers/raters are added — never hardcoded to today's qualifying set.
+export function peerP75(allRatings: ManagerEffectivenessRating[], cycleYear: number): { itemP75: Record<string, number>; areaP75: Record<string, number> } {
+  const byManager = new Map<string, ManagerEffectivenessRating[]>();
+  for (const r of allRatings) {
+    if (r.cycleYear !== cycleYear) continue;
+    if (!byManager.has(r.managerName)) byManager.set(r.managerName, []);
+    byManager.get(r.managerName)!.push(r);
+  }
+  const managerItemAvgs: Record<string, number>[] = [];
+  const managerAreaAvgs: Record<string, number>[] = [];
+  for (const ratings of byManager.values()) {
+    const avgs = averageManagerScores(ratings);
+    if (!avgs) continue;
+    managerItemAvgs.push(avgs);
+    const areaAvgs = averageManagerScoresByArea(avgs);
+    if (areaAvgs) managerAreaAvgs.push(areaAvgs);
+  }
+  const itemP75: Record<string, number> = {};
+  for (const b of MANAGER_BEHAVIORS) {
+    const vals = managerItemAvgs.map(a => a[b.id]).filter((v): v is number => v !== undefined);
+    if (vals.length) itemP75[b.id] = percentile(vals, 75);
+  }
+  const areaP75: Record<string, number> = {};
+  for (const area of LEADERSHIP_AREAS) {
+    const vals = managerAreaAvgs.map(a => a[area]).filter((v): v is number => v !== undefined);
+    if (vals.length) areaP75[area] = percentile(vals, 75);
+  }
+  return { itemP75, areaP75 };
+}

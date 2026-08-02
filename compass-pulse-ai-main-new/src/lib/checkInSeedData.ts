@@ -59,10 +59,21 @@ export const seedCheckIns: CheckIn[] = [
 const CURRENT_QUARTER = currentQuarterLabel();
 const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
 
+// "YYYY-Q#" label for the quarter before CURRENT_QUARTER — a second, earlier quarter's worth of
+// responses so the Year-to-date stacked view actually has more than one quarter to stack (a single
+// quarter's data "stacked" is just that quarter, which doesn't demonstrate the feature).
+function priorQuarterLabel(current: string): string {
+  const [y, q] = current.split("-Q").map(Number);
+  return q === 1 ? `${y - 1}-Q4` : `${y}-Q${q - 1}`;
+}
+const PRIOR_QUARTER = priorQuarterLabel(CURRENT_QUARTER);
+
 // Current quarter's pulse — 4 HCWM + 3 Credit Risk + 3 Marketing responses, all above the
 // 3-response anonymity threshold so every team's aggregate is visible without the user submitting
 // anything first. Submitted a few weeks back (not "just now") so the New Insights badge reads as
-// already-settled rather than perpetually fresh in the demo.
+// already-settled rather than perpetually fresh in the demo. A prior quarter's worth of HCWM/Credit
+// Risk responses is also seeded (same respondents, only if PRIOR_QUARTER still falls within the
+// current calendar year) so the Year-to-date stacked view has more than a single quarter to combine.
 export const seedPulseResponses: PulseResponse[] = [
   { id: "pr-seed-1", respondentName: "Belle Lim", department: "Human Capital & Workplace Management", quarter: CURRENT_QUARTER, submittedAt: daysAgo(25), ratings: { workload: 3, clarity: 4, support: 4, growth: 4 } },
   { id: "pr-seed-2", respondentName: "Rhea Yee", department: "Human Capital & Workplace Management", quarter: CURRENT_QUARTER, submittedAt: daysAgo(24), ratings: { workload: 3, clarity: 4, support: 5, growth: 3 } },
@@ -74,6 +85,17 @@ export const seedPulseResponses: PulseResponse[] = [
   { id: "pr-seed-8", respondentName: "Michelle Sylvia", department: "Marketing Communications", quarter: CURRENT_QUARTER, submittedAt: daysAgo(18), ratings: { workload: 3, clarity: 4, support: 4, growth: 4 } },
   { id: "pr-seed-9", respondentName: "Rave Tan", department: "Marketing Communications", quarter: CURRENT_QUARTER, submittedAt: daysAgo(17), ratings: { workload: 3, clarity: 3, support: 4, growth: 3 } },
   { id: "pr-seed-10", respondentName: "Christabel Lin", department: "Marketing Communications", quarter: CURRENT_QUARTER, submittedAt: daysAgo(16), ratings: { workload: 4, clarity: 3, support: 5, growth: 5 } },
+  // Prior quarter — same HCWM/Credit Risk respondents, slightly different answers (a real team's
+  // pulse moves quarter to quarter, it doesn't repeat identically).
+  ...(PRIOR_QUARTER.startsWith(`${new Date().getFullYear()}-`) ? [
+    { id: "pr-seed-11", respondentName: "Belle Lim", department: "Human Capital & Workplace Management", quarter: PRIOR_QUARTER, submittedAt: daysAgo(115), ratings: { workload: 3, clarity: 3, support: 4, growth: 3 } },
+    { id: "pr-seed-12", respondentName: "Rhea Yee", department: "Human Capital & Workplace Management", quarter: PRIOR_QUARTER, submittedAt: daysAgo(114), ratings: { workload: 2, clarity: 3, support: 4, growth: 3 } },
+    { id: "pr-seed-13", respondentName: "Bryan Goh", department: "Human Capital & Workplace Management", quarter: PRIOR_QUARTER, submittedAt: daysAgo(113), ratings: { workload: 3, clarity: 3, support: 3, growth: 3 } },
+    { id: "pr-seed-14", respondentName: "Anabelle Tan", department: "Human Capital & Workplace Management", quarter: PRIOR_QUARTER, submittedAt: daysAgo(112), ratings: { workload: 2, clarity: 4, support: 4, growth: 3 } },
+    { id: "pr-seed-15", respondentName: "Diana Chang", department: "Credit Risk Management (F.K.A. Credit Admin)", quarter: PRIOR_QUARTER, submittedAt: daysAgo(111), ratings: { workload: 3, clarity: 3, support: 4, growth: 3 } },
+    { id: "pr-seed-16", respondentName: "Elton Phua", department: "Credit Risk Management (F.K.A. Credit Admin)", quarter: PRIOR_QUARTER, submittedAt: daysAgo(110), ratings: { workload: 3, clarity: 4, support: 4, growth: 3 } },
+    { id: "pr-seed-17", respondentName: "Bella Lim", department: "Credit Risk Management (F.K.A. Credit Admin)", quarter: PRIOR_QUARTER, submittedAt: daysAgo(109), ratings: { workload: 3, clarity: 3, support: 4, growth: 4 } },
+  ] : []),
 ];
 
 // The 2026 cycle opened Jun 1 and ran through Jul 31 — already concluded as of "now," so its full
@@ -108,7 +130,7 @@ export const seedManagerRatings: ManagerEffectivenessRating[] = [
   { id: "mr-2025-2", managerName: "Sarah Chen", raterName: "Bryan Goh", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-06-12T09:00:00.000Z`, ratings: fullRatings(3, { b17: 2 }) },
   { id: "mr-2025-3", managerName: "Sarah Chen", raterName: "Marcus Teo", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-06-20T09:00:00.000Z`, ratings: fullRatings(4, { b15: 2 }) },
 
-  // ── Nadia Yong (HOD, Credit Risk) — 5 raters this cycle.
+  // ── Nadia Yong (HOD, Credit Risk) — 7 raters this cycle (of her 9 real direct reports).
   { id: "mr-2026-5", managerName: "Nadia Yong", raterName: "Victor Lai", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-05T10:00:00.000Z`,
     ratings: fullRatings(4, { b20: 3, b21: 3 }),
     textResponses: { t1: "Nadia is decisive under pressure and backs her team publicly.", t2: "Workload prioritisation across the team could be clearer during peak periods." } },
@@ -116,9 +138,14 @@ export const seedManagerRatings: ManagerEffectivenessRating[] = [
   { id: "mr-2026-7", managerName: "Nadia Yong", raterName: "Elton Phua", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-22T10:00:00.000Z`, ratings: fullRatings(4) },
   { id: "mr-2026-8", managerName: "Nadia Yong", raterName: "Delia Wong", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-07-01T10:00:00.000Z`, ratings: fullRatings(4, { b21: 3 }) },
   { id: "mr-2026-9", managerName: "Nadia Yong", raterName: "Bella Lim", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-07-09T10:00:00.000Z`, ratings: fullRatings(4) },
+  { id: "mr-2026-15", managerName: "Nadia Yong", raterName: "Brianna Lee", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-07-14T10:00:00.000Z`,
+    ratings: fullRatings(4, { b20: 3 }),
+    textResponses: { t1: "Always makes time to explain the reasoning behind a decision, not just the decision itself.", t2: "Could set clearer expectations upfront on turnaround-time targets for new team members." } },
+  { id: "mr-2026-16", managerName: "Nadia Yong", raterName: "Jasmine Tan", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-07-18T10:00:00.000Z`, ratings: fullRatings(4) },
   { id: "mr-2025-4", managerName: "Nadia Yong", raterName: "Victor Lai", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-06-06T10:00:00.000Z`, ratings: fullRatings(3, { b20: 2 }) },
   { id: "mr-2025-5", managerName: "Nadia Yong", raterName: "Diana Chang", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-06-14T10:00:00.000Z`, ratings: fullRatings(3) },
   { id: "mr-2025-6", managerName: "Nadia Yong", raterName: "Elton Phua", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-06-23T10:00:00.000Z`, ratings: fullRatings(4, { b21: 2 }) },
+  { id: "mr-2025-7", managerName: "Nadia Yong", raterName: "Delia Wong", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-07-02T10:00:00.000Z`, ratings: fullRatings(3, { b21: 2 }) },
 
   // ── Caleb Ong (Manager, non-HOD team lead, Workplace Management) — only 2 real direct reports in
   // the live roster, so this genuinely sits below the 3-rater anonymity threshold. Left that way
@@ -127,10 +154,15 @@ export const seedManagerRatings: ManagerEffectivenessRating[] = [
   { id: "mr-2026-10", managerName: "Caleb Ong", raterName: "Diana Eng", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-09T11:00:00.000Z`, ratings: fullRatings(4) },
   { id: "mr-2026-11", managerName: "Caleb Ong", raterName: "Ethan Lam", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-17T11:00:00.000Z`, ratings: fullRatings(4, { b6: 3 }) },
 
-  // ── Directors — each real manager of only 1-2 department HODs, so both sit below threshold too;
-  // same honest small-span-of-control demonstration as Caleb Ong above.
+  // ── Directors — Elsa Ling has 3 real HOD reports per users.csv (Sarah Chen/HCWM, Michelle
+  // Sylvia/Marketing, Reuben Tan/Compliance), so with all 3 rating her she genuinely clears the
+  // anonymity threshold. Ethan Lim has only 1 real HOD report (Nadia Yong), so he honestly stays
+  // below it — the same small-span-of-control demonstration as Caleb Ong above, not withheld data.
   { id: "mr-2026-12", managerName: "Elsa Ling", raterName: "Sarah Chen", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-25T12:00:00.000Z`, ratings: fullRatings(4) },
   { id: "mr-2026-13", managerName: "Elsa Ling", raterName: "Michelle Sylvia", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-26T12:00:00.000Z`, ratings: fullRatings(4, { b3: 3 }) },
+  { id: "mr-2026-17", managerName: "Elsa Ling", raterName: "Reuben Tan", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-27T12:00:00.000Z`,
+    ratings: fullRatings(4, { b17: 3 }),
+    textResponses: { t1: "Gives departments genuine autonomy while staying available when escalation is actually needed.", t2: "Inter-departmental alignment on shared initiatives could be tighter — Compliance often hears about changes late." } },
   { id: "mr-2026-14", managerName: "Ethan Lim", raterName: "Nadia Yong", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-25T12:30:00.000Z`, ratings: fullRatings(4) },
 ];
 

@@ -81,3 +81,10 @@ export function aggregateFirstShownDate(responses: PulseResponse[]): string | un
   const sorted = [...responses].sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
   return sorted[MIN_RESPONSES_FOR_AGGREGATE - 1]?.submittedAt;
 }
+
+// Every response for a department across every quarter of a given calendar year — feeds the
+// "year-to-date" stacked view (Team Pulse across the whole year so far, alongside the concluded
+// Manager Survey cycle) rather than just the current quarter in isolation.
+export function ytdResponses(responses: PulseResponse[], department: string, year: number): PulseResponse[] {
+  return responses.filter(r => r.department === department && r.quarter.startsWith(`${year}-`));
+}
