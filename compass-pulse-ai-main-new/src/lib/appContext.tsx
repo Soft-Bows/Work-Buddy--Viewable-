@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { workingDaysSince, effectiveKrScoreDueDate, newJoinerGoalDeadlinePassed, keyResultsOwnedBy, getJanuaryDeadline, ownerNames, isAmongOwners, hasPendingAck, currentQuarterLabel } from "./utils";
-import type { Tier, TeamMember, RAG, PersonalDevGoal, Activity, Goal, SkillAttachment, GoalEditProposal, DeptGoal, KeyResult } from "./mockData";
+import type { Tier, TeamMember, RAG, PersonalDevGoal, Activity, Goal, SkillAttachment, GoalEditProposal, DeptGoal, KeyResult, DirectorPerformanceGoal } from "./mockData";
 import {
   currentUser as _currentUser,
   departmentGoals as _departmentGoals,
@@ -188,6 +188,9 @@ interface AppCtx {
   teamDevGoalsById: Record<string, PersonalDevGoal[]>;
   upsertTeamDevGoal: (memberId: string, goal: PersonalDevGoal) => void;
   deleteTeamDevGoal: (memberId: string, id: string) => void;
+  directorPerformanceGoalsById: Record<string, DirectorPerformanceGoal[]>;
+  upsertDirectorPerformanceGoal: (personaId: string, goal: DirectorPerformanceGoal) => void;
+  deleteDirectorPerformanceGoal: (personaId: string, id: string) => void;
   updateGoalRag: (memberId: string, goalId: string, quarter: "Q1" | "Q2" | "Q3" | "Q4", rag: RAG) => void;
   addGoalRemark: (memberId: string, goalId: string, author: string, text: string) => void;
   modifyGoal: (memberId: string, goalId: string, changes: Partial<{ title: string; description: string; metric: string; linkedDept: string; weightage: number }>, andApprove: boolean) => void;
@@ -421,6 +424,19 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
     });
   const deleteTeamDevGoal = (memberId: string, id: string) =>
     setTeamDevGoalsById(prev => ({ ...prev, [memberId]: (prev[memberId] ?? []).filter(g => g.id !== id) }));
+
+  // A director's own performance goals — see mockData.ts's DirectorPerformanceGoal comment. Same
+  // per-persona keyed-map pattern as teamDevGoalsById above, session-only (no localStorage needed
+  // for what's currently a single-director-persona-at-a-time demo state).
+  const [directorPerformanceGoalsById, setDirectorPerformanceGoalsById] = useState<Record<string, DirectorPerformanceGoal[]>>({});
+  const upsertDirectorPerformanceGoal = (personaId: string, goal: DirectorPerformanceGoal) =>
+    setDirectorPerformanceGoalsById(prev => {
+      const existing = prev[personaId] ?? [];
+      const next = existing.some(g => g.id === goal.id) ? existing.map(g => g.id === goal.id ? goal : g) : [...existing, goal];
+      return { ...prev, [personaId]: next };
+    });
+  const deleteDirectorPerformanceGoal = (personaId: string, id: string) =>
+    setDirectorPerformanceGoalsById(prev => ({ ...prev, [personaId]: (prev[personaId] ?? []).filter(g => g.id !== id) }));
 
   // Ops persona dev goals state (one per tier, mutated independently)
   const [opsHodDevGoalsState, setOpsHodDevGoals] = useState<PersonalDevGoal[]>(_opsHodDevGoals);
@@ -2143,6 +2159,9 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
       teamDevGoalsById: { ...teamDevGoalsById, u22: opsMgr1DevGoalsState, u23: opsMgr2DevGoalsState },
       upsertTeamDevGoal,
       deleteTeamDevGoal,
+      directorPerformanceGoalsById,
+      upsertDirectorPerformanceGoal,
+      deleteDirectorPerformanceGoal,
       updateGoalRag,
       addGoalRemark,
       modifyGoal,

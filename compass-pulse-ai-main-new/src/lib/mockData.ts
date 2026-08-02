@@ -17,6 +17,22 @@ export interface PersonalDevGoal {
   encouragementSent?: boolean; // a supervisor's "Send encouragement note" is one-shot per goal
 }
 
+// A director's own lightweight performance goal, deliberately NOT a duplicate OKR system — per
+// 2026 executive-cascading research (tie an executive's own goals directly to one enterprise Key
+// Result rather than mirroring it), each goal links to exactly one existing OKR item org-wide
+// (either a 2026 Philly Group Key Result, or any department Objective/Key Result), never a
+// standalone target of its own. linkedOkrId is an id from the same flattened id-space
+// flattenOkrOptions() already uses (a DeptGoal id, a KeyResult id, or a Philly Group Goal/KR id —
+// all disjoint namespaces, so one field is enough); linkedOkrLabel is the resolved display text at
+// the time it was linked, cached so the row doesn't need to re-search every OKR list on every render.
+export interface DirectorPerformanceGoal {
+  id: string;
+  title: string;
+  linkedOkrId?: string;
+  linkedOkrLabel?: string;
+  status: "on-track" | "at-risk" | "done";
+}
+
 export interface Goal {
   id: string;
   title: string;

@@ -3,7 +3,9 @@ import { Card, SectionTitle, MonthPicker, formatDueDate, SkillAttachmentModal, R
 import { useApp } from "@/lib/appContext";
 import type { DevGoalRecommendation, PerfGoalRecommendation } from "@/lib/appContext";
 import { getAiProvider } from "@/lib/aiService";
-import type { RAG, PersonalDevGoal, SkillAttachment, KeyResult, DeptGoal } from "@/lib/mockData";
+import type { RAG, PersonalDevGoal, SkillAttachment, KeyResult, DeptGoal, DirectorPerformanceGoal } from "@/lib/mockData";
+import { HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
+import { MARKETING_DEPT_NAME, marketingDepartmentGoals } from "@/lib/marketingData";
 import {
   Check, Lock, MessageSquare, Bell, Info, AlertCircle, Clock,
   Pencil, Trash2, Plus, Sparkles, X, Loader2, Circle, CheckCircle2, Target, GraduationCap,
@@ -2705,6 +2707,124 @@ function ManagerGoalsView() {
 // Key Result owned under a real department Objective, and a director owns no department of their
 // own to host one under — their real performance content is the departments they oversee, on the
 // Team OKRs page, not a freestanding personal KR set.
+// A director's own performance goals — each links directly to one existing OKR item org-wide (a
+// 2026 Philly Group Key Result, or any department Objective/Key Result) rather than duplicating one,
+// per the executive-cascading research finding (tie an executive's own goal straight to one
+// enterprise Key Result, keep the cascade shallow). Kept to one compact row per goal — title, a
+// single OKR-picker select, and a status chip — so this stays intuitive rather than a second OKR
+// editor bolted onto My Goals.
+function DirectorPerformanceGoalsSection({ personaId }: { personaId: string }) {
+  const {
+    directorPerformanceGoalsById, upsertDirectorPerformanceGoal, deleteDirectorPerformanceGoal,
+    hcwmDepartmentGoals, opsDepartmentGoals, phillyGroupGoals,
+  } = useApp();
+  const [adding, setAdding] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftOkrId, setDraftOkrId] = useState("");
+
+  const goals = directorPerformanceGoalsById[personaId] ?? [];
+
+  const phillyOptions = phillyGroupGoals.flatMap(pg => [
+    { id: pg.id, label: pg.title },
+    ...pg.keyResults.map(k => ({ id: k.id, label: `↳ ${k.title}` })),
+  ]);
+  const deptOptionGroups: { label: string; options: { id: string; label: string }[] }[] = [
+    { label: "2026 Philly Group OKRs", options: phillyOptions },
+    { label: MARKETING_DEPT_NAME, options: flattenOkrOptions(marketingDepartmentGoals) },
+    { label: HCWM_DEPT_NAME, options: flattenOkrOptions(hcwmDepartmentGoals) },
+    { label: CREDIT_RISK_DEPT_NAME, options: flattenOkrOptions(opsDepartmentGoals) },
+  ];
+  const allOptions = deptOptionGroups.flatMap(g => g.options);
+  const labelFor = (id?: string) => allOptions.find(o => o.id === id)?.label;
+
+  const STATUS_STYLE: Record<DirectorPerformanceGoal["status"], string> = {
+    "on-track": "bg-rag-green/10 text-rag-green border-rag-green/30",
+    "at-risk": "bg-rag-amber/10 text-amber-foreground border-rag-amber/30",
+    "done": "bg-muted text-muted-foreground border-border",
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2">
+          <div className="size-1.5 rounded-full bg-primary shrink-0" />
+          <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">My Performance Goals ({goals.length})</div>
+        </div>
+        {!adding && (
+          <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-md bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 transition-colors">
+            <Plus className="size-3" /> Add a Goal
+          </button>
+        )}
+      </div>
+      {adding && (
+        <div className="mb-3 rounded-xl border border-border p-3 space-y-2 bg-muted/20">
+          <input
+            value={draftTitle} onChange={e => setDraftTitle(e.target.value)} placeholder="Goal title"
+            className="w-full text-sm rounded-md border border-input bg-background px-2.5 py-1.5"
+          />
+          <select value={draftOkrId} onChange={e => setDraftOkrId(e.target.value)} className="w-full text-xs rounded-md border border-input bg-background px-2.5 py-1.5">
+            <option value="">Link to an OKR (optional)</option>
+            {deptOptionGroups.map(g => (
+              <optgroup key={g.label} label={g.label}>
+                {g.options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+              </optgroup>
+            ))}
+          </select>
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => {
+                if (!draftTitle.trim()) { toast.error("Title is required"); return; }
+                upsertDirectorPerformanceGoal(personaId, {
+                  id: `dpg-${Date.now()}`, title: draftTitle.trim(),
+                  linkedOkrId: draftOkrId || undefined, linkedOkrLabel: draftOkrId ? labelFor(draftOkrId) : undefined,
+                  status: "on-track",
+                });
+                setDraftTitle(""); setDraftOkrId(""); setAdding(false);
+              }}
+              className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium"
+            >
+              Add
+            </button>
+            <button onClick={() => { setAdding(false); setDraftTitle(""); setDraftOkrId(""); }} className="px-3 py-1.5 rounded-md border border-border text-xs">Cancel</button>
+          </div>
+        </div>
+      )}
+      {goals.length === 0 && !adding ? (
+        <div className="rounded-xl border-2 border-dashed border-border px-6 py-8 text-center text-sm text-muted-foreground">
+          No performance goals set yet — add one and link it to any Philly Group or department OKR.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {goals.map(g => (
+            <div key={g.id} className="rounded-lg border border-border bg-card p-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium">{g.title}</div>
+                {g.linkedOkrLabel && (
+                  <div className="text-[10px] text-muted-foreground mt-0.5 truncate">🔗 {g.linkedOkrLabel}</div>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <select
+                  value={g.status}
+                  onChange={e => upsertDirectorPerformanceGoal(personaId, { ...g, status: e.target.value as DirectorPerformanceGoal["status"] })}
+                  className={cn("text-[10px] rounded-full border px-2 py-1 font-medium", STATUS_STYLE[g.status])}
+                >
+                  <option value="on-track">On track</option>
+                  <option value="at-risk">At risk</option>
+                  <option value="done">Done</option>
+                </select>
+                <button onClick={() => deleteDirectorPerformanceGoal(personaId, g.id)} className="size-6 rounded grid place-items-center text-muted-foreground hover:text-rag-red hover:bg-muted transition-colors">
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DirectorGoalsView() {
   const { directorMeta, teamDevGoalsById, upsertTeamDevGoal, deleteTeamDevGoal } = useApp();
   const [addingGoal, setAddingGoal] = useState(false);
@@ -2716,9 +2836,10 @@ function DirectorGoalsView() {
       <div className="mb-2">
         <h2 className="font-display text-2xl">My Goals</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Your own development goals — free-form, since a director's real performance content is the departments you oversee on the Team OKRs page, not a personal Key Result set.
+          Your own performance goals — each links directly to a Philly Group or department OKR — plus free-form development goals.
         </p>
       </div>
+      <DirectorPerformanceGoalsSection personaId={directorMeta.personaId} />
       <div>
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2">
