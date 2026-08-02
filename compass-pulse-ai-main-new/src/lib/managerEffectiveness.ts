@@ -83,11 +83,18 @@ export interface ManagerEffectivenessRating {
 // single rater's score, and never at all below this count.
 export const MIN_RATERS_FOR_AGGREGATE = 3;
 
-// Annual — this cycle opens Aug 1, 2026 and runs 2 months, closing at the end of September, so it's
-// open now rather than waiting for the usual second-half-of-year window.
+// Annual — this cycle opened Jun 1, 2026 and ran 2 months, closing at the end of July — already
+// concluded as of "now," so the full 2026 cycle's insights (and the AI action plan built from them)
+// are ready to view immediately rather than waiting for a window that hasn't happened yet.
 export function isManagerSurveyWindowOpen(reference: Date = new Date()): boolean {
-  const m = reference.getMonth(); // 0-indexed: Aug = 7, Sep = 8
-  return m === 7 || m === 8;
+  const m = reference.getMonth(); // 0-indexed: Jun = 5, Jul = 6
+  return m === 5 || m === 6;
+}
+
+// True once this year's window has already closed (past July) — distinct from "not yet open"
+// (before June), so the UI can say "closed for this year" instead of a misleading "opens soon."
+export function hasManagerSurveyWindowClosedThisYear(reference: Date = new Date()): boolean {
+  return reference.getMonth() > 6;
 }
 
 export function currentManagerSurveyCycleYear(reference: Date = new Date()): number {

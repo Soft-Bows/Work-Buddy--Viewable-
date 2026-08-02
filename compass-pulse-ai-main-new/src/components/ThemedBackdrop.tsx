@@ -244,50 +244,101 @@ function MalaysiaScene() {
 function SingaporeScene() {
   return (
     <Scene>
-      {/* "Arrived at Gardens by the Bay at night" — a deep indigo/navy sky, no daytime pastels;
-          SkyLayer's white cloud-cluster blurs and glow read as moonlit haze rather than daytime
-          cloud, the right backdrop for the nightly Garden Rhapsody light show at Supertree Grove. */}
-      <SkyLayer sky="linear-gradient(180deg, #0B1230 0%, #16204A 32%, #223B72 66%, #2E4E86 100%)" glow="#9FC4FF" />
-      {/* Supertree Grove, illuminated for Garden Rhapsody — 5 Supertrees of varying height, each a
-          tapered trunk under a lit canopy, in the mixed jewel-tone palette the real light show
-          actually cycles through (magenta, teal, amber, violet, cyan), plus the OCBC Skyway canopy
-          walkway linking two of the tallest trees. Replaces the earlier boxy Changi Airport
-          buildings, which read as plain rectangles rather than a real landmark. */}
-      <svg className={`absolute bottom-0 inset-x-0 w-full h-[48vh] min-h-[270px] ${LANDMARK_OPACITY}`} viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
-        <path d="M0 178 Q110 158 220 170 T400 160 V220 H0 Z" fill="#0F1D18" />
-        {[
-          { x: 55, h: 78, r: 24, c: "#E85FA0", glow: "#FFD1EA" },
-          { x: 128, h: 112, r: 28, c: "#3FC7C2", glow: "#C9F7F2" },
-          { x: 212, h: 150, r: 34, c: "#F0B23C", glow: "#FCE3A0" },
-          { x: 296, h: 118, r: 28, c: "#9A6FD6", glow: "#E4D3FA" },
-          { x: 358, h: 84, r: 22, c: "#4FA8E8", glow: "#CDE7FA" },
-        ].map((t, i) => {
+      {/* "Arrived at Gardens by the Bay at night" — a deep indigo sky, brighter and more violet than
+          the first pass so the illuminated grove has something rich to glow against, still clearly
+          night (no daytime pastels). SkyLayer's white cloud-cluster blurs and glow read as moonlit/
+          light-show haze, the right backdrop for the nightly Garden Rhapsody show. */}
+      <SkyLayer sky="linear-gradient(180deg, #131A3D 0%, #202B5E 28%, #38468C 60%, #52619E 100%)" glow="#C99FF0" />
+      {/* Supertree Grove, illuminated for Garden Rhapsody — 7 Supertrees (up from 5, a fuller grove),
+          each with a layered canopy (base colour + inner glow core + scattered sparkle lights, the
+          same "lit window" technique used for Changi/MBS) plus a soft ground-uplight pool at its
+          base, so the grove reads as genuinely glowing rather than a flat coloured block. A glass
+          conservatory dome (standing in for the Flower Dome/Cloud Forest) sits low in the background
+          for extra depth. A custom, brighter-than-usual opacity override (most other scenes stay at
+          the shared LANDMARK_OPACITY) sells the "illuminated at night" effect without touching any
+          other country's backdrop. */}
+      <svg className="absolute bottom-0 inset-x-0 w-full h-[48vh] min-h-[270px] opacity-[0.68] dark:opacity-[0.42]" viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
+        <defs>
+          <radialGradient id="domeGlow" cx="50%" cy="35%" r="65%">
+            <stop offset="0%" stopColor="#FFE9B0" stopOpacity="0.5" />
+            <stop offset="100%" stopColor="#FFE9B0" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <path d="M0 178 Q110 158 220 170 T400 160 V220 H0 Z" fill="#101C2E" />
+        {/* Flower Dome / Cloud Forest — a low glass conservatory silhouette, softly lit from within */}
+        <path d="M20 178 Q20 128 90 122 Q160 128 160 178 Z" fill="#243252" opacity="0.85" />
+        <path d="M20 178 Q20 128 90 122 Q160 128 160 178 Z" fill="url(#domeGlow)" />
+        {[38, 56, 74, 92, 110, 128, 146].map(x => (
+          <line key={x} x1={x} y1="178" x2="90" y2="124" stroke="#3A4B72" strokeWidth="1" opacity="0.6" />
+        ))}
+        {[{ x: 46, h: 92 }, { x: 118, h: 128 }, { x: 178, h: 156 }, { x: 232, h: 176 }, { x: 286, h: 144 }, { x: 336, h: 116 }, { x: 378, h: 86 }].map((t, i) => {
+          const c = ["#E85FA0", "#3FC7C2", "#F0B23C", "#B85CE0", "#F0B23C", "#3FC7C2", "#4FA8E8"][i];
+          const glow = ["#FFD1EA", "#C9F7F2", "#FCE3A0", "#E9CFFA", "#FCE3A0", "#C9F7F2", "#CDE7FA"][i];
+          const r = 18 + t.h * 0.13;
           const baseY = 192, topY = baseY - t.h;
+          const sparkles = [
+            [-0.5, -0.1], [0.4, -0.35], [-0.2, -0.5], [0.55, 0.1], [-0.6, 0.15], [0.15, -0.15],
+          ];
           return (
-            <g key={i}>
-              <path d={`M${t.x - 5} ${baseY} L${t.x - 8} ${topY} L${t.x + 8} ${topY} L${t.x + 5} ${baseY} Z`} fill="#3A2C1E" />
-              <ellipse cx={t.x} cy={topY} rx={t.r} ry={t.r * 0.45} fill={t.c} opacity="0.9" />
-              <ellipse cx={t.x} cy={topY - 3} rx={t.r * 0.65} ry={t.r * 0.28} fill={t.glow} opacity="0.65" />
+            <g key={t.x}>
+              {/* Ground uplight — a soft wide glow pool at the base, selling "lit from below" */}
+              <ellipse cx={t.x} cy={baseY + 1} rx={r * 0.9} ry="4" fill={c} opacity="0.35" />
+              <path d={`M${t.x - 4} ${baseY} L${t.x - 7} ${topY} L${t.x + 7} ${topY} L${t.x + 4} ${baseY} Z`} fill="#2E2418" />
+              {/* Canopy: base disc, brighter inner core, then scattered sparkle points for texture */}
+              <ellipse cx={t.x} cy={topY} rx={r} ry={r * 0.44} fill={c} opacity="0.92" />
+              <ellipse cx={t.x} cy={topY - 2} rx={r * 0.62} ry={r * 0.26} fill={glow} opacity="0.75" />
+              {sparkles.map(([dx, dy], si) => (
+                <circle key={si} cx={t.x + dx * r} cy={topY + dy * r * 0.4} r="1.4" fill="#FFFDF0" opacity={0.7 + (si % 2) * 0.2} />
+              ))}
             </g>
           );
         })}
-        {/* OCBC Skyway — a slung walkway between the two tallest trees, with small hanging lights */}
-        <path d="M212 122 Q254 132 296 104" stroke="#2A3B5C" strokeWidth="4" fill="none" />
-        {[228, 244, 260, 276].map(x => (
-          <circle key={x} cx={x} cy={125 - (x - 212) * 0.2} r="1.6" fill="#FFE9B0" opacity="0.9" />
+        {/* OCBC Skyway — a slung walkway between two of the tallest trees, with hanging lights */}
+        <path d="M178 118 Q205 130 232 108" stroke="#3A4B72" strokeWidth="4" fill="none" />
+        {[190, 202, 214, 226].map(x => (
+          <circle key={x} cx={x} cy={122 - (x - 178) * 0.2} r="1.6" fill="#FFE9B0" opacity="0.9" />
         ))}
-        {/* Flower bed along the walkway, mixed colours standing in for whichever seasonal Flower
-            Dome display is running (Balinese-orchid Orchid Extravaganza in early Aug 2026, giving
-            way to the Egypt-themed Lilytopia) — swap the palette here when the season changes. */}
-        {[40, 66, 92, 300, 326, 352, 378].map((x, i) => (
-          <g key={x}>
-            {[0, 72, 144, 216, 288].map(deg => (
-              <ellipse key={deg} cx={x} cy="186" rx="3.2" ry="7" fill={["#E8A0C4", "#F3D26A", "#B98AE8", "#F0A83C"][i % 4]} transform={`rotate(${deg} ${x} 186)`} opacity="0.85" />
-            ))}
-            <circle cx={x} cy="186" r="2.2" fill="#FFF3D0" />
-          </g>
-        ))}
-        <path d="M0 195 Q120 180 240 190 T400 184 V220 H0 Z" fill="#0A1712" />
+        {/* A wide, varied flower field along the base — three distinct bloom types (five-petal
+            blossoms, clustered hydrangea-style pom-poms, tall flower spikes) rather than one repeated
+            shape, standing in for whichever seasonal Flower Dome display is running (Balinese-orchid
+            Orchid Extravaganza into early Aug 2026, giving way to the Egypt-themed Lilytopia) — swap
+            the palette here when the season changes. */}
+        {[24, 48, 72, 96, 150, 174, 260, 284, 308, 332, 356, 380].map((x, i) => {
+          const kind = i % 3;
+          const petalColors = ["#E8A0C4", "#B98AE8", "#F0A83C", "#F3D26A"];
+          const c = petalColors[i % petalColors.length];
+          if (kind === 0) {
+            // Five-petal blossom
+            return (
+              <g key={x}>
+                {[0, 72, 144, 216, 288].map(deg => (
+                  <ellipse key={deg} cx={x} cy="187" rx="3" ry="6.5" fill={c} transform={`rotate(${deg} ${x} 187)`} opacity="0.9" />
+                ))}
+                <circle cx={x} cy="187" r="2" fill="#FFF3D0" />
+              </g>
+            );
+          }
+          if (kind === 1) {
+            // Clustered pom-pom bloom (hydrangea-style)
+            return (
+              <g key={x}>
+                {[[-3, -2], [3, -2], [0, -5], [-2, 1], [2, 1], [0, -1]].map(([dx, dy], j) => (
+                  <circle key={j} cx={x + dx} cy={188 + dy} r="2.6" fill={c} opacity="0.88" />
+                ))}
+              </g>
+            );
+          }
+          // Tall flower spike
+          return (
+            <g key={x}>
+              <line x1={x} y1="190" x2={x} y2="176" stroke="#3E6B4A" strokeWidth="1.5" />
+              {[178, 181, 184, 187].map((y, j) => (
+                <circle key={j} cx={x + (j % 2 === 0 ? -1.5 : 1.5)} cy={y} r="2" fill={c} opacity="0.9" />
+              ))}
+            </g>
+          );
+        })}
+        <path d="M0 195 Q120 180 240 190 T400 184 V220 H0 Z" fill="#0C1622" />
       </svg>
       {/* Vanda Miss Joaquim orchid, Singapore's national flower — bottom-right */}
       <svg className={`absolute bottom-8 right-[6%] ${FOREGROUND_OPACITY}`} width="64" height="76" viewBox="0 0 60 70" fill="none">

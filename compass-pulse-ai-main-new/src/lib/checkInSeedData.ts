@@ -76,10 +76,11 @@ export const seedPulseResponses: PulseResponse[] = [
   { id: "pr-seed-10", respondentName: "Christabel Lin", department: "Marketing Communications", quarter: CURRENT_QUARTER, submittedAt: daysAgo(16), ratings: { workload: 4, clarity: 3, support: 5, growth: 5 } },
 ];
 
-// The 2026 cycle opens Aug 1 and is live now — every rating below is dated within the open window
-// so the demo reflects a real, currently-submittable state rather than a future or past cycle. A
-// 2025 cycle is also seeded for Sarah Chen and Nadia Yong (the two department HODs) so their
-// year-over-year trend has something real to compare against once the 2026 aggregate exists.
+// The 2026 cycle opened Jun 1 and ran through Jul 31 — already concluded as of "now," so its full
+// aggregate (and the AI action plan built from it) is ready to view immediately rather than showing
+// a still-running or not-yet-started cycle. A 2025 cycle is also seeded for Sarah Chen and Nadia
+// Yong (the two department HODs) so their year-over-year trend has something real to compare
+// against once the 2026 aggregate exists.
 const CYCLE_YEAR = new Date().getFullYear();
 
 // Builds a full 30-item ratings object from a baseline score, with specific items overridden for
@@ -93,44 +94,44 @@ export const seedManagerRatings: ManagerEffectivenessRating[] = [
   // ── Sarah Chen (HOD, HCWM) — 4 raters this cycle, comfortably above the anonymity threshold.
   // Strong on Ethics/Integrity, a real dip on work-life harmony (b15) and cross-dept alignment (b17)
   // — exactly the kind of below-3.5 signal the AI action plan is meant to surface.
-  { id: "mr-2026-1", managerName: "Sarah Chen", raterName: "Anabelle Tan", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-08-04T09:00:00.000Z`,
+  { id: "mr-2026-1", managerName: "Sarah Chen", raterName: "Anabelle Tan", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-04T09:00:00.000Z`,
     ratings: fullRatings(4, { b15: 2, b17: 3, b26: 5, b27: 5 }),
     textResponses: { t1: "Sarah is excellent at translating strategy into clear team goals — keep involving us early when priorities shift.", t2: "Work-life harmony during quarter-end crunch could be better protected for the team." } },
-  { id: "mr-2026-2", managerName: "Sarah Chen", raterName: "Bryan Goh", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-08-05T09:00:00.000Z`,
+  { id: "mr-2026-2", managerName: "Sarah Chen", raterName: "Bryan Goh", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-11T09:00:00.000Z`,
     ratings: fullRatings(4, { b15: 3, b17: 3, b9: 5 }) },
-  { id: "mr-2026-3", managerName: "Sarah Chen", raterName: "Marcus Teo", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-08-06T09:00:00.000Z`,
+  { id: "mr-2026-3", managerName: "Sarah Chen", raterName: "Marcus Teo", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-19T09:00:00.000Z`,
     ratings: fullRatings(4, { b15: 2, b28: 5, b29: 5 }),
     textResponses: { t1: "Very fair and consistent — gives credit where it's due.", t2: "Could delegate more of the cross-department coordination work instead of holding onto it herself." } },
-  { id: "mr-2026-4", managerName: "Sarah Chen", raterName: "Caleb Ong", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-08-07T09:00:00.000Z`,
+  { id: "mr-2026-4", managerName: "Sarah Chen", raterName: "Caleb Ong", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-07-02T09:00:00.000Z`,
     ratings: fullRatings(4, { b15: 3, b17: 4 }) },
-  { id: "mr-2025-1", managerName: "Sarah Chen", raterName: "Anabelle Tan", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-08-05T09:00:00.000Z`, ratings: fullRatings(3, { b15: 2 }) },
-  { id: "mr-2025-2", managerName: "Sarah Chen", raterName: "Bryan Goh", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-08-06T09:00:00.000Z`, ratings: fullRatings(3, { b17: 2 }) },
-  { id: "mr-2025-3", managerName: "Sarah Chen", raterName: "Marcus Teo", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-08-07T09:00:00.000Z`, ratings: fullRatings(4, { b15: 2 }) },
+  { id: "mr-2025-1", managerName: "Sarah Chen", raterName: "Anabelle Tan", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-06-05T09:00:00.000Z`, ratings: fullRatings(3, { b15: 2 }) },
+  { id: "mr-2025-2", managerName: "Sarah Chen", raterName: "Bryan Goh", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-06-12T09:00:00.000Z`, ratings: fullRatings(3, { b17: 2 }) },
+  { id: "mr-2025-3", managerName: "Sarah Chen", raterName: "Marcus Teo", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-06-20T09:00:00.000Z`, ratings: fullRatings(4, { b15: 2 }) },
 
   // ── Nadia Yong (HOD, Credit Risk) — 5 raters this cycle.
-  { id: "mr-2026-5", managerName: "Nadia Yong", raterName: "Victor Lai", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-08-04T10:00:00.000Z`,
+  { id: "mr-2026-5", managerName: "Nadia Yong", raterName: "Victor Lai", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-05T10:00:00.000Z`,
     ratings: fullRatings(4, { b20: 3, b21: 3 }),
     textResponses: { t1: "Nadia is decisive under pressure and backs her team publicly.", t2: "Workload prioritisation across the team could be clearer during peak periods." } },
-  { id: "mr-2026-6", managerName: "Nadia Yong", raterName: "Diana Chang", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-08-05T10:00:00.000Z`, ratings: fullRatings(4, { b20: 3 }) },
-  { id: "mr-2026-7", managerName: "Nadia Yong", raterName: "Elton Phua", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-08-06T10:00:00.000Z`, ratings: fullRatings(4) },
-  { id: "mr-2026-8", managerName: "Nadia Yong", raterName: "Delia Wong", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-08-07T10:00:00.000Z`, ratings: fullRatings(4, { b21: 3 }) },
-  { id: "mr-2026-9", managerName: "Nadia Yong", raterName: "Bella Lim", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-08-08T10:00:00.000Z`, ratings: fullRatings(4) },
-  { id: "mr-2025-4", managerName: "Nadia Yong", raterName: "Victor Lai", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-08-04T10:00:00.000Z`, ratings: fullRatings(3, { b20: 2 }) },
-  { id: "mr-2025-5", managerName: "Nadia Yong", raterName: "Diana Chang", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-08-05T10:00:00.000Z`, ratings: fullRatings(3) },
-  { id: "mr-2025-6", managerName: "Nadia Yong", raterName: "Elton Phua", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-08-06T10:00:00.000Z`, ratings: fullRatings(4, { b21: 2 }) },
+  { id: "mr-2026-6", managerName: "Nadia Yong", raterName: "Diana Chang", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-13T10:00:00.000Z`, ratings: fullRatings(4, { b20: 3 }) },
+  { id: "mr-2026-7", managerName: "Nadia Yong", raterName: "Elton Phua", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-22T10:00:00.000Z`, ratings: fullRatings(4) },
+  { id: "mr-2026-8", managerName: "Nadia Yong", raterName: "Delia Wong", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-07-01T10:00:00.000Z`, ratings: fullRatings(4, { b21: 3 }) },
+  { id: "mr-2026-9", managerName: "Nadia Yong", raterName: "Bella Lim", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-07-09T10:00:00.000Z`, ratings: fullRatings(4) },
+  { id: "mr-2025-4", managerName: "Nadia Yong", raterName: "Victor Lai", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-06-06T10:00:00.000Z`, ratings: fullRatings(3, { b20: 2 }) },
+  { id: "mr-2025-5", managerName: "Nadia Yong", raterName: "Diana Chang", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-06-14T10:00:00.000Z`, ratings: fullRatings(3) },
+  { id: "mr-2025-6", managerName: "Nadia Yong", raterName: "Elton Phua", cycleYear: CYCLE_YEAR - 1, submittedAt: `${CYCLE_YEAR - 1}-06-23T10:00:00.000Z`, ratings: fullRatings(4, { b21: 2 }) },
 
-  // ── Caleb Ong (Manager, non-HOD leave supervisor, Workplace Management) — only 2 real direct
-  // reports in the live roster, so this genuinely sits below the 3-rater anonymity threshold. Left
-  // that way deliberately rather than fabricating a 3rd rater who doesn't exist in the real org
-  // chart — this is itself a useful demo of the anonymity gate working as intended for a small team.
-  { id: "mr-2026-10", managerName: "Caleb Ong", raterName: "Diana Eng", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-08-05T11:00:00.000Z`, ratings: fullRatings(4) },
-  { id: "mr-2026-11", managerName: "Caleb Ong", raterName: "Ethan Lam", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-08-06T11:00:00.000Z`, ratings: fullRatings(4, { b6: 3 }) },
+  // ── Caleb Ong (Manager, non-HOD team lead, Workplace Management) — only 2 real direct reports in
+  // the live roster, so this genuinely sits below the 3-rater anonymity threshold. Left that way
+  // deliberately rather than fabricating a 3rd rater who doesn't exist in the real org chart — this
+  // is itself a useful demo of the anonymity gate working as intended for a small team.
+  { id: "mr-2026-10", managerName: "Caleb Ong", raterName: "Diana Eng", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-09T11:00:00.000Z`, ratings: fullRatings(4) },
+  { id: "mr-2026-11", managerName: "Caleb Ong", raterName: "Ethan Lam", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-17T11:00:00.000Z`, ratings: fullRatings(4, { b6: 3 }) },
 
-  // ── Directors — each real leave supervisor of only 1-2 department HODs, so both sit below
-  // threshold too; same honest small-span-of-control demonstration as Caleb Ong above.
-  { id: "mr-2026-12", managerName: "Elsa Ling", raterName: "Sarah Chen", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-08-08T12:00:00.000Z`, ratings: fullRatings(4) },
-  { id: "mr-2026-13", managerName: "Elsa Ling", raterName: "Michelle Sylvia", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-08-09T12:00:00.000Z`, ratings: fullRatings(4, { b3: 3 }) },
-  { id: "mr-2026-14", managerName: "Ethan Lim", raterName: "Nadia Yong", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-08-08T12:30:00.000Z`, ratings: fullRatings(4) },
+  // ── Directors — each real manager of only 1-2 department HODs, so both sit below threshold too;
+  // same honest small-span-of-control demonstration as Caleb Ong above.
+  { id: "mr-2026-12", managerName: "Elsa Ling", raterName: "Sarah Chen", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-25T12:00:00.000Z`, ratings: fullRatings(4) },
+  { id: "mr-2026-13", managerName: "Elsa Ling", raterName: "Michelle Sylvia", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-26T12:00:00.000Z`, ratings: fullRatings(4, { b3: 3 }) },
+  { id: "mr-2026-14", managerName: "Ethan Lim", raterName: "Nadia Yong", cycleYear: CYCLE_YEAR, submittedAt: `${CYCLE_YEAR}-06-25T12:30:00.000Z`, ratings: fullRatings(4) },
 ];
 
 export const seedAiActivityLog: AiActivityLogEntry[] = [

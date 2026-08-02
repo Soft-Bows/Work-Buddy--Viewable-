@@ -9,7 +9,7 @@ import {
 import {
   MANAGER_BEHAVIORS, LEADERSHIP_AREAS, MANAGER_SURVEY_TEXT_QUESTIONS,
   averageManagerScores, averageManagerScoresByArea, collectTextResponses, MIN_RATERS_FOR_AGGREGATE,
-  isManagerSurveyWindowOpen, currentManagerSurveyCycleYear,
+  isManagerSurveyWindowOpen, hasManagerSurveyWindowClosedThisYear, currentManagerSurveyCycleYear,
 } from "@/lib/managerEffectiveness";
 import { resolveOwnScopeChallenges, computeChallengeThemes, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
 import { COMPLIANCE_DEPT_NAME, complianceTeamMembers, complianceDepartmentGoals } from "@/lib/complianceData";
@@ -18,7 +18,7 @@ import { hasMinimumTenure, cn } from "@/lib/utils";
 import { pointsToast } from "@/lib/pointsToast";
 import { COUNTRY_THEMES, COUNTRY_THEME_STORAGE_KEY } from "@/lib/themes";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Legend, Tooltip } from "recharts";
-import { HeartPulse, Star, Sparkles, Lock, Users, ChevronDown, ChevronUp, TrendingUp, TrendingDown } from "lucide-react";
+import { HeartPulse, Star, Sparkles, Lock, Users, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Check } from "lucide-react";
 import type { TeamMember, DeptGoal } from "@/lib/mockData";
 
 // ── Small shared bits ────────────────────────────────────────────────────────────
@@ -200,6 +200,7 @@ function ManagerSurveyCard({
   });
   const cycleYear = currentManagerSurveyCycleYear();
   const windowOpen = isManagerSurveyWindowOpen();
+  const windowClosedThisYear = hasManagerSurveyWindowClosedThisYear();
   const [ratings, setRatings] = useState<Record<string, number>>(() => Object.fromEntries(MANAGER_BEHAVIORS.map(b => [b.id, 3])));
   const [textAnswers, setTextAnswers] = useState<Record<string, string>>(() => Object.fromEntries(MANAGER_SURVEY_TEXT_QUESTIONS.map(q => [q.id, ""])));
 
@@ -249,7 +250,9 @@ function ManagerSurveyCard({
           {tenureOk && mySupervisorName && (
             <div className="rounded-lg border border-border/60 bg-background/60 p-3 space-y-3">
               <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                How's {mySupervisorName.split(" ")[0]} doing as your manager? {!windowOpen && <span className="text-rag-amber">(opens Aug 1)</span>}
+                How's {mySupervisorName.split(" ")[0]} doing as your manager? {!windowOpen && (
+                  <span className="text-rag-amber">{windowClosedThisYear ? `(closed for ${cycleYear})` : "(opens Jun 1)"}</span>
+                )}
               </div>
               {alreadySubmitted ? (
                 <p className="text-xs text-rag-green font-medium">✓ Submitted for the {cycleYear} cycle — thanks!</p>
@@ -283,8 +286,10 @@ function ManagerSurveyCard({
                   </div>
                   <button onClick={submit} className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium">Submit anonymously</button>
                 </>
+              ) : windowClosedThisYear ? (
+                <p className="text-xs text-muted-foreground">The {cycleYear} cycle has closed — thanks to everyone who responded. It reopens Jun 1, {cycleYear + 1}.</p>
               ) : (
-                <p className="text-xs text-muted-foreground">Runs annually, Aug 1 – Sep 30. Check back then.</p>
+                <p className="text-xs text-muted-foreground">Runs annually, Jun 1 – Jul 31. Check back then.</p>
               )}
             </div>
           )}
@@ -449,7 +454,20 @@ function KeyStaffChallengesCard({
 function ActionPlanCard({ pulseAvgs, managerAvgs, department }: { pulseAvgs?: Record<string, number> | null; managerAvgs?: Record<string, number> | null; department: string }) {
   const [items, setItems] = useState<{ title: string; desc: string; source: "Team Pulse" | "Manager Survey" }[] | null>(null);
   const [loading, setLoading] = useState(false);
+  // Closing-the-loop tracking — a plan item is only worth generating if someone can mark it done and
+  // see that reflected; kept as page-local state (not yet persisted server-side) rather than a
+  // silent read-only list.
+  const [doneKeys, setDoneKeys] = useState<Set<string>>(new Set());
+  const toggleDone = (key: string) => setDoneKeys(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
 
+  // Recomputes any time the underlying aggregates actually change value (submissions arrive live via
+  // app-context state, which re-renders this component with fresh pulseAvgs/managerAvgs on every
+  // relevant change) — this is what "real-time synchronised, not a static view" means in practice:
+  // there's no cached/stale snapshot anywhere, every render derives the plan fresh from current data.
   useEffect(() => {
     if (!pulseAvgs && !managerAvgs) { setItems(null); return; }
     setLoading(true);
@@ -458,26 +476,47 @@ function ActionPlanCard({ pulseAvgs, managerAvgs, department }: { pulseAvgs?: Re
   }, [pulseAvgs, managerAvgs, department]);
 
   if (!pulseAvgs && !managerAvgs) return null;
+
+  // Disclaimer reflects exactly which data actually fed this plan — a generic "reads both" line
+  // regardless of what's really available is exactly what caused the earlier contradiction (an
+  // action plan implying it used Team Pulse data while that panel was still showing "not enough
+  // responses yet").
+  const sourcesUsed = [pulseAvgs && "Team Pulse", managerAvgs && "Manager Survey"].filter(Boolean).join(" and ");
+
   return (
     <div className="rounded-xl border border-amber/40 bg-amber/5 p-4">
       <div className="flex items-center gap-2 mb-1">
         <Sparkles className="size-4 text-amber-foreground" />
         <div className="text-xs uppercase tracking-widest text-amber-foreground">AI-curated action plan</div>
       </div>
-      <p className="text-[11px] text-muted-foreground mb-3">Reads this quarter's Team Pulse and this cycle's Manager Survey together for context — each item stays labelled with its source, never blended into one score.</p>
+      <p className="text-[11px] text-muted-foreground mb-1">
+        Based on this {department}'s {sourcesUsed} data{pulseAvgs && managerAvgs ? " together" : ""} — each item stays labelled with its source, never blended into one score.
+        {!pulseAvgs && " Team Pulse isn't included yet (not enough responses this quarter)."}
+        {!managerAvgs && " Manager Survey isn't included yet (not enough ratings this cycle)."}
+      </p>
+      <p className="text-[11px] text-muted-foreground mb-3">Visible here to you; for anything systemic rather than team-specific, raise it with your own supervisor or director so it gets the visibility it needs.</p>
       {loading && <p className="text-xs text-muted-foreground">Thinking…</p>}
       {!loading && items && items.length === 0 && <p className="text-xs text-muted-foreground">No areas below the attention threshold right now — nice work.</p>}
       {!loading && items && items.length > 0 && (
         <ul className="space-y-2">
-          {items.map((it, i) => (
-            <li key={i} className="text-xs bg-background rounded-lg border border-border p-2.5">
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <span className={cn("text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full", it.source === "Team Pulse" ? "bg-rose-500/15 text-rose-600" : "bg-violet-500/15 text-violet-600")}>{it.source}</span>
-                <span className="font-medium">{it.title}</span>
-              </div>
-              <p className="text-muted-foreground">{it.desc}</p>
-            </li>
-          ))}
+          {items.map((it, i) => {
+            const key = `${it.source}:${it.title}`;
+            const done = doneKeys.has(key);
+            return (
+              <li key={i} className={cn("text-xs bg-background rounded-lg border p-2.5 flex items-start gap-2", done ? "border-rag-green/40 bg-rag-green/5" : "border-border")}>
+                <button onClick={() => toggleDone(key)} className={cn("size-4 rounded border shrink-0 grid place-items-center mt-0.5", done ? "bg-rag-green border-rag-green text-white" : "border-border")}>
+                  {done && <Check className="size-2.5" />}
+                </button>
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className={cn("text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full", it.source === "Team Pulse" ? "bg-rose-500/15 text-rose-600" : "bg-violet-500/15 text-violet-600")}>{it.source}</span>
+                    <span className={cn("font-medium", done && "line-through text-muted-foreground")}>{it.title}</span>
+                  </div>
+                  <p className="text-muted-foreground">{it.desc}</p>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

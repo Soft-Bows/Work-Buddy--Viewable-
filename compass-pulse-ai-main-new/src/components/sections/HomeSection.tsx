@@ -154,14 +154,18 @@ function computeDeptRag(
 // Team cards cycle through this palette by team name (not row index — the team row can now mix
 // several teams together, capped at 5 cards), so two cards from the same team always match even
 // though they're no longer grouped under their own row.
+// Card backgrounds bumped from /60 (light) · /10 (dark) to /78 · /22 — the colourful title text
+// sitting directly on these washes was losing contrast against the more vivid backdrop scenes
+// showing through the old, very sheer tint, especially in dark mode. Still visibly translucent
+// (backdrop shows through at the card edges/gaps), just no longer thin enough to fight the text.
 const HOME_TEAM_ROW_COLORS = [
-  { border: "border-l-teal-500", chip: "bg-teal-500 text-white", text: "text-teal-700 dark:text-teal-300", cardBorder: "border-teal-300/60 dark:border-teal-500/40", cardBg: "bg-teal-50/60 dark:bg-teal-900/10", dot: "bg-teal-500" },
-  { border: "border-l-violet-500", chip: "bg-violet-500 text-white", text: "text-violet-700 dark:text-violet-300", cardBorder: "border-violet-300/60 dark:border-violet-500/40", cardBg: "bg-violet-50/60 dark:bg-violet-900/10", dot: "bg-violet-500" },
-  { border: "border-l-rose-500", chip: "bg-rose-500 text-white", text: "text-rose-700 dark:text-rose-300", cardBorder: "border-rose-300/60 dark:border-rose-500/40", cardBg: "bg-rose-50/60 dark:bg-rose-900/10", dot: "bg-rose-500" },
-  { border: "border-l-amber-500", chip: "bg-amber-500 text-white", text: "text-amber-700 dark:text-amber-300", cardBorder: "border-amber-300/60 dark:border-amber-500/40", cardBg: "bg-amber-50/60 dark:bg-amber-900/10", dot: "bg-amber-500" },
-  { border: "border-l-blue-500", chip: "bg-blue-500 text-white", text: "text-blue-700 dark:text-blue-300", cardBorder: "border-blue-300/60 dark:border-blue-500/40", cardBg: "bg-blue-50/60 dark:bg-blue-900/10", dot: "bg-blue-500" },
+  { border: "border-l-teal-500", chip: "bg-teal-500 text-white", text: "text-teal-700 dark:text-teal-300", cardBorder: "border-teal-300/60 dark:border-teal-500/40", cardBg: "bg-teal-50/78 dark:bg-teal-900/22", dot: "bg-teal-500" },
+  { border: "border-l-violet-500", chip: "bg-violet-500 text-white", text: "text-violet-700 dark:text-violet-300", cardBorder: "border-violet-300/60 dark:border-violet-500/40", cardBg: "bg-violet-50/78 dark:bg-violet-900/22", dot: "bg-violet-500" },
+  { border: "border-l-rose-500", chip: "bg-rose-500 text-white", text: "text-rose-700 dark:text-rose-300", cardBorder: "border-rose-300/60 dark:border-rose-500/40", cardBg: "bg-rose-50/78 dark:bg-rose-900/22", dot: "bg-rose-500" },
+  { border: "border-l-amber-500", chip: "bg-amber-500 text-white", text: "text-amber-700 dark:text-amber-300", cardBorder: "border-amber-300/60 dark:border-amber-500/40", cardBg: "bg-amber-50/78 dark:bg-amber-900/22", dot: "bg-amber-500" },
+  { border: "border-l-blue-500", chip: "bg-blue-500 text-white", text: "text-blue-700 dark:text-blue-300", cardBorder: "border-blue-300/60 dark:border-blue-500/40", cardBg: "bg-blue-50/78 dark:bg-blue-900/22", dot: "bg-blue-500" },
 ];
-const HOME_DEPT_ROW_COLOR = { chip: "bg-primary text-primary-foreground", text: "text-primary", cardBorder: "border-primary/40", cardBg: "bg-primary/5", dot: "bg-primary" };
+const HOME_DEPT_ROW_COLOR = { chip: "bg-primary text-primary-foreground", text: "text-primary", cardBorder: "border-primary/40", cardBg: "bg-primary/14", dot: "bg-primary" };
 const HOME_TEAM_ROW_CAP = 5;
 
 const DEPT_WASH_BLOBS = [
