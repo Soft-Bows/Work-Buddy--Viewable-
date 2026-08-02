@@ -308,6 +308,31 @@ export function isKrScoreStaleForDisplay(kr: KeyResult): boolean {
   return kr.definitionEditedDate > kr.scoreSubmittedDate;
 }
 
+// A department's flagged-item mode for the director Home page: once every current Key Result in
+// the department has a live-quarter score, red/amber SCORE is the more actionable, further-along
+// signal to surface (the quarter is effectively closed out); otherwise — or once a KR's confidence
+// has been refreshed again since it was scored, meaning a new monthly cycle has started — red/amber
+// CONFIDENCE (the forward-looking leading indicator) is shown instead.
+export function deptFlagMode(goals: DeptGoal[]): "score" | "confidence" {
+  const allKrs = goals.flatMap(g => g.keyResults ?? []);
+  if (allKrs.length === 0) return "confidence";
+  const allScoredThisQuarter = allKrs.every(kr => kr.score !== undefined && kr.scoreQuarter === currentQuarterLabel());
+  if (!allScoredThisQuarter) return "confidence";
+  const anyFreshConfidenceSinceScoring = allKrs.some(kr =>
+    kr.ragConfidenceUpdatedDate && kr.scoreSubmittedDate && kr.ragConfidenceUpdatedDate > kr.scoreSubmittedDate);
+  return anyFreshConfidenceSinceScoring ? "confidence" : "score";
+}
+
+// "Recently updated" — any edit (title, owner, due date, description, or a new quarterly score)
+// within the last 7 working days, matching the existing confidenceRecentlyUpdated convention
+// already used for the same 7-working-day window elsewhere in TeamSection.tsx. Deliberately
+// broader than isKrScoreFromPastQuarter/isKrScoreStaleForDisplay above, which only ever look at
+// title changes — this drives the separate "recently updated" highlight, not the past-quarter
+// score display rule.
+export function isRecentlyUpdated(item: { lastTouchedDate?: string }): boolean {
+  return item.lastTouchedDate !== undefined && workingDaysSince(item.lastTouchedDate) <= 7;
+}
+
 // The Objective-level equivalent of the above, for the rolled-up objectiveScore() display: only
 // returns a quarter label when every contributing Key Result agrees on the same past quarter and
 // none of them are stale — anything messier (mixed quarters, a stale KR in the mix) falls back to no

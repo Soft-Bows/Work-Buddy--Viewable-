@@ -1,10 +1,11 @@
 import { useEffect, useRef } from "react";
 import { X, Globe2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, isRecentlyUpdated } from "@/lib/utils";
 import { useApp } from "@/lib/appContext";
 import { marketingDepartmentGoals, MARKETING_DEPT_NAME } from "@/lib/marketingData";
 import { HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
 import { RagPill } from "./ui-bits";
+import { AttentionHighlight } from "./AttentionHighlight";
 
 // The 2026 Philly Group OKRs viewer — the group-level layer above every department's own Objectives
 // (see src/lib/phillyGroupOkrs.ts for why this exists and the research behind it). Openable from any
@@ -70,28 +71,29 @@ export function PhillyGroupOkrsDialog({
                 {pg.keyResults.map(kr => {
                   const linked = linkedDeptGoalsFor(pg.id, kr.id);
                   const isHighlighted = highlightGoalId === pg.id && highlightKrId === kr.id;
+                  const needsAttention = kr.ragConfidence === "red" || kr.ragConfidence === "amber";
                   return (
-                    <div
-                      key={kr.id}
-                      ref={isHighlighted ? highlightRef : undefined}
-                      className={cn("px-4 py-3", isHighlighted && "bg-amber-50 dark:bg-amber-900/10 ring-1 ring-inset ring-amber-300/60")}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="text-xs font-medium min-w-0">{kr.title}</div>
-                        <RagPill rag={kr.ragConfidence} />
-                      </div>
-                      <div className="text-[10px] text-muted-foreground mt-1">Owner: <span className="font-medium text-foreground">{kr.owner}</span></div>
-                      {linked.length > 0 ? (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {linked.map(({ dept, goal }) => (
-                            <span key={goal.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-foreground border border-border">
-                              {dept}: {goal.title}
-                            </span>
-                          ))}
+                    <div key={kr.id} ref={isHighlighted ? highlightRef : undefined} className={cn(isHighlighted && "bg-amber-50 dark:bg-amber-900/10")}>
+                      <AttentionHighlight needsAttention={needsAttention} rag={kr.ragConfidence === "red" ? "red" : "amber"} recentlyUpdated={isRecentlyUpdated(kr)} className="mx-2 my-1">
+                        <div className={cn("px-2 py-2", isHighlighted && "ring-1 ring-inset ring-amber-300/60 rounded-lg")}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="text-xs font-medium min-w-0">{kr.title}</div>
+                            <RagPill rag={kr.ragConfidence} />
+                          </div>
+                          <div className="text-[10px] text-muted-foreground mt-1">Owner: <span className="font-medium text-foreground">{kr.owner}</span></div>
+                          {linked.length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {linked.map(({ dept, goal }) => (
+                                <span key={goal.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-foreground border border-border">
+                                  {dept}: {goal.title}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="mt-1.5 text-[10px] text-muted-foreground/70 italic">No department Objective linked to this yet</div>
+                          )}
                         </div>
-                      ) : (
-                        <div className="mt-1.5 text-[10px] text-muted-foreground/70 italic">No department Objective linked to this yet</div>
-                      )}
+                      </AttentionHighlight>
                     </div>
                   );
                 })}

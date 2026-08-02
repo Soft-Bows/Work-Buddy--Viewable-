@@ -28,7 +28,8 @@ function TeamSVG() {
 
 import { toast } from "sonner";
 import { pointsToast } from "@/lib/pointsToast";
-import { cn, workingDaysSince, formatGoalStatusDueDate, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, flattenOkrOptions, objectiveScore, objectiveConfidence, objectiveConfidenceValue, ragConfidenceValue, scoreToRag, keyResultsOwnedBy, formatMonthlyConfidenceDueDate, isAmongOwners, ownerNames, isPendingAckFor, hasPendingAck, isKrOverdue, formatEffectiveKrScoreDueDate, isConfidenceStale, krOwnerCounts, MAX_KRS_PER_OWNER, isKrScoreFromPastQuarter, isKrScoreStaleForDisplay, objectiveScoreQuarterLabel } from "@/lib/utils";
+import { cn, workingDaysSince, formatGoalStatusDueDate, stripLeadingZero, clampScoreDecimal, roundToOneDecimal, flattenOkrOptions, objectiveScore, objectiveConfidence, objectiveConfidenceValue, ragConfidenceValue, scoreToRag, keyResultsOwnedBy, formatMonthlyConfidenceDueDate, isAmongOwners, ownerNames, isPendingAckFor, hasPendingAck, isKrOverdue, formatEffectiveKrScoreDueDate, isConfidenceStale, krOwnerCounts, MAX_KRS_PER_OWNER, isKrScoreFromPastQuarter, isKrScoreStaleForDisplay, objectiveScoreQuarterLabel, isRecentlyUpdated } from "@/lib/utils";
+import { AttentionHighlight } from "@/components/AttentionHighlight";
 import { computeChallengeThemes, getRelevantDeptsForViewer, HCWM_DEPT_NAME, CREDIT_RISK_DEPT_NAME } from "@/lib/insights";
 import { phillyGroupGoals, findPhillyGoal, findPhillyKr } from "@/lib/phillyGroupOkrs";
 import { PhillyGroupOkrsDialog } from "@/components/PhillyGroupOkrsDialog";
@@ -329,8 +330,12 @@ function KeyResultRow({
     setDraftingAiResponse(false);
   };
 
+  const krNeedsAttention = kr.ragConfidence === "red" || kr.ragConfidence === "amber"
+    || (kr.score !== undefined && scoreToRag(kr.score) !== "green");
+  const krRag: "red" | "amber" = kr.ragConfidence === "red" || (kr.score !== undefined && scoreToRag(kr.score) === "red") ? "red" : "amber";
   return (
-    <div className={cn(
+    <AttentionHighlight needsAttention={krNeedsAttention} rag={krRag} recentlyUpdated={isRecentlyUpdated(kr)}>
+    <div data-kr-id={kr.id} className={cn(
       // rounded-xl (up from -lg) plus a soft shadow + hover lift matches ObjectiveCard's own
       // "lively" treatment — a Key Result nested inside a department objective should feel like
       // part of the same friendly, tactile visual system, not a flatter afterthought.
@@ -1078,6 +1083,7 @@ function KeyResultRow({
         </div>
       )}
     </div>
+    </AttentionHighlight>
   );
 }
 
@@ -1170,8 +1176,12 @@ function ObjectiveCard({
     (kr.pendingChallengeResponseFor ?? []).includes(viewedUserName)
     || (!!kr.pendingChallengeAckByOwner && isAmongOwners(kr.owner, viewedUserName))
   );
+  const objNeedsAttention = confidence === "red" || confidence === "amber"
+    || (score !== undefined && scoreToRag(score) !== "green");
+  const objRag: "red" | "amber" = confidence === "red" || (score !== undefined && scoreToRag(score) === "red") ? "red" : "amber";
 
   return (
+    <AttentionHighlight needsAttention={objNeedsAttention} rag={objRag} recentlyUpdated={isRecentlyUpdated(deptGoal)}>
     <div
       data-objective-id={deptGoal.id}
       className={cn(
@@ -1623,6 +1633,7 @@ function ObjectiveCard({
         )}
       </div>
     </div>
+    </AttentionHighlight>
   );
 }
 
@@ -2454,7 +2465,7 @@ export function TeamSection() {
   const {
     teamMembers, tier, currentUser, focusedTeamMemberId, setFocusedTeamMemberId, departmentGoals,
     staffMemberId, adminMemberId, opsMeta, directorMeta, staffList, teamOkrEditors, setTeamOkrEditor, renameTeam,
-    teamBoxNames, renameTeamBox, focusedObjectiveId, clearFocusedObjective, focusedObjectiveExpandKrs,
+    teamBoxNames, renameTeamBox, focusedObjectiveId, clearFocusedObjective, focusedObjectiveExpandKrs, focusedKrId,
     opsTeamMembersAll, opsDepartmentGoals, hcwmTeamMembers, hcwmDepartmentGoals,
     teamMemberDrawerReturnHome, setTeamMemberDrawerReturnHome, setSection,
     respondToCrossDeptAppointment,
@@ -2484,7 +2495,11 @@ export function TeamSection() {
   // Results list expanded, so this effect only needs to handle the scroll + clear the focus.
   useEffect(() => {
     if (!focusedObjectiveId) return;
-    const el = document.querySelector(`[data-objective-id="${focusedObjectiveId}"]`);
+    // A flagged Key Result (from the director Home page's click-through) scrolls to the KR itself,
+    // not just its parent Objective — falls back to the Objective when no specific KR was focused.
+    const el = focusedKrId
+      ? document.querySelector(`[data-kr-id="${focusedKrId}"]`)
+      : document.querySelector(`[data-objective-id="${focusedObjectiveId}"]`);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
     clearFocusedObjective();
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -127,10 +127,15 @@ export interface KeyResult {
   // such" apart from "this is current" — see isKrScoreFromPastQuarter/isKrScoreStaleForDisplay in
   // utils.ts.
   scoreQuarter?: string;
-  // Stamped whenever this KR's own title/dueDate/owner is edited (updateKeyResult, resolveOkrCounter)
-  // — compared against scoreSubmittedDate so a past-quarter score is hidden entirely once it no longer
-  // describes the current KR, per the "no longer relevant if modified" display rule.
+  // Stamped only on a real TITLE change (updateKeyResult, resolveOkrCounter) — compared against
+  // scoreSubmittedDate so a past-quarter score is hidden entirely once it no longer describes the
+  // current KR, per the "no longer relevant if modified" display rule. Deliberately narrower than
+  // lastTouchedDate below: an owner or due-date change alone shouldn't hide an otherwise-valid score.
   definitionEditedDate?: string;
+  // Stamped on ANY edit (title, owner, due date, description, or a new quarterly score) — drives the
+  // "recently updated" highlight (see AttentionHighlight.tsx), which is deliberately broader than
+  // definitionEditedDate above.
+  lastTouchedDate?: string;
   assignedDate?: string;
   // Owner names still owing an acknowledgement — e.g. appointing one new co-owner on an
   // already-multi-owner KR only puts *that* name here, not every existing owner. Undefined/empty =
@@ -233,6 +238,9 @@ export interface DeptGoal {
   // group level. linkedPhillyKrId is only meaningful alongside linkedPhillyGoalId.
   linkedPhillyGoalId?: string;
   linkedPhillyKrId?: string;
+  // See KeyResult.lastTouchedDate — same meaning, at the Objective level, drives the same
+  // "recently updated" highlight.
+  lastTouchedDate?: string;
   keyResults?: KeyResult[];
   assignedDate?: string;
   // See KeyResult.pendingAcknowledgementFor — same meaning, at the Objective level.

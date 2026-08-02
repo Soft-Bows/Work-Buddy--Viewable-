@@ -5,7 +5,8 @@ import { CheckCircle2, Circle, Clock, X, Pencil, Trash2, Plus, Gift, Laptop, Tar
 import { TeamDrawer } from "@/components/sections/TeamSection";
 import { toast } from "sonner";
 import { pointsToast } from "@/lib/pointsToast";
-import { cn, isAmongOwners, keyResultsOwnedBy, objectivesOwnedBy, isPendingAckFor, objectiveConfidence, objectiveConfidenceValue, objectiveScore, scoreToRag, isConfidenceStale, objectiveScoreQuarterLabel } from "@/lib/utils";
+import { cn, isAmongOwners, keyResultsOwnedBy, objectivesOwnedBy, isPendingAckFor, objectiveConfidence, objectiveConfidenceValue, objectiveScore, scoreToRag, isConfidenceStale, objectiveScoreQuarterLabel, deptFlagMode, isRecentlyUpdated } from "@/lib/utils";
+import { AttentionHighlight } from "@/components/AttentionHighlight";
 import { daysSinceLastCheckIn, CHECK_IN_CADENCE_DAYS } from "@/lib/checkIns";
 import { TeamHealthWidget } from "@/components/sections/TeamHealthWidget";
 import type { TeamMember, RAG, SkillAttachment, DeptGoal, PersonalDevGoal } from "@/lib/mockData";
@@ -1050,7 +1051,7 @@ export function HomeSection() {
     allTeamMemberSkills, managerInputs, acknowledgedManagerInputs, opsMeta, teamDevGoalsById,
     nudgedGoalIds, setFocusedGoalId, pendingDevGoalRecs, deptGoalSkills, pendingGoalEditProposals,
     checkIns, setTeamMemberDrawerReturnHome, aiActivityLog, logAiActivity,
-    directorMeta, staffList, hcwmTeamMembers, opsTeamMembersAll, hcwmDepartmentGoals,
+    directorMeta, staffList, hcwmTeamMembers, opsTeamMembersAll, hcwmDepartmentGoals, focusObjective,
   } = useApp();
 
   const isOpsTier = tier === "ops_hod" || tier === "ops_mgr1" || tier === "ops_mgr2";
@@ -1447,14 +1448,22 @@ export function HomeSection() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {directorDepts.map(dept => {
                 const goals = DIR_GOALS_BY_DEPT[dept] ?? [];
-                const allKrs = goals.flatMap(g => (g.keyResults ?? []).map(kr => ({ kr, objectiveTitle: g.title })));
-                // Flag on this month's confidence (the forward-looking leading indicator), not
-                // quarter-end score — a blended average score isn't meaningful for a holding-level
-                // view and, per Google's OKR practice, confidence is the earlier, more actionable
-                // signal a director can actually act on before quarter-end. Red first, then amber.
+                const allKrs = goals.flatMap(g => (g.keyResults ?? []).map(kr => ({ kr, objectiveId: g.id, objectiveTitle: g.title })));
+                // Once every current Key Result in this department has a live-quarter score, the
+                // quarter is effectively closed out and red/amber SCORE is the more actionable
+                // signal; otherwise (or once a fresh monthly confidence cycle has started since
+                // scoring) red/amber CONFIDENCE — the forward-looking leading indicator — is shown
+                // instead. See deptFlagMode in utils.ts.
+                const flagMode = deptFlagMode(goals);
                 const flagged = allKrs
-                  .filter(({ kr }) => kr.ragConfidence === "red" || kr.ragConfidence === "amber")
-                  .sort((a, b) => (a.kr.ragConfidence === b.kr.ragConfidence ? 0 : a.kr.ragConfidence === "red" ? -1 : 1));
+                  .filter(({ kr }) => flagMode === "score"
+                    ? kr.score !== undefined && scoreToRag(kr.score) !== "green"
+                    : kr.ragConfidence === "red" || kr.ragConfidence === "amber")
+                  .map(entry => ({
+                    ...entry,
+                    rag: (flagMode === "score" ? scoreToRag(entry.kr.score!) : entry.kr.ragConfidence) as "red" | "amber" | "green",
+                  }))
+                  .sort((a, b) => (a.rag === b.rag ? 0 : a.rag === "red" ? -1 : 1));
                 const shownFlags = flagged.slice(0, 3);
                 return (
                   <Card key={dept} className="space-y-2">
@@ -1467,24 +1476,31 @@ export function HomeSection() {
                     </div>
                     {shownFlags.length > 0 && (
                       <div className="pt-1 border-t border-border/60 space-y-1">
-                        <div className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground/70">Needs your attention</div>
-                        {shownFlags.map(({ kr, objectiveTitle }) => (
-                          <div key={kr.id} className={cn(
-                            "flex items-start gap-1.5 text-[11px] rounded px-1.5 py-1 border",
-                            kr.ragConfidence === "red" ? "bg-rag-red/10 border-rag-red/30" : "bg-rag-amber/10 border-rag-amber/30",
-                          )}>
-                            <AlertCircle className={cn("size-3 shrink-0 mt-0.5", kr.ragConfidence === "red" ? "text-rag-red" : "text-amber-foreground")} />
-                            <div className="min-w-0 space-y-0.5">
-                              <div>
-                                <span className="text-[8px] uppercase tracking-wider font-bold text-muted-foreground/70">Key Result </span>
-                                <span className="font-medium text-foreground">{kr.title}</span>
+                        <div className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground/70">
+                          Needs your attention — {flagMode === "score" ? "quarterly score" : "monthly confidence"}
+                        </div>
+                        {shownFlags.map(({ kr, objectiveId, objectiveTitle, rag }) => (
+                          <AttentionHighlight key={kr.id} needsAttention rag={rag as "red" | "amber"} recentlyUpdated={isRecentlyUpdated(kr)}>
+                            <button
+                              onClick={() => focusObjective(objectiveId, true, kr.id)}
+                              className={cn(
+                                "w-full flex items-start gap-1.5 text-[11px] rounded px-1.5 py-1 border text-left",
+                                rag === "red" ? "bg-rag-red/10 border-rag-red/30" : "bg-rag-amber/10 border-rag-amber/30",
+                              )}
+                            >
+                              <AlertCircle className={cn("size-3 shrink-0 mt-0.5", rag === "red" ? "text-rag-red" : "text-amber-foreground")} />
+                              <div className="min-w-0 space-y-0.5">
+                                <div>
+                                  <span className="text-[8px] uppercase tracking-wider font-bold text-muted-foreground/70">Key Result </span>
+                                  <span className="font-medium text-foreground">{kr.title}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[8px] uppercase tracking-wider font-bold text-muted-foreground/70">Objective </span>
+                                  <span className="text-muted-foreground">{objectiveTitle}</span>
+                                </div>
                               </div>
-                              <div>
-                                <span className="text-[8px] uppercase tracking-wider font-bold text-muted-foreground/70">Objective </span>
-                                <span className="text-muted-foreground">{objectiveTitle}</span>
-                              </div>
-                            </div>
-                          </div>
+                            </button>
+                          </AttentionHighlight>
                         ))}
                         {flagged.length > shownFlags.length && (
                           <button onClick={() => setSection("team")} className="text-[10px] text-primary font-medium hover:underline">

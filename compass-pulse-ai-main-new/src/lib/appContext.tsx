@@ -353,9 +353,12 @@ interface AppCtx {
   // expandKrs additionally forces that Objective's Key Results list open (the "view all key
   // results" icon's behaviour; the "linked objective" icon leaves it collapsed).
   focusedObjectiveId: string | null;
-  focusObjective: (objectiveId: string, expandKrs: boolean) => void;
+  focusObjective: (objectiveId: string, expandKrs: boolean, krId?: string) => void;
   clearFocusedObjective: () => void;
   focusedObjectiveExpandKrs: boolean;
+  // See the comment on setFocusedKrId above — which specific Key Result to scroll to/highlight
+  // within the focused Objective, if any.
+  focusedKrId: string | null;
   // Activity catalog — admin-editable list of all point-earning/penalty activities
   liveActivities: Activity[];
   addActivity: (activity: Omit<Activity, "id">) => void;
@@ -739,12 +742,17 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
   // Also switches the active section to Team OKRs, since that's where the target actually lives.
   const [focusedObjectiveId, setFocusedObjectiveId] = useState<string | null>(null);
   const [focusedObjectiveExpandKrs, setFocusedObjectiveExpandKrs] = useState(false);
-  const focusObjective = (objectiveId: string, expandKrs: boolean) => {
+  // Which specific Key Result within the focused Objective to scroll to and highlight — set by the
+  // director Home page's flagged-item click-through, so a flagged KR (not just its parent
+  // Objective) gets pinpointed on Team OKRs. undefined when focusing just the Objective itself.
+  const [focusedKrId, setFocusedKrId] = useState<string | null>(null);
+  const focusObjective = (objectiveId: string, expandKrs: boolean, krId?: string) => {
     setFocusedObjectiveId(objectiveId);
     setFocusedObjectiveExpandKrs(expandKrs);
+    setFocusedKrId(krId ?? null);
     setSection("team");
   };
-  const clearFocusedObjective = () => setFocusedObjectiveId(null);
+  const clearFocusedObjective = () => { setFocusedObjectiveId(null); setFocusedKrId(null); };
 
   // Live activity catalog — admin can add/edit/delete activities in real time. Persisted to
   // localStorage so an admin's changes (including deletions) survive a page reload or a future
@@ -1617,6 +1625,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
         pendingChangeType: pendingFor.length > 0 ? "hodEdit" : g.pendingChangeType,
         assignedDate: pendingFor.length > 0 ? new Date().toISOString().slice(0, 10) : g.assignedDate,
         ackPenaltyApplied: pendingFor.length > 0 ? false : g.ackPenaltyApplied,
+        lastTouchedDate: new Date().toISOString().slice(0, 10),
       };
     }));
 
@@ -1698,6 +1707,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
           // the same underlying Key Result.
           definitionEditedDate: changes.title !== undefined && changes.title !== k.title
             ? new Date().toISOString().slice(0, 10) : k.definitionEditedDate,
+          lastTouchedDate: new Date().toISOString().slice(0, 10),
         };
       }),
     })));
@@ -1793,6 +1803,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
             pendingChangeType: pendingFor.length > 0 ? "hodEdit" : g.pendingChangeType,
             assignedDate: pendingFor.length > 0 ? new Date().toISOString().slice(0, 10) : g.assignedDate,
             ackPenaltyApplied: pendingFor.length > 0 ? false : g.ackPenaltyApplied,
+            lastTouchedDate: new Date().toISOString().slice(0, 10),
           };
         }));
       } else {
@@ -1808,6 +1819,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
               ackPenaltyApplied: pendingFor.length > 0 ? false : k.ackPenaltyApplied,
               definitionEditedDate: resolution.changes.title !== undefined && resolution.changes.title !== k.title
                 ? new Date().toISOString().slice(0, 10) : k.definitionEditedDate,
+              lastTouchedDate: new Date().toISOString().slice(0, 10),
             };
           }),
         })));
@@ -1848,6 +1860,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
           counterProposal: undefined, lastCounterRejection: undefined,
           pendingAcknowledgementFor: pendingFor,
           pendingChangeType: pendingFor.length > 0 ? "hodEdit" : g.pendingChangeType,
+          lastTouchedDate: new Date().toISOString().slice(0, 10),
         };
       }
       return {
@@ -1872,6 +1885,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
             pendingChangeType: pendingFor.length > 0 ? "hodEdit" : k.pendingChangeType,
             definitionEditedDate: k.counterProposal.title !== undefined && k.counterProposal.title !== k.title
               ? new Date().toISOString().slice(0, 10) : k.definitionEditedDate,
+            lastTouchedDate: new Date().toISOString().slice(0, 10),
           };
         }),
       };
@@ -1962,7 +1976,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
               }
             : {};
         if (ownerNames(k.owner).length <= 1) {
-          return { ...k, score, scoreSubmittedDate: new Date().toISOString().slice(0, 10), scoreQuarter: currentQuarterLabel(), pendingCoOwnerScore: undefined, ...scoreRemarkFields };
+          return { ...k, score, scoreSubmittedDate: new Date().toISOString().slice(0, 10), scoreQuarter: currentQuarterLabel(), lastTouchedDate: new Date().toISOString().slice(0, 10), pendingCoOwnerScore: undefined, ...scoreRemarkFields };
         }
         return { ...k, pendingCoOwnerScore: { score, proposedBy, proposedDate: new Date().toISOString().slice(0, 10) }, ...scoreRemarkFields };
       }),
@@ -2000,7 +2014,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
     deptGoalSetter(isOps)(prev => prev.map(g => (g.id !== objectiveId ? g : {
       ...g,
       keyResults: (g.keyResults ?? []).map(k => (k.id === krId && k.pendingCoOwnerScore
-        ? { ...k, score: k.pendingCoOwnerScore.score, scoreSubmittedDate: new Date().toISOString().slice(0, 10), scoreQuarter: currentQuarterLabel(), pendingCoOwnerScore: undefined, alignedScoreThisQuarter: true }
+        ? { ...k, score: k.pendingCoOwnerScore.score, scoreSubmittedDate: new Date().toISOString().slice(0, 10), scoreQuarter: currentQuarterLabel(), lastTouchedDate: new Date().toISOString().slice(0, 10), pendingCoOwnerScore: undefined, alignedScoreThisQuarter: true }
         : k)),
     })));
 
@@ -2018,7 +2032,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
       ...g,
       keyResults: (g.keyResults ?? []).map(k => (k.id === krId
         ? {
-            ...k, score, scoreSubmittedDate: new Date().toISOString().slice(0, 10), scoreQuarter: currentQuarterLabel(),
+            ...k, score, scoreSubmittedDate: new Date().toISOString().slice(0, 10), scoreQuarter: currentQuarterLabel(), lastTouchedDate: new Date().toISOString().slice(0, 10),
             scoreRemark: score >= 0.7 ? undefined : scoreRemarkText ? { text: scoreRemarkText, date: new Date().toISOString().slice(0, 10), score } : k.scoreRemark,
             pendingAcknowledgementFor: ownerNames(k.owner), pendingChangeType: "hodScore", assignedDate: new Date().toISOString().slice(0, 10), ackPenaltyApplied: false,
           }
@@ -2202,7 +2216,7 @@ export function AppProvider({ children, initialTier }: { children: ReactNode; in
       skillAttachments, markAttachmentViewed, devGoalAttachments, attachDevGoalCertificate,
       nudgedGoalIds, nudgeGoal, sendEncouragementNote,
       focusedGoalId, setFocusedGoalId,
-      focusedObjectiveId, focusObjective, clearFocusedObjective, focusedObjectiveExpandKrs,
+      focusedObjectiveId, focusObjective, clearFocusedObjective, focusedObjectiveExpandKrs, focusedKrId,
       liveActivities, addActivity, updateActivity, deleteActivity, bulkUpsertActivities,
       updateSupervisor,
       managerInputs, saveManagerInput,
