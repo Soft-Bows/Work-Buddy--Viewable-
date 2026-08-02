@@ -219,13 +219,19 @@ function DeptTeamOkrSection({
     const myKrs = (g.keyResults ?? []).filter(kr => isAmongOwners(kr.owner, viewerName));
     return (
       <Card key={g.id} className={cn("p-2.5 border", color.cardBorder, color.cardBg)}>
-        {/* Title/owner previously used plain default-foreground/muted-foreground text on top of the
-            card's own translucent colour wash — legible, but flat, disconnected from the card's own
-            colour identity. Keeping the wash exactly as translucent as before, just giving the text
-            itself more presence: the title now picks up the row's own saturated colour + bold
-            weight, and the owner line moves off low-contrast muted grey onto full foreground. */}
+        {/* Title text previously used the row's own accent colour (color.text) for more visual
+            personality — but for the Department row, that colour is `text-primary`, a CSS variable
+            that changes per active country theme. Several themes (Japan, Thailand, UAE, India) tune
+            --primary to a deliberately LIGHT hue for their accent chips/dots, and that same light
+            colour used as body text is illegible against a light/translucent card background no
+            matter how opaque the card itself is — raising the card's opacity repeatedly never fixed
+            this because the background was never the actual problem, the text colour was. Title text
+            now always uses text-foreground (the page's normal, theme-independent high-contrast body
+            colour) — legible on every theme — while color.text stays reserved for small accent bits
+            (the section's own label/dot) where lower contrast is a stylistic choice, not a reading
+            requirement. */}
         <div className="text-[9px] uppercase tracking-widest text-foreground/70 font-semibold truncate">{g.owner}</div>
-        <div className={cn("font-bold text-xs mt-0.5 leading-snug", color.text)}>{g.title}</div>
+        <div className="font-bold text-xs mt-0.5 leading-snug text-foreground">{g.title}</div>
         {/* Confidence + Score side by side, both word + numeric value — mirrors Team OKRs'
             FieldBadge/RagPill treatment (previously this only showed a single bare "GREEN"/"AMBER"
             word with no numeric value and no separate Score at all, unlike the Team OKRs page). */}
@@ -332,7 +338,7 @@ function DeptTeamOkrSection({
         <WatercolorWash blobs={DEPT_WASH_BLOBS} />
         <div className="flex items-center gap-1.5 mb-2 pl-2.5 border-l-4 border-l-primary">
           <span className={cn("size-1.5 rounded-full", HOME_DEPT_ROW_COLOR.dot)} />
-          <span className={cn("text-[10px] uppercase tracking-widest font-bold", HOME_DEPT_ROW_COLOR.text)}>Department OKRs</span>
+          <span className="text-[10px] uppercase tracking-widest font-bold text-foreground/90">Department OKRs</span>
         </div>
         <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(deptObjectives.length, 1)}, minmax(0, 1fr))` }}>
           {deptObjectives.map(g => renderCard(g, HOME_DEPT_ROW_COLOR))}

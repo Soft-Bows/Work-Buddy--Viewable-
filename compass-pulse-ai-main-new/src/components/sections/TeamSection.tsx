@@ -691,7 +691,7 @@ function KeyResultRow({
 
           {showBody && kr.challengeResponse && (
             <div className="rounded-md border border-primary/25 bg-primary/5 p-2 space-y-1">
-              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-primary">
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-foreground">
                 {kr.challengeResponse.respondedBy}'s response{kr.challengeResponse.isAI && <span className="normal-case font-medium text-muted-foreground">(Work Buddy AI-assisted)</span>}
               </div>
               <p className="text-xs text-foreground/85 leading-relaxed">{kr.challengeResponse.text}</p>
@@ -777,7 +777,7 @@ function KeyResultRow({
 
           {showBody && kr.scoreResponse && (
             <div className="rounded-md border border-primary/25 bg-primary/5 p-2 space-y-1">
-              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-primary">
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-foreground">
                 {kr.scoreResponse.respondedBy}'s response{kr.scoreResponse.isAI && <span className="normal-case font-medium text-muted-foreground">(Work Buddy AI-assisted)</span>}
               </div>
               <p className="text-xs text-foreground/85 leading-relaxed">{kr.scoreResponse.text}</p>

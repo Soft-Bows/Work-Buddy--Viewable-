@@ -1438,7 +1438,7 @@ function RecommendedPerfGoalCard({ rec, memberId, departmentGoals }: { rec: Perf
     <Card className="space-y-3 border-dashed border-primary/40 bg-primary/5">
       <div className="flex items-center gap-2">
         <Target className="size-4 text-primary shrink-0" />
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-primary">Recommended for you</span>
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-foreground">Recommended for you</span>
       </div>
       <div>
         <div className="font-medium">{rec.title}</div>
@@ -1767,7 +1767,7 @@ function MyKeyResultCard({ kr, objective, isOps, viewerName }: { kr: KeyResult; 
           <p className="text-xs text-foreground/85 leading-relaxed">&ldquo;{kr.challengeRemark.text}&rdquo;</p>
           {kr.challengeResponse && (
             <div className="rounded-md border border-primary/25 bg-primary/5 p-2 space-y-1">
-              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-primary">
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-foreground">
                 {kr.challengeResponse.respondedBy}'s response{kr.challengeResponse.isAI && <span className="normal-case font-medium text-muted-foreground">(Work Buddy AI-assisted)</span>}
               </div>
               <p className="text-xs text-foreground/85 leading-relaxed">{kr.challengeResponse.text}</p>
@@ -1839,7 +1839,7 @@ function MyKeyResultCard({ kr, objective, isOps, viewerName }: { kr: KeyResult; 
           <p className="text-xs text-foreground/85 leading-relaxed">&ldquo;{kr.scoreRemark.text}&rdquo;</p>
           {kr.scoreResponse && (
             <div className="rounded-md border border-primary/25 bg-primary/5 p-2 space-y-1">
-              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-primary">
+              <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-foreground">
                 {kr.scoreResponse.respondedBy}'s response{kr.scoreResponse.isAI && <span className="normal-case font-medium text-muted-foreground">(Work Buddy AI-assisted)</span>}
               </div>
               <p className="text-xs text-foreground/85 leading-relaxed">{kr.scoreResponse.text}</p>

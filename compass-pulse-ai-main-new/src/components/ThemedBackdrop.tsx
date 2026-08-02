@@ -242,113 +242,89 @@ function MalaysiaScene() {
 }
 
 function SingaporeScene() {
+  // Rebuilt from scratch as a bright DAYTIME scene after 2 night-theme passes kept reading as
+  // "just dark vertical shapes" no matter how much colour or opacity was added. Rendered this
+  // exact SVG to a PNG (via @resvg/resvg-js, composited over both a light and dark page
+  // background at realistic in-app opacity) to actually verify before shipping — the night
+  // version's problem wasn't the artwork, it was any dark-toned sky rendering flat and murky at
+  // this layer's necessarily-low opacity in dark mode; a bright sky doesn't have that failure
+  // mode at all. This also fixes the accuracy complaint: Singapore is a year-round tropical
+  // summer climate, so a sunny midday Gardens by the Bay is the truer "arrived here" moment than
+  // a night scene ever was.
   return (
     <Scene>
-      {/* "Arrived at Gardens by the Bay at night" — a deep indigo sky, brighter and more violet than
-          the first pass so the illuminated grove has something rich to glow against, still clearly
-          night (no daytime pastels). SkyLayer's white cloud-cluster blurs and glow read as moonlit/
-          light-show haze, the right backdrop for the nightly Garden Rhapsody show. */}
-      <SkyLayer sky="linear-gradient(180deg, #131A3D 0%, #202B5E 28%, #38468C 60%, #52619E 100%)" glow="#C99FF0" />
-      {/* A second, scene-local light-show glow — a wide soft magenta/gold wash sitting low over the
-          grove, unique to this scene (not touching the shared SkyLayer component that every other
-          country also uses), suggesting stage lighting bouncing off the canopies. */}
-      <div className="absolute bottom-[8vh] inset-x-[10%] h-[26vh] rounded-full blur-3xl opacity-70 dark:opacity-50" style={{ background: "radial-gradient(ellipse, #FF9FE0 0%, #FFD98A 45%, transparent 75%)" }} />
-      {/* Supertree Grove, illuminated for Garden Rhapsody — 7 Supertrees, each with a layered canopy
-          (base colour + brighter inner core + scattered sparkle lights, the same "lit window"
-          technique used for Changi/MBS) plus a ground-uplight pool at its base. A glass conservatory
-          dome (standing in for the Flower Dome/Cloud Forest) sits low in the background for depth.
-          First pass at this scene still read as dim, undifferentiated "vertical shapes": canopies
-          were too flat/narrow relative to their trunks and the whole svg's opacity was still too low
-          against a dark sky. Fixed here with a much higher local opacity override (0.97/0.85 — this
-          scene's own custom className, not the shared LANDMARK_OPACITY every other country still
-          uses unchanged), wider/taller canopies, brighter saturated colours, and bigger, more numerous
-          sparkle points. */}
-      <svg className="absolute bottom-0 inset-x-0 w-full h-[48vh] min-h-[270px] opacity-[0.97] dark:opacity-[0.85]" viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
+      <SkyLayer sky="linear-gradient(180deg, #4FB8E8 0%, #7DCBEE 30%, #B8E4F5 60%, #E8F7FB 100%)" glow="#FFEB99" />
+      {/* Supertree Grove by day — leafy green mushroom-cap canopies (the real Supertrees are
+          covered in ~163,000 live plants/ferns, which reads as green foliage in daylight, not
+          coloured light) over bark-brown trunks, plus the Flower Dome conservatory and the OCBC
+          Skyway. Verified opacity 0.6 (both modes — a bright sky doesn't need dark mode to be
+          much dimmer than light mode the way a navy night sky did) against both a light and a
+          dark page background before shipping. */}
+      <svg className="absolute bottom-0 inset-x-0 w-full h-[48vh] min-h-[270px] opacity-[0.6]" viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
         <defs>
-          <radialGradient id="domeGlow" cx="50%" cy="35%" r="65%">
-            <stop offset="0%" stopColor="#FFE9B0" stopOpacity="0.6" />
-            <stop offset="100%" stopColor="#FFE9B0" stopOpacity="0" />
-          </radialGradient>
-          <linearGradient id="sgGround" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#1C3348" />
-            <stop offset="100%" stopColor="#142838" />
+          <linearGradient id="sgCanopy" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#8FD48A" />
+            <stop offset="100%" stopColor="#4A9B4A" />
           </linearGradient>
         </defs>
-        <path d="M0 178 Q110 158 220 170 T400 160 V220 H0 Z" fill="url(#sgGround)" />
-        {/* Flower Dome / Cloud Forest — a low glass conservatory silhouette, softly lit from within */}
-        <path d="M20 178 Q20 128 90 122 Q160 128 160 178 Z" fill="#33456C" opacity="0.9" />
-        <path d="M20 178 Q20 128 90 122 Q160 128 160 178 Z" fill="url(#domeGlow)" />
-        {[38, 56, 74, 92, 110, 128, 146].map(x => (
-          <line key={x} x1={x} y1="178" x2="90" y2="124" stroke="#516992" strokeWidth="1" opacity="0.7" />
-        ))}
-        {[{ x: 46, h: 96 }, { x: 118, h: 134 }, { x: 178, h: 162 }, { x: 232, h: 182 }, { x: 286, h: 150 }, { x: 336, h: 122 }, { x: 378, h: 90 }].map((t, i) => {
-          const c = ["#FF6FB0", "#48E0D8", "#FFC24C", "#C374F0", "#FFC24C", "#48E0D8", "#5FBBFF"][i];
-          const glow = ["#FFDFF0", "#DEFFFB", "#FFF0C8", "#F3E2FF", "#FFF0C8", "#DEFFFB", "#E4F4FF"][i];
-          const r = 22 + t.h * 0.17;
+        <path d="M0 178 Q110 158 220 170 T400 160 V220 H0 Z" fill="#6FBF6A" />
+        {/* Flower Dome — a glass conservatory dome, sunlit */}
+        <path d="M20 178 Q20 128 90 122 Q160 128 160 178 Z" fill="#EAF6FA" stroke="#BFE0EE" strokeWidth="1.5" opacity="0.95" />
+        <path d="M30 176 Q32 132 90 126" fill="none" stroke="#9FCBDE" strokeWidth="1" opacity="0.6" />
+        <ellipse cx="70" cy="140" rx="14" ry="8" fill="#FFFFFF" opacity="0.7" />
+        {[
+          { x: 46, h: 96, r: 26 }, { x: 118, h: 134, r: 32 }, { x: 178, h: 162, r: 38 }, { x: 232, h: 182, r: 42 },
+          { x: 286, h: 150, r: 30 }, { x: 336, h: 122, r: 24 }, { x: 378, h: 90, r: 20 },
+        ].map(t => {
           const baseY = 192, topY = baseY - t.h;
-          const sparkles = [
-            [-0.55, -0.15], [0.45, -0.4], [-0.15, -0.55], [0.6, 0.15], [-0.65, 0.2], [0.1, -0.2], [0.7, -0.1], [-0.4, 0.3],
-          ];
           return (
             <g key={t.x}>
-              {/* Ground uplight — a soft wide glow pool at the base, selling "lit from below" */}
-              <ellipse cx={t.x} cy={baseY + 1} rx={r * 1.05} ry="6" fill={c} opacity="0.5" />
-              <path d={`M${t.x - 4} ${baseY} L${t.x - 7} ${topY} L${t.x + 7} ${topY} L${t.x + 4} ${baseY} Z`} fill="#3A2C1E" />
-              {/* Canopy: wide base disc, brighter inner core, then scattered sparkle points for texture */}
-              <ellipse cx={t.x} cy={topY} rx={r} ry={r * 0.56} fill={c} opacity="0.97" />
-              <ellipse cx={t.x} cy={topY - 3} rx={r * 0.68} ry={r * 0.34} fill={glow} opacity="0.85" />
-              {sparkles.map(([dx, dy], si) => (
-                <circle key={si} cx={t.x + dx * r} cy={topY + dy * r * 0.5} r="2.1" fill="#FFFDF0" opacity={0.85 + (si % 2) * 0.15} />
-              ))}
+              <path d={`M${t.x - 4} ${baseY} L${t.x - 8} ${topY} L${t.x + 8} ${topY} L${t.x + 4} ${baseY} Z`} fill="#3A2C1E" />
+              <ellipse cx={t.x} cy={topY} rx={t.r} ry={t.r * 0.48} fill="url(#sgCanopy)" />
+              <ellipse cx={t.x} cy={topY - t.r * 0.2} rx={t.r * 0.62} ry={t.r * 0.24} fill="#A6E39D" opacity="0.85" />
             </g>
           );
         })}
-        {/* OCBC Skyway — a slung walkway between two of the tallest trees, with hanging lights */}
-        <path d="M178 118 Q205 130 232 108" stroke="#5A6FA0" strokeWidth="4" fill="none" />
-        {[190, 202, 214, 226].map(x => (
-          <circle key={x} cx={x} cy={122 - (x - 178) * 0.2} r="2" fill="#FFE9B0" opacity="0.95" />
-        ))}
-        {/* A wide, varied flower field along the base — three distinct bloom types (five-petal
-            blossoms, clustered hydrangea-style pom-poms, tall flower spikes) rather than one repeated
-            shape, standing in for whichever seasonal Flower Dome display is running (Balinese-orchid
-            Orchid Extravaganza into early Aug 2026, giving way to the Egypt-themed Lilytopia) — swap
-            the palette here when the season changes. */}
-        {[24, 48, 72, 96, 150, 174, 260, 284, 308, 332, 356, 380].map((x, i) => {
+        {/* OCBC Skyway */}
+        <path d="M178 58 Q205 68 232 40" stroke="#7A8FA8" strokeWidth="4" fill="none" />
+        <path d="M0 195 Q120 180 240 190 T400 184 V220 H0 Z" fill="#5CA858" />
+        {/* A wide, varied flower field — three distinct bloom types (five-petal blossoms,
+            clustered hydrangea-style pom-poms, tall flower spikes) standing in for whichever
+            seasonal Flower Dome display is running (Balinese-orchid Orchid Extravaganza into
+            early Aug 2026, giving way to the Egypt-themed Lilytopia) — swap the palette here
+            when the season changes. */}
+        {[14, 34, 54, 96, 150, 165, 255, 270, 300, 320, 345, 365, 388].map((x, i) => {
           const kind = i % 3;
-          const petalColors = ["#E8A0C4", "#B98AE8", "#F0A83C", "#F3D26A"];
+          const petalColors = ["#FF3D8B", "#FFD23D", "#B04FE0", "#FF7A3D", "#3DBFFF"];
           const c = petalColors[i % petalColors.length];
           if (kind === 0) {
-            // Five-petal blossom
             return (
               <g key={x}>
                 {[0, 72, 144, 216, 288].map(deg => (
-                  <ellipse key={deg} cx={x} cy="187" rx="3" ry="6.5" fill={c} transform={`rotate(${deg} ${x} 187)`} opacity="0.9" />
+                  <ellipse key={deg} cx={x} cy="200" rx="3.6" ry="8" fill={c} transform={`rotate(${deg} ${x} 200)`} opacity="0.95" />
                 ))}
-                <circle cx={x} cy="187" r="2" fill="#FFF3D0" />
+                <circle cx={x} cy="200" r="2.4" fill="#FFF9D6" />
               </g>
             );
           }
           if (kind === 1) {
-            // Clustered pom-pom bloom (hydrangea-style)
             return (
               <g key={x}>
-                {[[-3, -2], [3, -2], [0, -5], [-2, 1], [2, 1], [0, -1]].map(([dx, dy], j) => (
-                  <circle key={j} cx={x + dx} cy={188 + dy} r="2.6" fill={c} opacity="0.88" />
+                {[[-3.5, -2], [3.5, -2], [0, -6], [-2.5, 1], [2.5, 1], [0, -1]].map(([dx, dy], j) => (
+                  <circle key={j} cx={x + dx} cy={201 + dy} r="3" fill={c} opacity="0.92" />
                 ))}
               </g>
             );
           }
-          // Tall flower spike
           return (
             <g key={x}>
-              <line x1={x} y1="190" x2={x} y2="176" stroke="#3E6B4A" strokeWidth="1.5" />
-              {[178, 181, 184, 187].map((y, j) => (
-                <circle key={j} cx={x + (j % 2 === 0 ? -1.5 : 1.5)} cy={y} r="2" fill={c} opacity="0.9" />
+              <line x1={x} y1="204" x2={x} y2="184" stroke="#3E6B4A" strokeWidth="1.8" />
+              {[186, 190, 194, 198].map((y, j) => (
+                <circle key={j} cx={x + (j % 2 === 0 ? -2 : 2)} cy={y} r="2.4" fill={c} opacity="0.95" />
               ))}
             </g>
           );
         })}
-        <path d="M0 195 Q120 180 240 190 T400 184 V220 H0 Z" fill="#0C1622" />
       </svg>
       {/* Vanda Miss Joaquim orchid, Singapore's national flower — bottom-right */}
       <svg className={`absolute bottom-8 right-[6%] ${FOREGROUND_OPACITY}`} width="64" height="76" viewBox="0 0 60 70" fill="none">
@@ -548,22 +524,30 @@ function VietnamScene() {
 function JapanScene() {
   return (
     <Scene>
-      <SkyLayer sky="linear-gradient(180deg, #DCEEFB 0%, #EAF3FC 22%, #FBE7EF 55%, #FCEFE0 100%)" glow="#FFE8B8" />
+      {/* Brighter, more saturated dawn than the original pale wash — same reasoning as Singapore's
+          rebuild: this shared SkyLayer only ever shows through at a low opacity (dark mode
+          especially), so a richer starting gradient is what actually reads as "luminous" once
+          composited, not a subtle pastel that was already close to washed-out before the opacity
+          reduction. */}
+      <SkyLayer sky="linear-gradient(180deg, #F7C9DC 0%, #FADCE8 22%, #FDEBD8 55%, #FFF3D6 100%)" glow="#FFD98E" />
       {/* Mount Fuji — the previous silhouette was a steep spike whose apex sat at y=40 of a 220-tall
           viewBox; preserveAspectRatio="slice" crops overflow from the TOP on any wide/short-viewport
           laptop, and y=40 sat squarely inside that crop zone, leaving only a truncated grey trapezoid
           visible ("top half missing"). Redrawn wide and gently-sloped (Fuji's real profile is a broad
-          cone, not a spire) with its apex at y=115 — comfortably clear of the crop line — plus a
-          gradient fill instead of one flat colour for warmth/depth. */}
-      <svg className={`absolute bottom-0 inset-x-0 w-full h-[46vh] min-h-[260px] ${LANDMARK_OPACITY}`} viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
+          cone, not a spire) with its apex at y=115 — comfortably clear of the crop line. A scene-local
+          opacity override (0.6, verified by rendering this exact SVG to a PNG and compositing it over
+          both a light and dark page background before shipping — same method used for Singapore's
+          rebuild) replaces the shared LANDMARK_OPACITY, which was crushing the gradient into a flat,
+          colourless grey in dark mode; every other country's landmark is untouched. */}
+      <svg className="absolute bottom-0 inset-x-0 w-full h-[46vh] min-h-[260px] opacity-[0.6]" viewBox="0 0 400 220" preserveAspectRatio="xMidYMax slice">
         <defs>
-          {/* Warm dusk-lit "Red Fuji" palette (after Hokusai's famous print) instead of a flat
-              grey-blue — coral catching the light near the peak, deepening to plum at the base —
-              rather than a cooler, colourless silhouette. */}
+          {/* Warm dusk-lit "Red Fuji" palette (after Hokusai's famous print), brightened further —
+              coral catching the light near the peak, deepening to plum at the base — rather than a
+              cooler, colourless silhouette. */}
           <linearGradient id="fujiSlope" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#E8927A" />
-            <stop offset="45%" stopColor="#B06A8C" />
-            <stop offset="100%" stopColor="#5C3F6B" />
+            <stop offset="0%" stopColor="#F0A08A" />
+            <stop offset="45%" stopColor="#C97BA0" />
+            <stop offset="100%" stopColor="#6B4878" />
           </linearGradient>
         </defs>
         <path d="M0 170 Q90 140 180 160 T400 145 V220 H0 Z" fill="#BFE0D8" />
